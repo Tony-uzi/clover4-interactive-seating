@@ -1,0 +1,321 @@
+/* Base / Reset */
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial,
+    "Helvetica Neue", "Noto Sans", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  color: #0f172a; /* slate-900 */
+}
+
+/* 让页面成为 头-体-脚 的列布局，内容不足时页脚仍贴底 */
+.page-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+/* main 占据剩余空间 */
+main {
+  flex: 1;
+}
+
+/* Layout Helpers */
+.container {
+  width: min(1120px, 92vw);
+  margin: 0 auto;
+}
+/* 原先 24px 0 48px 会把 footer 顶起来，这里收紧底部间距 */
+.page {
+  padding: 24px 0 12px;
+}
+
+/* Header */
+.site-header {
+  background: #0b69c7;
+  color: #fff;
+}
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+}
+.logo {
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+.main-nav {
+  display: flex;
+  gap: 20px;
+}
+.main-nav a {
+  color: #e8f1fb;
+  text-decoration: none;
+  padding: 6px 4px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+.main-nav a:hover {
+  color: #fff;
+}
+.main-nav .active {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 6px;
+}
+
+/* Buttons*/
+.btn {
+  display: inline-block;
+  line-height: 1;
+  padding: 12px 18px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn:hover {
+  filter: brightness(0.98);
+}
+.btn-primary {
+  background: #0b69c7;
+  border-color: #0b69c7;
+  color: #fff;
+}
+.btn-primary:hover {
+  filter: brightness(1.05);
+}
+
+/* Hero / Headline*/
+.hero {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 40px;
+  align-items: center;
+  padding: 36px 0 12px;
+}
+.hero h1 {
+  font-size: 44px;
+  line-height: 1.2;
+  margin: 0 0 10px;
+}
+.hero p {
+  margin: 0 0 16px;
+  color: #364152;
+} /* slate-600 */
+.hero .hero-buttons {
+  display: flex;
+  gap: 12px;
+}
+.hero .hero-img {
+  width: 100%;
+  height: 260px;
+  border-radius: 8px;
+  background: #e5e7eb;
+  color: #64748b;
+  display: grid;
+  place-items: center;
+}
+
+/* ========= Feature Grid (六宫格) ========= */
+.features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px 36px;
+  padding: 24px 0 8px;
+}
+.feature {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 12px;
+}
+.feature .icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  color: #0b69c7;
+}
+.feature h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+.feature p {
+  margin: 0;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Cards 底部的两个卡片*/
+.card {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 28px;
+  text-align: center;
+  background: #fff;
+}
+.card + .card {
+  margin-top: 18px;
+}
+.card img {
+  max-width: 100%;
+  height: 48px;
+  object-fit: contain;
+}
+.card h2 {
+  margin: 12px 0 10px;
+  font-size: 22px;
+}
+.card p {
+  margin: 0 0 16px;
+  color: #475569;
+}
+
+/* Footer  */
+.info-bar {
+  background: #0b69c7;
+  color: #e8f1fb;
+  margin-top: 24px;
+}
+.info-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  gap: 16px;
+  font-size: 14px;
+}
+.social-icons {
+  display: flex;
+  gap: 14px;
+}
+.social-icons i {
+  opacity: 0.9;
+}
+
+/* Forms (Login/Signup) */
+.form-card {
+  width: min(520px, 92vw);
+  margin: 12px 0;
+  display: grid;
+  gap: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  background: #fff;
+}
+.form-card input {
+  height: 40px;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  outline: none;
+}
+.form-card input:focus {
+  border-color: #0b69c7;
+  box-shadow: 0 0 0 3px rgba(11, 105, 199, 0.15);
+}
+
+/* ========= Small screens ========= */
+@media (max-width: 960px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+  .features {
+    grid-template-columns: 1fr;
+  }
+}
+/* ========= Editor pages (Conference / Tradeshow) ========= */
+/* 页面上半部分标题 + 说明 */
+.editor-head {
+  margin: 8px 0 6px;
+}
+.editor-subtitle {
+  margin: 0 0 8px;
+  color: #475569;
+}
+
+/* 工具栏：左右分组，垂直居中，自动换行 */
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 10px;
+  margin-bottom: 10px;
+}
+
+/* 画布外框（跟容器左右对齐） */
+.editor-canvas {
+  border: 1px solid #e5e7eb;
+  height: 70px;
+  border-radius: 12px;
+  background: #fafafa;
+  padding: 12px; /* 让 Konva 画布与边框有内边距 */
+}
+
+/* 在全局 css 或 App.css 里加两段即可 */
+.editor-topbar {
+  height: 48px;
+  /* 固定高度 */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-wrap: wrap; /* 按钮太多就换行 */
+  overflow: visible; /* 保证下拉菜单不被裁剪 */
+}
+
+/* Konva 画布下的网格背景（如果你用 div 包裹 Stage，可给它这个类） */
+.grid-bg {
+  background-image: linear-gradient(
+      to right,
+      rgba(0, 0, 0, 0.04) 1px,
+      transparent 1px
+    ),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px; /* 你的网格步长 */
+  border-radius: 8px;
+}
+/* === Editor Layout tidy === */
+.editor-layout {
+  min-height: 520px;
+}
+.editor-topbar {
+  background: #fff;
+}
+.editor-sidebar ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.editor-sidebar li {
+  line-height: 1.8;
+}
+.editor-sidebar li:hover {
+  text-decoration: underline;
+}
+
+/* 画布容器（右侧） */
+.editor-stagewrap {
+  background: #fafafa;
+}
+
+/* 如果你之前给 .editor-canvas 设过固定 height（比如 70px），
+   建议改成： */
+.editor-canvas {
+  min-height: 560px;
+  height: auto;
+}
