@@ -264,10 +264,14 @@ function Palette({ onAdd }) {
 export default function CanvasEditor({
   storageKey = "layout.default.v1",
   remoteName = "default",
+  initialItems: initialItemsProp = null,
 }) {
   /*初始example */
   const initialItems = useMemo(
-    () => [
+    () =>
+      initialItemsProp && Array.isArray(initialItemsProp)
+        ? initialItemsProp
+        : [
       {
         id: "t1",
         type: "table",
@@ -297,7 +301,7 @@ export default function CanvasEditor({
         group: "Group 2",
       },
     ],
-    []
+    [initialItemsProp]
   );
 
   const {
@@ -315,10 +319,48 @@ export default function CanvasEditor({
     canRedo,
   } = useCanvasState(initialItems);
 
+  // When initialItemsProp changes from parent (e.g., after async load), sync into editor state
+  useEffect(() => {
+    if (initialItemsProp && Array.isArray(initialItemsProp)) {
+      setItems(initialItemsProp);
+    }
+  }, [initialItemsProp, setItems]);
+
   // 自适应画布尺寸
   const stageRef = useRef(null);
   const containerRef = useRef(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
+
+  // ======= Capacity & Safety Warnings =======
+  const [maxCapacity, setMaxCapacity] = useState(80); // 简易容量阈值
+  const overlaps = useMemo(() => {
+    // 简易 AABB 重叠检测
+    let count = 0;
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const a = items[i];
+        const b = items[j];
+        const aabb = (r) => ({
+          left: r.x,
+          right: r.x + r.w,
+          top: r.y,
+          bottom: r.y + r.h,
+        });
+        const A = aabb(a);
+        const B = aabb(b);
+        const intersect = !(
+          A.right <= B.left ||
+          A.left >= B.right ||
+          A.bottom <= B.top ||
+          A.top >= B.bottom
+        );
+        if (intersect) count++;
+      }
+    }
+    return count;
+  }, [items]);
+  const capacityExceeded = items.length > maxCapacity;
+  const showWarning = capacityExceeded || overlaps > 0;
 
   useEffect(() => {
     const el = containerRef.current;
@@ -431,6 +473,35 @@ export default function CanvasEditor({
   const W = size.w || 960;
   const H = size.h || 560;
 
+  // ======= Share =======
+  const ensureSharesBucket = () => {
+    const raw = localStorage.getItem("shares");
+    if (!raw) localStorage.setItem("shares", JSON.stringify([]));
+  };
+  const saveShare = () => {
+    ensureSharesBucket();
+    const id = `${remoteName}-${Date.now()}`;
+    const record = {
+      id,
+      name: `${remoteName} layout`,
+      items,
+      createdAt: new Date().toISOString(),
+    };
+    const arr = JSON.parse(localStorage.getItem("shares") || "[]");
+    const next = [record, ...arr.filter((x) => x.id !== id)].slice(0, 50);
+    localStorage.setItem("shares", JSON.stringify(next));
+    return id;
+  };
+  const copyShareLink = (id) => {
+    const url = `${window.location.origin}/share/${encodeURIComponent(id)}`;
+    navigator.clipboard
+      .writeText(url)
+      .then(() => alert("Link copied to clipboard"))
+      .catch(() => {
+        prompt("Copy failed, please copy manually:", url);
+      });
+  };
+
   return (
     <div
       className="editor-layout"
@@ -458,6 +529,39 @@ export default function CanvasEditor({
           flexWrap: "wrap",
         }}
       >
+        {/* Warnings */}
+        {showWarning && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "8px 12px",
+              border: "1px solid #fecaca",
+              background: "#fff1f2",
+              color: "#b91c1c",
+              borderRadius: 8,
+            }}
+          >
+            <span>
+              {capacityExceeded && `容量超出：${items.length}/${maxCapacity}`}
+              {capacityExceeded && overlaps > 0 && " ・ "}
+              {overlaps > 0 && `检测到可能重叠：${overlaps} 处`}
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ color: "#991b1b", fontSize: 12 }}>调整阈值</span>
+              <input
+                type="number"
+                min={10}
+                max={1000}
+                value={maxCapacity}
+                onChange={(e) => setMaxCapacity(Number(e.target.value) || 0)}
+                style={{ width: 90 }}
+              />
+            </div>
+          </div>
+        )}
+
         <Palette onAdd={addItem} />
 
         <button disabled={!selectedId} onClick={() => removeItem(selectedId)}>
@@ -525,6 +629,27 @@ export default function CanvasEditor({
           onChange={(e) => e.target.files?.[0] && importJSON(e.target.files[0])}
         />
         <button onClick={() => fileRef.current?.click()}>Import JSON</button>
+
+        {/* Share */}
+        <button
+          onClick={() => {
+            const id = saveShare();
+            copyShareLink(id);
+          }}
+        >
+          Share Link
+        </button>
+        <button
+          onClick={() => {
+            const id = saveShare();
+            window.open(`/share/${encodeURIComponent(id)}`, "_blank");
+          }}
+        >
+          Present
+        </button>
+
+        {/* Cloud Save/Load */}
+        <CloudControls items={items} setItems={setItems} remoteName={remoteName} />
       </div>
 
       {/* Left side：Groups / Tags */}
@@ -683,5 +808,61 @@ export default function CanvasEditor({
         </div>
       </div>
     </div>
+  );
+}
+
+import { useState as _useState } from "react";
+import { createOrGetDesign, saveDesignVersion, getLatestDesign } from "../lib/api.js";
+
+function CloudControls({ items, setItems, remoteName }) {
+  const [saving, setSaving] = _useState(false);
+  const [loading, setLoading] = _useState(false);
+  const [designMeta, setDesignMeta] = _useState(null); // {id, name, kind, latest_version}
+
+  const doSave = async () => {
+    const name = prompt("Enter a file name (e.g. My Conference Layout)", designMeta?.name || `${remoteName} layout`);
+    if (!name) return;
+    try {
+      setSaving(true);
+      const meta = await createOrGetDesign(name, remoteName);
+      setDesignMeta(meta);
+      const payload = { items };
+      const note = prompt("Version note (optional)", "");
+      await saveDesignVersion(meta.id, payload, note || "");
+      alert("Saved to cloud");
+    } catch (e) {
+      alert(e.message || "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const doLoad = async () => {
+    const name = prompt("Enter the file name to load", designMeta?.name || `${remoteName} layout`);
+    if (!name) return;
+    try {
+      setLoading(true);
+      const meta = await createOrGetDesign(name, remoteName);
+      setDesignMeta(meta);
+      const latest = await getLatestDesign(meta.id);
+      const next = Array.isArray(latest.data) ? latest.data : latest.data.items || [];
+      setItems(next);
+      alert(`Loaded latest version v${latest.version}`);
+    } catch (e) {
+      alert(e.message || "Load failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <button onClick={doSave} disabled={saving}>
+        {saving ? "Saving..." : "Save to Cloud"}
+      </button>
+      <button onClick={doLoad} disabled={loading}>
+        {loading ? "Loading..." : "Load from Cloud"}
+      </button>
+    </>
   );
 }

@@ -14,14 +14,16 @@ export default function Login() {
       body: JSON.stringify(form),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || '登录失败');
-    // 成功
+    if (!res.ok) throw new Error(data.detail || 'Login failed');
+    // success
     localStorage.setItem('token', data.token);
-    alert('登录成功！token 已保存');
-    // 跳转到首页或控制台
-    window.location.href = '/';   // 或者用 navigate('/') 如果你用 useNavigate
+    alert('Logged in. Token saved.');
+    // navigate (support redirect back)
+    const params = new URLSearchParams(window.location.search);
+    const redirect = params.get('redirect');
+    window.location.href = redirect || '/';
   } catch (err) {
-    alert(err.message);
+    alert(err.message || 'Login failed');
   }
 };
 

@@ -12,6 +12,9 @@ import Signup from "./pages/Signup.jsx";
 import QRCode from "./pages/QRCode.jsx";
 import Conference from "./pages/Conference.jsx";
 import Tradeshow from "./pages/Tradeshow.jsx";
+import Profile from "./pages/Profile.jsx";
+import ShareView from "./pages/ShareView.jsx";
+import EditorDesign from "./pages/EditorDesign.jsx";
 
 // 404 组件
 function NotFound() {
@@ -32,6 +35,9 @@ export default function App() {
         <Route path="/conference" element={<Conference />} />
         <Route path="/tradeshow" element={<Tradeshow />} />
         <Route path="/qrcode" element={<QRCode />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/editor/:designId" element={<EditorDesign />} />
+        <Route path="/share/:shareId" element={<ShareView />} />
         <Route path="/about" element={<About />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />

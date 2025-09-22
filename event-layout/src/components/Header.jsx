@@ -22,6 +22,9 @@ export default function Header() {
           <NavLink to="/qrcode" className={link}>
             QRCode
           </NavLink>
+          <NavLink to="/profile" className={link}>
+            Profile
+          </NavLink>
           <NavLink to="/about" className={link}>
             About
           </NavLink>
