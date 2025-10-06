@@ -1,8 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { Circle, Rect, Text, Transformer, Line, Group } from 'react-konva';
-import { MdTableRestaurant, MdChair, MdRecordVoiceOver, MdTheaters, MdDoorFront, MdWindow } from 'react-icons/md';
-import { FaWheelchair } from 'react-icons/fa';
-import { TbTableOptions } from 'react-icons/tb';
+import { useEffect, useRef } from 'react';
+import { Circle, Rect, Text, Transformer, Line } from 'react-konva';
 import COLORS from '../colors';
 import { PX_PER_METER, GRID_SIZE_PX, snapPx } from '../utils';
 
@@ -56,16 +53,26 @@ export default function ElementNode({
   const widthPx = node.w * PX_PER_METER * node.scaleX;
   const heightPx = node.h * PX_PER_METER * node.scaleY;
   const hasSeats = node.seats && node.seats > 0;
-  let fill = TYPE_COLORS[node.type] || COLORS.booth;
+  const shapeType = node.shapeType || (node.type === 'table_round' ? 'circle' : 'rect');
+  let fill = node.fillColor || TYPE_COLORS[node.type] || COLORS.booth;
   if (hasSeats && assignedGuests && assignedGuests.length > 0) {
     fill = '#fef3c7';
   }
 
   const handleDragEnd = (event) => {
+    let nextX = event.target.x();
+    let nextY = event.target.y();
+
+    if (shapeType === 'circle') {
+      const radius = Math.min(widthPx, heightPx) / 2;
+      nextX -= radius;
+      nextY -= radius;
+    }
+
     onChange({
       ...node,
-      x: snapPx(event.target.x()),
-      y: snapPx(event.target.y())
+      x: snapPx(nextX),
+      y: snapPx(nextY)
     });
     if (onDragEnd) onDragEnd();
   };
@@ -78,18 +85,39 @@ export default function ElementNode({
     const scaleY = ref.scaleY();
     const rawWidth = node.w * PX_PER_METER * scaleX;
     const rawHeight = node.h * PX_PER_METER * scaleY;
-    const snappedWidth = Math.max(GRID_SIZE_PX, snapPx(rawWidth));
-    const snappedHeight = Math.max(GRID_SIZE_PX, snapPx(rawHeight));
-    const nextScaleX = snappedWidth / (node.w * PX_PER_METER);
-    const nextScaleY = snappedHeight / (node.h * PX_PER_METER);
+    let snappedWidth = Math.max(GRID_SIZE_PX, snapPx(rawWidth));
+    let snappedHeight = Math.max(GRID_SIZE_PX, snapPx(rawHeight));
+
+    if (shapeType === 'circle') {
+      const size = Math.max(snappedWidth, snappedHeight);
+      snappedWidth = size;
+      snappedHeight = size;
+    }
+
+    let nextScaleX = snappedWidth / (node.w * PX_PER_METER);
+    let nextScaleY = snappedHeight / (node.h * PX_PER_METER);
+
+    if (shapeType === 'circle') {
+      const sizeScale = snappedWidth / (node.w * PX_PER_METER);
+      nextScaleX = sizeScale;
+      nextScaleY = sizeScale;
+    }
 
     ref.scaleX(1);
     ref.scaleY(1);
 
+    let nextX = ref.x();
+    let nextY = ref.y();
+
+    if (shapeType === 'circle') {
+      nextX -= snappedWidth / 2;
+      nextY -= snappedHeight / 2;
+    }
+
     onChange({
       ...node,
-      x: snapPx(ref.x()),
-      y: snapPx(ref.y()),
+      x: snapPx(nextX),
+      y: snapPx(nextY),
       scaleX: nextScaleX,
       scaleY: nextScaleY,
       rotation: ref.rotation()
@@ -113,27 +141,51 @@ export default function ElementNode({
     onDblTap: () => onDelete(node.id)
   };
 
-  return (
-    <>
-      {node.type === 'table_round' ? (
+  const renderMainShape = () => {
+    if (shapeType === 'circle') {
+      return (
         <Circle
           {...baseProps}
-          radius={Math.max(widthPx, heightPx) / 4}
+          x={node.x + widthPx / 2}
+          y={node.y + heightPx / 2}
+          radius={Math.min(widthPx, heightPx) / 2}
           fill={fill}
           stroke={COLORS.text}
           strokeWidth={2}
         />
-      ) : (
-        <Rect
+      );
+    }
+
+    if (shapeType === 'polygon' && Array.isArray(node.points) && node.points.length >= 3) {
+      const polygonPoints = node.points.flatMap((point) => [point.x * widthPx, point.y * heightPx]);
+      return (
+        <Line
           {...baseProps}
-          width={widthPx}
-          height={heightPx}
+          points={polygonPoints}
+          closed
           fill={fill}
           stroke={COLORS.text}
           strokeWidth={2}
-          cornerRadius={4}
         />
-      )}
+      );
+    }
+
+    return (
+      <Rect
+        {...baseProps}
+        width={widthPx}
+        height={heightPx}
+        fill={fill}
+        stroke={COLORS.text}
+        strokeWidth={2}
+        cornerRadius={4}
+      />
+    );
+  };
+
+  return (
+    <>
+      {renderMainShape()}
       {node.type === 'door' && (
         <Line
           x={node.x}

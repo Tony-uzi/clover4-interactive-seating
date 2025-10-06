@@ -9,7 +9,13 @@ export default function GuestSidebar({
   elements,
   onRemove,
   onDragStart,
-  onDragEnd
+  onDragEnd,
+  onAddTag,
+  onRemoveTag,
+  onAutoAssignDietary,
+  canAutoAssignDietary,
+  onAutoAssignTags,
+  canAutoAssignTags
 }) {
   if (!visible) return null;
 
@@ -31,9 +37,49 @@ export default function GuestSidebar({
         overflow: 'auto'
       }}
     >
-      <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 600, color: COLORS.text }}>
-        Available Guests ({unassignedGuests.length})
-      </h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: COLORS.text }}>
+          Available Guests ({unassignedGuests.length})
+        </h3>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {onAutoAssignTags && (
+            <button
+              onClick={onAutoAssignTags}
+              disabled={!canAutoAssignTags}
+              style={{
+                padding: '6px 10px',
+                background: canAutoAssignTags ? COLORS.accent : COLORS.border,
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: 12,
+                cursor: canAutoAssignTags ? 'pointer' : 'not-allowed',
+                fontWeight: 600
+              }}
+            >
+              Auto seat by tags
+            </button>
+          )}
+          {onAutoAssignDietary && (
+            <button
+              onClick={onAutoAssignDietary}
+              disabled={!canAutoAssignDietary}
+              style={{
+                padding: '6px 10px',
+                background: canAutoAssignDietary ? COLORS.primary : COLORS.border,
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: 12,
+                cursor: canAutoAssignDietary ? 'pointer' : 'not-allowed',
+                fontWeight: 600
+              }}
+            >
+              Auto seat by dietary
+            </button>
+          )}
+        </div>
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {unassignedGuests.map((guest) => (
           <div
@@ -64,6 +110,62 @@ export default function GuestSidebar({
               <div style={{ fontSize: '11px', color: COLORS.textLight, marginTop: '4px' }}>
                 🍽️ {guest.dietary}
               </div>
+            )}
+            {guest.tags && guest.tags.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                {guest.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '2px 6px',
+                      background: '#e0f2fe',
+                      borderRadius: 999,
+                      fontSize: 11,
+                      color: COLORS.text
+                    }}
+                  >
+                    #{tag}
+                    {onRemoveTag && (
+                      <button
+                        type="button"
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onClick={() => onRemoveTag(guest.id, tag)}
+                        style={{
+                          border: 'none',
+                          background: 'transparent',
+                          cursor: 'pointer',
+                          fontSize: 12,
+                          color: COLORS.textLight
+                        }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </div>
+            )}
+            {onAddTag && (
+              <button
+                type="button"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={() => onAddTag(guest.id)}
+                style={{
+                  marginTop: 8,
+                  padding: '4px 8px',
+                  borderRadius: 6,
+                  border: `1px dashed ${COLORS.border}`,
+                  background: '#fff',
+                  fontSize: 11,
+                  cursor: 'pointer',
+                  color: COLORS.primary
+                }}
+              >
+                + Add tag
+              </button>
             )}
           </div>
         ))}
@@ -130,8 +232,55 @@ export default function GuestSidebar({
                       marginBottom: 4,
                       fontSize: 12
                     }}
-                  >
-                    <span>{guest.name}</span>
+                    >
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span>{guest.name}</span>
+                      {guest.tags && guest.tags.length > 0 && (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', fontSize: 10, color: COLORS.textLight }}>
+                          {guest.tags.map((tag) => (
+                            <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              #{tag}
+                              {onRemoveTag && (
+                                <button
+                                  type="button"
+                                  onMouseDown={(event) => event.stopPropagation()}
+                                  onClick={() => onRemoveTag(guest.id, tag)}
+                                  style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    cursor: 'pointer',
+                                    color: COLORS.textLight,
+                                    fontSize: 11
+                                  }}
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {onAddTag && (
+                        <button
+                          type="button"
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={() => onAddTag(guest.id)}
+                          style={{
+                            alignSelf: 'flex-start',
+                            marginTop: 4,
+                            padding: '2px 6px',
+                            borderRadius: 6,
+                            border: `1px dashed ${COLORS.border}`,
+                            background: '#fff',
+                            fontSize: 10,
+                            cursor: 'pointer',
+                            color: COLORS.primary
+                          }}
+                        >
+                          + Tag
+                        </button>
+                      )}
+                    </div>
                     <button
                       onClick={() => onRemove(guestId, element.id)}
                       style={{

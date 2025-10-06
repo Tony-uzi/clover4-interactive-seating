@@ -22,6 +22,26 @@ export default function Header() {
           <NavLink to="/tradeshow-planner" className={link}>
             Trade Show Planner
           </NavLink>
+
+          <NavLink to="/event" className={link}>
+            Event Venue
+          </NavLink>
+          <NavLink to="/qrcode" className={link}>
+            QRCode
+          </NavLink>
+          <NavLink to="/profile" className={link}>
+            Profile
+          </NavLink>
+          <NavLink to="/about" className={link}>
+            About
+          </NavLink>
+          <NavLink to="/login" className={link}>
+            Login
+          </NavLink>
+          <NavLink to="/signup" className={link}>
+            Sign Up
+          </NavLink>
+
           {/* <NavLink to="/event" className={link}>
             Event Venue
           </NavLink>

@@ -32,11 +32,20 @@ export default function App() {
     <Layout>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/event" element={<EventVenue />} />
         {/* <Route path="/event" element={<EventVenue />} /> */}
         <Route path="/conference" element={<Conference />} />
         <Route path="/tradeshow" element={<Tradeshow />} />
-        {/* <Route path="/qrcode" element={<QRCode />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/editor" element={<CanvasEditor />} />
+        <Route path="/share/:shareId" element={<ShareView />} />
+        <Route path="/qrcode" element={<QRCode />} />
+        <Route path="/about" element={<About />} />
+
+          {/* <Route path="/qrcode" element={<QRCode />} />
+
         <Route path="/editor/:designId" element={<EditorDesign />} />
         <Route path="/share/:shareId" element={<ShareView />} />
         <Route path="/about" element={<About />} />
