@@ -16,6 +16,7 @@ import PresetPanel from '../components/planner/tradeshow/PresetPanel.jsx';
 import ScaleIndicator from '../components/planner/ScaleIndicator.jsx';
 import CanvasSettingsPanel from '../components/planner/CanvasSettingsPanel.jsx';
 import SelectionInspector from '../components/planner/SelectionInspector.jsx';
+import { downloadPlannerAsPDF, downloadPlannerAsPNG } from '../lib/exportPlanner.js';
 
 const STORAGE_KEY = 'tradeshow_planner_integrated_v1';
 
@@ -72,6 +73,24 @@ export default function TradeshowPlannerIntegrated() {
   const canvasNodeRef = useRef(null);
 
   const hasLoadedRef = useRef(false);
+
+  const handleExportPNG = useCallback(() => {
+    try {
+      downloadPlannerAsPNG(stageRef, canvasNodeRef, { fileBaseName: 'tradeshow-layout' });
+    } catch (error) {
+      console.error('Failed to export tradeshow layout as PNG', error);
+      window.alert('Export failed. Please try again once the canvas is fully loaded.');
+    }
+  }, [stageRef, canvasNodeRef]);
+
+  const handleExportPDF = useCallback(() => {
+    try {
+      downloadPlannerAsPDF(stageRef, canvasNodeRef, { fileBaseName: 'tradeshow-layout' });
+    } catch (error) {
+      console.error('Failed to export tradeshow layout as PDF', error);
+      window.alert('Export failed. Please try again once the canvas is fully loaded.');
+    }
+  }, [stageRef, canvasNodeRef]);
 
   useEffect(() => {
     if (hasLoadedRef.current) return;
@@ -627,6 +646,8 @@ export default function TradeshowPlannerIntegrated() {
         onZoomOut={() => zoomBy(1 / 1.2)}
         gridOn={gridOn}
         onToggleGrid={setGridOn}
+        onExportPNG={handleExportPNG}
+        onExportPDF={handleExportPDF}
         extraCounts={headerCounts}
       />
 

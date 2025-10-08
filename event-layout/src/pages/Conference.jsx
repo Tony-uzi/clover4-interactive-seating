@@ -37,16 +37,40 @@ function elementCenter(element) {
 function loadConferenceData() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return { elements: [], guests: [], seatAssignments: {} };
+    if (!stored) {
+      return {
+        elements: [],
+        guests: [],
+        seatAssignments: {},
+        roomWidth: DEFAULT_ROOM_DIMENSIONS.width,
+        roomHeight: DEFAULT_ROOM_DIMENSIONS.height,
+        canvasShape: 'rounded'
+      };
+    }
     const parsed = JSON.parse(stored);
     return {
       elements: Array.isArray(parsed.elements) ? parsed.elements : [],
-      guests: Array.isArray(parsed.guests) ? parsed.guests : [],
-      seatAssignments: parsed.seatAssignments || {}
+      guests: Array.isArray(parsed.guests)
+        ? parsed.guests.map((guest) => ({
+            ...guest,
+            tags: Array.isArray(guest.tags) ? guest.tags : []
+          }))
+        : [],
+      seatAssignments: parsed.seatAssignments || {},
+      roomWidth: parsed.roomWidth || DEFAULT_ROOM_DIMENSIONS.width,
+      roomHeight: parsed.roomHeight || DEFAULT_ROOM_DIMENSIONS.height,
+      canvasShape: parsed.canvasShape || 'rounded'
     };
   } catch (error) {
     console.warn('Failed to load conference kiosk data', error);
-    return { elements: [], guests: [], seatAssignments: {} };
+    return {
+      elements: [],
+      guests: [],
+      seatAssignments: {},
+      roomWidth: DEFAULT_ROOM_DIMENSIONS.width,
+      roomHeight: DEFAULT_ROOM_DIMENSIONS.height,
+      canvasShape: 'rounded'
+    };
   }
 }
 
@@ -54,16 +78,29 @@ export default function Conference() {
   const [elements, setElements] = useState([]);
   const [guests, setGuests] = useState([]);
   const [seatAssignments, setSeatAssignments] = useState({});
+  const [roomWidth, setRoomWidth] = useState(DEFAULT_ROOM_DIMENSIONS.width);
+  const [roomHeight, setRoomHeight] = useState(DEFAULT_ROOM_DIMENSIONS.height);
+  const [canvasShape, setCanvasShape] = useState('rounded');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGuestId, setSelectedGuestId] = useState(null);
   const containerRef = useRef(null);
   const [stageSize, setStageSize] = useState({ width: 960, height: 600 });
 
   useEffect(() => {
-    const { elements: loadedElements, guests: loadedGuests, seatAssignments: loadedAssignments } = loadConferenceData();
+    const {
+      elements: loadedElements,
+      guests: loadedGuests,
+      seatAssignments: loadedAssignments,
+      roomWidth: loadedRoomWidth,
+      roomHeight: loadedRoomHeight,
+      canvasShape: loadedCanvasShape
+    } = loadConferenceData();
     setElements(loadedElements);
     setGuests(loadedGuests);
     setSeatAssignments(loadedAssignments);
+    setRoomWidth(loadedRoomWidth);
+    setRoomHeight(loadedRoomHeight);
+    setCanvasShape(loadedCanvasShape);
   }, []);
 
   useEffect(() => {
@@ -115,8 +152,14 @@ export default function Conference() {
     return [start.x, start.y, end.x, end.y];
   }, [entranceElement, selectedElement]);
 
-  const layoutWidth = mToPx(DEFAULT_ROOM_DIMENSIONS.width);
-  const layoutHeight = mToPx(DEFAULT_ROOM_DIMENSIONS.height);
+  const layoutWidth = mToPx(roomWidth);
+  const layoutHeight = mToPx(roomHeight);
+  let canvasCornerRadius = 12;
+  if (canvasShape === 'rectangle') {
+    canvasCornerRadius = 0;
+  } else if (canvasShape === 'oval') {
+    canvasCornerRadius = Math.min(layoutWidth, layoutHeight) / 2;
+  }
   const margin = 40;
   const availableWidth = Math.max(1, stageSize.width - margin);
   const availableHeight = Math.max(1, stageSize.height - margin);
@@ -137,14 +180,15 @@ export default function Conference() {
 
   const renderElement = (element) => {
     const { width, height } = elementSize(element);
+    const shapeType = element.shapeType || (element.type === 'table_round' ? 'circle' : 'rect');
     const isSelected = selectedElement && selectedElement.id === element.id;
-    const fill = TYPE_COLORS[element.type] || (element.seats && element.seats > 0 ? '#f8fafc' : '#e2e8f0');
+    const fill = element.fillColor || TYPE_COLORS[element.type] || (element.seats && element.seats > 0 ? '#f8fafc' : '#e2e8f0');
     const label = element.label || '';
 
     const children = [];
 
-    if (element.type === 'table_round') {
-      const radius = Math.max(width, height) / 2;
+    if (shapeType === 'circle') {
+      const radius = Math.min(width, height) / 2;
       children.push(
         <Circle
           key="shape"
@@ -165,7 +209,32 @@ export default function Conference() {
             radius={radius + 6}
             stroke={COLORS.accent}
             strokeWidth={3}
-            dash={[8, 6]}
+            dash={[10, 6]}
+            listening={false}
+          />
+        );
+      }
+    } else if (shapeType === 'polygon' && Array.isArray(element.points) && element.points.length >= 3) {
+      const polygonPoints = element.points.flatMap((point) => [point.x * width, point.y * height]);
+      children.push(
+        <Line
+          key="shape"
+          points={polygonPoints}
+          closed
+          fill={fill}
+          stroke={COLORS.text}
+          strokeWidth={1.5}
+        />
+      );
+      if (isSelected) {
+        children.push(
+          <Line
+            key="highlight"
+            points={polygonPoints}
+            closed
+            stroke={COLORS.accent}
+            strokeWidth={3}
+            dash={[10, 6]}
             listening={false}
           />
         );
@@ -191,11 +260,44 @@ export default function Conference() {
             stroke={COLORS.accent}
             strokeWidth={3}
             cornerRadius={4}
-            dash={[8, 6]}
+            dash={[10, 6]}
             listening={false}
           />
         );
       }
+    }
+
+    if (element.type === 'door') {
+      children.push(
+        <Line
+          key="door-detail"
+          points={[0, 0, 0, height]}
+          stroke={COLORS.text}
+          strokeWidth={1.5}
+          listening={false}
+        />
+      );
+    }
+
+    if (element.type === 'window') {
+      children.push(
+        <Line
+          key="window-1"
+          points={[0, height * 0.25, width, height * 0.25]}
+          stroke={COLORS.textLight}
+          strokeWidth={1.5}
+          listening={false}
+        />
+      );
+      children.push(
+        <Line
+          key="window-2"
+          points={[0, height * 0.75, width, height * 0.75]}
+          stroke={COLORS.textLight}
+          strokeWidth={1.5}
+          listening={false}
+        />
+      );
     }
 
     if (element.type === 'blind_path') {
@@ -205,7 +307,7 @@ export default function Conference() {
         children.push(
           <Line
             key={`blind-${i}`}
-            points={[width * ratio, 0, width * ratio, height]}
+            points={[ratio * width, 0, ratio * width, height]}
             stroke={COLORS.text}
             strokeWidth={1}
             dash={[6, 6]}
@@ -219,15 +321,14 @@ export default function Conference() {
       children.push(
         <Text
           key="label"
-          text={label}
+          text={`${TYPE_LABELS[element.type] || '📦'} ${label}`}
           width={width}
-          height={Math.min(height, 40)}
-          y={Math.max(0, height / 2 - 10)}
+          y={-18}
           align="center"
-          verticalAlign="middle"
-          fontSize={14}
+          fontSize={13}
           fill={COLORS.text}
           listening={false}
+          fontStyle="bold"
         />
       );
     }
@@ -400,7 +501,7 @@ export default function Conference() {
                       fill="#ffffff"
                       stroke={COLORS.border}
                       strokeWidth={2}
-                      cornerRadius={12}
+                      cornerRadius={canvasCornerRadius}
                     />
 
                     {pathPoints && (
