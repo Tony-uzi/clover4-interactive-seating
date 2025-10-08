@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Stage, Layer, Rect } from 'react-konva';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Stage, Layer, Rect, Line, Circle, Group } from 'react-konva';
 import PlannerHeader from '../components/planner/Header.jsx';
 import CatalogToolbar from '../components/planner/CatalogToolbar.jsx';
 import CSVImport from '../components/planner/CSVImport.jsx';
@@ -14,8 +14,19 @@ import RouteVisualization from '../components/planner/tradeshow/RouteVisualizati
 import TipsCard from '../components/planner/tradeshow/TipsCard.jsx';
 import PresetPanel from '../components/planner/tradeshow/PresetPanel.jsx';
 import ScaleIndicator from '../components/planner/ScaleIndicator.jsx';
+import CanvasSettingsPanel from '../components/planner/CanvasSettingsPanel.jsx';
+import SelectionInspector from '../components/planner/SelectionInspector.jsx';
 
 const STORAGE_KEY = 'tradeshow_planner_integrated_v1';
+
+const DEFAULT_CUSTOM_CANVAS_POINTS = Object.freeze([
+  { x: 0, y: 0 },
+  { x: 1, y: 0 },
+  { x: 1, y: 1 },
+  { x: 0, y: 1 }
+]);
+
+const CUSTOM_POINT_BOUNDS = { min: -0.25, max: 1.25 };
 
 const MODES = [
   { id: 'layout', label: 'Layout', icon: '🏗️' },
@@ -45,6 +56,20 @@ export default function TradeshowPlannerIntegrated() {
 
   const [hallWidth, setHallWidth] = useState(40);
   const [hallHeight, setHallHeight] = useState(30);
+  const [canvasShape, setCanvasShape] = useState('rounded');
+  const [canvasCustomPoints, setCanvasCustomPoints] = useState(DEFAULT_CUSTOM_CANVAS_POINTS);
+  const [canvasCorners, setCanvasCorners] = useState(() => [
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { x: 1, y: 1 },
+    { x: 0, y: 1 }
+  ]);
+  const selectedBooth = useMemo(
+    () => booths.find((item) => item.id === selectedId) || null,
+    [booths, selectedId]
+  );
+  const [isCanvasSelected, setIsCanvasSelected] = useState(false);
+  const canvasNodeRef = useRef(null);
 
   const hasLoadedRef = useRef(false);
 
@@ -61,7 +86,19 @@ export default function TradeshowPlannerIntegrated() {
       if (parsed.visitRoute) setVisitRoute(parsed.visitRoute);
       if (parsed.hallWidth) setHallWidth(parsed.hallWidth);
       if (parsed.hallHeight) setHallHeight(parsed.hallHeight);
+      if (parsed.canvasShape) setCanvasShape(parsed.canvasShape);
+      if (Array.isArray(parsed.canvasCustomPoints)) {
+        const validPoints = parsed.canvasCustomPoints.filter(
+          (point) => typeof point?.x === 'number' && typeof point?.y === 'number'
+        );
+        if (validPoints.length >= 3) {
+          setCanvasCustomPoints(validPoints.map((point) => ({ x: point.x, y: point.y })));
+        }
+      }
       if (typeof parsed.showPresetPanel === 'boolean') setShowPresetPanel(parsed.showPresetPanel);
+      if (Array.isArray(parsed.canvasCorners) && parsed.canvasCorners.length === 4) {
+        setCanvasCorners(parsed.canvasCorners);
+      }
     } catch (error) {
       console.warn('Failed to restore tradeshow planner state', error);
     }
@@ -76,15 +113,35 @@ export default function TradeshowPlannerIntegrated() {
       visitRoute,
       hallWidth,
       hallHeight,
-      showPresetPanel
+      showPresetPanel,
+      canvasShape,
+      canvasCustomPoints,
+      canvasCorners
     });
     localStorage.setItem(STORAGE_KEY, payload);
-  }, [booths, vendors, boothAssignments, visitRoute, hallWidth, hallHeight, showPresetPanel]);
+  }, [
+    booths,
+    vendors,
+    boothAssignments,
+    visitRoute,
+    hallWidth,
+    hallHeight,
+    showPresetPanel,
+    canvasShape,
+    canvasCustomPoints,
+    canvasCorners
+  ]);
 
   useEffect(() => {
     setIsDraggingBooth(false);
     setIsDraggingVendor(false);
   }, [mode]);
+
+  useEffect(() => {
+    if (canvasShape === 'custom' && (!Array.isArray(canvasCustomPoints) || canvasCustomPoints.length < 3)) {
+      setCanvasCustomPoints(DEFAULT_CUSTOM_CANVAS_POINTS);
+    }
+  }, [canvasShape, canvasCustomPoints]);
 
   const handleAddBooth = (catalogItem) => {
     const id = generateId('booth');
@@ -99,10 +156,12 @@ export default function TradeshowPlannerIntegrated() {
       h: catalogItem.h,
       rotation: 0,
       scaleX: 1,
-      scaleY: 1
+      scaleY: 1,
+      orientation: catalogItem.orientation || 'horizontal'
     };
     setBooths((prev) => [...prev, node]);
     setSelectedId(id);
+    setIsCanvasSelected(false);
   };
 
   const handleChangeBooth = (booth) => {
@@ -121,7 +180,11 @@ export default function TradeshowPlannerIntegrated() {
   };
 
   const handleStageMouseDown = (event) => {
-    if (event.target === event.target.getStage()) setSelectedId(null);
+    const stage = event.target.getStage();
+    if (event.target === stage) {
+      setSelectedId(null);
+      setIsCanvasSelected(false);
+    }
   };
 
   const handleWheel = (event) => {
@@ -287,7 +350,8 @@ export default function TradeshowPlannerIntegrated() {
         h: catalogItem.h,
         rotation,
         scaleX,
-        scaleY
+        scaleY,
+        orientation: boothTemplate.orientation || catalogItem.orientation || 'horizontal'
       });
     });
 
@@ -308,7 +372,8 @@ export default function TradeshowPlannerIntegrated() {
         h: catalogItem.h,
         rotation,
         scaleX,
-        scaleY
+        scaleY,
+        orientation: facilityTemplate.orientation || catalogItem.orientation || 'horizontal'
       });
     });
 
@@ -318,6 +383,7 @@ export default function TradeshowPlannerIntegrated() {
     setShowPresetPanel(false);
     setBoothAssignments({});
     setVisitRoute([]);
+    setIsCanvasSelected(false);
   };
 
   const handleVendorDragStart = (event, vendorId) => {
@@ -374,19 +440,162 @@ export default function TradeshowPlannerIntegrated() {
 
   useEffect(() => {
     const onKey = (event) => {
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+          return;
+        }
+        const interactiveAncestor = target.closest?.('input, textarea, [contenteditable="true"]');
+        if (interactiveAncestor) return;
+      }
+
       if ((event.key === 'Delete' || event.key === 'Backspace') && selectedId) {
         handleDeleteBooth(selectedId);
       }
       if (event.key === 'Escape') {
         setSelectedId(null);
+        setIsCanvasSelected(false);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedId]);
 
+  useEffect(() => {
+    if (mode !== 'layout') {
+      setIsCanvasSelected(false);
+    }
+  }, [mode]);
+
   const canvasWidth = mToPx(hallWidth);
   const canvasHeight = mToPx(hallHeight);
+  let canvasCornerRadius = 0;
+  if (canvasShape === 'rounded') {
+    canvasCornerRadius = 24;
+  } else if (canvasShape === 'oval') {
+    canvasCornerRadius = Math.min(canvasWidth, canvasHeight) / 2;
+  }
+
+  const actualCanvasCorners = useMemo(
+    () =>
+      canvasCorners.map((corner) => ({
+        x: corner.x * canvasWidth,
+        y: corner.y * canvasHeight
+      })),
+    [canvasCorners, canvasWidth, canvasHeight]
+  );
+
+  const canvasCornersPoints = useMemo(
+    () => actualCanvasCorners.flatMap((corner) => [corner.x, corner.y]),
+    [actualCanvasCorners]
+  );
+
+  const effectiveCustomPoints = useMemo(() => {
+    if (canvasShape !== 'custom') return DEFAULT_CUSTOM_CANVAS_POINTS;
+    if (!Array.isArray(canvasCustomPoints) || canvasCustomPoints.length < 3) {
+      return DEFAULT_CUSTOM_CANVAS_POINTS;
+    }
+    return canvasCustomPoints;
+  }, [canvasShape, canvasCustomPoints]);
+
+  const actualCanvasPoints = useMemo(
+    () =>
+      effectiveCustomPoints.map((point) => ({
+        x: point.x * canvasWidth,
+        y: point.y * canvasHeight
+      })),
+    [effectiveCustomPoints, canvasWidth, canvasHeight]
+  );
+
+  const canvasPolygonPoints = useMemo(
+    () => actualCanvasPoints.flatMap((point) => [point.x, point.y]),
+    [actualCanvasPoints]
+  );
+
+  const canvasClipFunc = useCallback(
+    (context) => {
+      if (!actualCanvasPoints.length) return;
+      const [first, ...rest] = actualCanvasPoints;
+      context.beginPath();
+      context.moveTo(first.x, first.y);
+      rest.forEach((point) => context.lineTo(point.x, point.y));
+      context.closePath();
+    },
+    [actualCanvasPoints]
+  );
+
+  const updateCustomPointAt = useCallback(
+    (index, x, y) => {
+      if (canvasShape !== 'custom') return null;
+      if (canvasWidth === 0 || canvasHeight === 0) return null;
+
+      const normalize = (value, dimension) => {
+        if (dimension === 0) return 0;
+        const scaled = value / dimension;
+        return Math.max(CUSTOM_POINT_BOUNDS.min, Math.min(CUSTOM_POINT_BOUNDS.max, scaled));
+      };
+
+      const normalizedX = normalize(x, canvasWidth);
+      const normalizedY = normalize(y, canvasHeight);
+
+      setCanvasCustomPoints((prev) => {
+        const source = Array.isArray(prev) && prev.length >= 3 ? prev : DEFAULT_CUSTOM_CANVAS_POINTS;
+        return source.map((point, idx) => {
+          if (idx === index) return { x: normalizedX, y: normalizedY };
+          return { x: point.x, y: point.y };
+        });
+      });
+
+      return {
+        x: normalizedX * canvasWidth,
+        y: normalizedY * canvasHeight
+      };
+    },
+    [canvasShape, canvasWidth, canvasHeight]
+  );
+
+  const handleCustomHandleDragMove = useCallback(
+    (index, event) => {
+      const nextPosition = event.target.position();
+      const clampedPosition = updateCustomPointAt(index, nextPosition.x, nextPosition.y);
+      if (clampedPosition) {
+        event.target.position(clampedPosition);
+      }
+    },
+    [updateCustomPointAt]
+  );
+
+
+  const catalogLabelForType = (type) => {
+    const entry = BOOTH_CATALOG.find((item) => item.type === type);
+    return entry ? entry.label : type;
+  };
+
+  const handleRenameBooth = (id, nextLabel) => {
+    setBooths((prev) => prev.map((item) => (item.id === id ? { ...item, label: nextLabel } : item)));
+  };
+
+  const toggleOrientationForBooth = (booth) => {
+    if (!booth) return;
+    const currentOrientation = booth.orientation || (booth.w >= booth.h ? 'horizontal' : 'vertical');
+    const nextOrientation = currentOrientation === 'vertical' ? 'horizontal' : 'vertical';
+    const widthMeters = booth.w * booth.scaleX;
+    const heightMeters = booth.h * booth.scaleY;
+
+    setBooths((prev) =>
+      prev.map((item) => {
+        if (item.id !== booth.id) return item;
+        return {
+          ...item,
+          w: heightMeters,
+          h: widthMeters,
+          scaleX: 1,
+          scaleY: 1,
+          orientation: nextOrientation
+        };
+      })
+    );
+  };
 
   const headerCounts = useMemo(
     () => ({ assign: vendors.length, route: visitRoute.length }),
@@ -421,7 +630,20 @@ export default function TradeshowPlannerIntegrated() {
         extraCounts={headerCounts}
       />
 
-      {mode === 'layout' && <CatalogToolbar catalog={BOOTH_CATALOG} onAdd={handleAddBooth} />}
+      {mode === 'layout' && (
+        <>
+          <CatalogToolbar catalog={BOOTH_CATALOG} onAdd={handleAddBooth} />
+          <CanvasSettingsPanel
+            title="Hall Canvas"
+            width={hallWidth}
+            height={hallHeight}
+            onWidthChange={setHallWidth}
+            onHeightChange={setHallHeight}
+            shape={canvasShape}
+            onShapeChange={setCanvasShape}
+          />
+        </>
+      )}
 
       <PresetPanel visible={showPresetPanel} presets={PRESET_LAYOUTS} onSelect={loadPreset} />
 
@@ -486,18 +708,116 @@ export default function TradeshowPlannerIntegrated() {
             style={{ background: COLORS.backgroundLight }}
           >
             <Layer>
-              <Rect
-                x={0}
-                y={0}
-                width={canvasWidth}
-                height={canvasHeight}
-                fill="#fff"
-                stroke={COLORS.text}
-                strokeWidth={2}
-                cornerRadius={6}
-                listening={false}
-              />
-              <Grid width={canvasWidth} height={canvasHeight} visible={gridOn} />
+              {canvasShape === 'custom' ? (
+                <>
+                  <Line
+                    ref={canvasNodeRef}
+                    points={canvasPolygonPoints}
+                    closed
+                    fill="#fff"
+                    stroke={isCanvasSelected ? COLORS.accent : COLORS.text}
+                    strokeWidth={isCanvasSelected ? 3 : 2}
+                    listening={mode === 'layout'}
+                    onMouseDown={() => {
+                      if (mode !== 'layout') return;
+                      setIsCanvasSelected(true);
+                      setSelectedId(null);
+                    }}
+                    onTap={() => {
+                      if (mode !== 'layout') return;
+                      setIsCanvasSelected(true);
+                      setSelectedId(null);
+                    }}
+                  />
+                  <Group listening={false} clipFunc={canvasClipFunc}>
+                    <Grid width={canvasWidth} height={canvasHeight} visible={gridOn} />
+                  </Group>
+                  {mode === 'layout' && (
+                    <>
+                      {actualCanvasPoints.map((point, index) => (
+                        <Circle
+                          key={`handle-${index}`}
+                          x={point.x}
+                          y={point.y}
+                          radius={8 / zoom}
+                          fill={COLORS.accent}
+                          stroke="#fff"
+                          strokeWidth={1 / zoom}
+                          draggable
+                          onMouseDown={(event) => {
+                            event.cancelBubble = true;
+                            if (mode !== 'layout') return;
+                            setIsCanvasSelected(true);
+                            setSelectedId(null);
+                          }}
+                          onTouchStart={(event) => {
+                            event.cancelBubble = true;
+                            if (mode !== 'layout') return;
+                            setIsCanvasSelected(true);
+                            setSelectedId(null);
+                          }}
+                          onDragMove={(event) => handleCustomHandleDragMove(index, event)}
+                          onDragEnd={(event) => handleCustomHandleDragMove(index, event)}
+                        />
+                      ))}
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Line
+                    ref={canvasNodeRef}
+                    points={canvasCornersPoints}
+                    closed
+                    fill="#fff"
+                    stroke={isCanvasSelected ? COLORS.accent : COLORS.text}
+                    strokeWidth={isCanvasSelected ? 3 : 2}
+                    listening={mode === 'layout'}
+                    onMouseDown={() => {
+                      if (mode !== 'layout') return;
+                      setIsCanvasSelected(true);
+                      setSelectedId(null);
+                    }}
+                    onTap={() => {
+                      if (mode !== 'layout') return;
+                      setIsCanvasSelected(true);
+                      setSelectedId(null);
+                    }}
+                  />
+                  <Grid width={canvasWidth} height={canvasHeight} visible={gridOn} />
+                  {mode === 'layout' && isCanvasSelected && (
+                    <>
+                      {actualCanvasCorners.map((corner, index) => (
+                        <Circle
+                          key={`corner-${index}`}
+                          x={corner.x}
+                          y={corner.y}
+                          radius={8 / zoom}
+                          fill={COLORS.accent}
+                          stroke="#fff"
+                          strokeWidth={1 / zoom}
+                          draggable
+                          onMouseDown={(event) => {
+                            event.cancelBubble = true;
+                          }}
+                          onTouchStart={(event) => {
+                            event.cancelBubble = true;
+                          }}
+                          onDragMove={(event) => {
+                            const newX = Math.max(0, event.target.x());
+                            const newY = Math.max(0, event.target.y());
+                            const normalizedX = newX / canvasWidth;
+                            const normalizedY = newY / canvasHeight;
+                            setCanvasCorners((prev) =>
+                              prev.map((c, i) => (i === index ? { x: normalizedX, y: normalizedY } : c))
+                            );
+                          }}
+                        />
+                      ))}
+                    </>
+                  )}
+                </>
+              )}
             </Layer>
 
             <Layer>
@@ -507,6 +827,7 @@ export default function TradeshowPlannerIntegrated() {
                   node={booth}
                   isSelected={booth.id === selectedId}
                   onSelect={() => {
+                    setIsCanvasSelected(false);
                     setSelectedId(booth.id);
                     if (mode === 'route' && routeMode === 'manual' && boothAssignments[booth.id]) {
                       toggleBoothInRoute(booth.id);
@@ -573,6 +894,28 @@ export default function TradeshowPlannerIntegrated() {
               onDrop={handleCanvasDrop}
             />
           )}
+
+          <SelectionInspector
+            visible={mode === 'layout' && !!selectedBooth}
+            title="Selected Widget"
+            typeLabel={selectedBooth ? catalogLabelForType(selectedBooth.type) : ''}
+            name={selectedBooth?.label || ''}
+            onNameChange={(value) => selectedBooth && handleRenameBooth(selectedBooth.id, value)}
+            onDelete={() => selectedBooth && handleDeleteBooth(selectedBooth.id)}
+            canToggleOrientation={
+              !!selectedBooth && (selectedBooth.type === 'window' || selectedBooth.type === 'blind_path')
+            }
+            isVertical={
+              !!selectedBooth && (selectedBooth.orientation === 'vertical' || selectedBooth.h > selectedBooth.w)
+            }
+            onToggleOrientation={() => toggleOrientationForBooth(selectedBooth)}
+          >
+            {selectedBooth?.category && (
+              <div style={{ fontSize: 12, color: COLORS.textLight }}>
+                Category: <strong style={{ color: COLORS.text }}>{selectedBooth.category}</strong>
+              </div>
+            )}
+          </SelectionInspector>
 
           <TipsCard mode={mode} />
           <ScaleIndicator zoom={zoom} pxPerMeter={PX_PER_METER} labelPrefix="Scale" />

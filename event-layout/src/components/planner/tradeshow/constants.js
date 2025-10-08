@@ -8,9 +8,9 @@ export const BOOTH_CATALOG = [
   { key: 'restroom', label: 'Restroom', type: 'restroom', w: 3, h: 2, category: 'facility' },
   { key: 'food-area', label: 'Food Court', type: 'food', w: 5, h: 4, category: 'facility' },
   { key: 'info-desk', label: 'Info Desk', type: 'info', w: 2, h: 2, category: 'facility' },
-  { key: 'door', label: 'Door', type: 'door', w: 2, h: 0.4, category: 'structure' },
-  { key: 'window', label: 'Window', type: 'window', w: 3, h: 0.25, category: 'structure' },
-  { key: 'blind-path', label: 'Tactile Path', type: 'blind_path', w: 1, h: 6, category: 'structure' }
+  { key: 'door', label: 'Door', type: 'door', w: 2, h: 0.4, category: 'structure', orientation: 'horizontal' },
+  { key: 'window', label: 'Window', type: 'window', w: 3, h: 0.25, category: 'structure', orientation: 'horizontal' },
+  { key: 'blind-path', label: 'Tactile Path', type: 'blind_path', w: 1, h: 6, category: 'structure', orientation: 'horizontal' }
 ];
 
 export const PRESET_LAYOUTS = [

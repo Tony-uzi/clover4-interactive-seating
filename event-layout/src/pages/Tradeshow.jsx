@@ -32,7 +32,14 @@ function loadTradeshowData() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) {
-      return { booths: [], vendors: [], boothAssignments: {}, hallWidth: 40, hallHeight: 30 };
+      return {
+        booths: [],
+        vendors: [],
+        boothAssignments: {},
+        hallWidth: 40,
+        hallHeight: 30,
+        canvasShape: 'rounded'
+      };
     }
     const parsed = JSON.parse(stored);
     return {
@@ -40,11 +47,19 @@ function loadTradeshowData() {
       vendors: Array.isArray(parsed.vendors) ? parsed.vendors : [],
       boothAssignments: parsed.boothAssignments || {},
       hallWidth: parsed.hallWidth || 40,
-      hallHeight: parsed.hallHeight || 30
+      hallHeight: parsed.hallHeight || 30,
+      canvasShape: parsed.canvasShape || 'rounded'
     };
   } catch (error) {
     console.warn('Failed to load tradeshow kiosk data', error);
-    return { booths: [], vendors: [], boothAssignments: {}, hallWidth: 40, hallHeight: 30 };
+    return {
+      booths: [],
+      vendors: [],
+      boothAssignments: {},
+      hallWidth: 40,
+      hallHeight: 30,
+      canvasShape: 'rounded'
+    };
   }
 }
 
@@ -54,18 +69,27 @@ export default function Tradeshow() {
   const [boothAssignments, setBoothAssignments] = useState({});
   const [hallWidth, setHallWidth] = useState(40);
   const [hallHeight, setHallHeight] = useState(30);
+  const [canvasShape, setCanvasShape] = useState('rounded');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVendorId, setSelectedVendorId] = useState(null);
   const containerRef = useRef(null);
   const [stageSize, setStageSize] = useState({ width: 960, height: 620 });
 
   useEffect(() => {
-    const { booths: loadedBooths, vendors: loadedVendors, boothAssignments: loadedAssignments, hallWidth: width, hallHeight: height } = loadTradeshowData();
+    const {
+      booths: loadedBooths,
+      vendors: loadedVendors,
+      boothAssignments: loadedAssignments,
+      hallWidth: width,
+      hallHeight: height,
+      canvasShape: loadedCanvasShape
+    } = loadTradeshowData();
     setBooths(loadedBooths);
     setVendors(loadedVendors);
     setBoothAssignments(loadedAssignments);
     setHallWidth(width);
     setHallHeight(height);
+    setCanvasShape(loadedCanvasShape);
   }, []);
 
   useEffect(() => {
@@ -122,6 +146,12 @@ export default function Tradeshow() {
 
   const layoutWidth = mToPx(hallWidth || 40);
   const layoutHeight = mToPx(hallHeight || 30);
+  let canvasCornerRadius = 16;
+  if (canvasShape === 'rectangle') {
+    canvasCornerRadius = 0;
+  } else if (canvasShape === 'oval') {
+    canvasCornerRadius = Math.min(layoutWidth, layoutHeight) / 2;
+  }
   const margin = 48;
   const availableWidth = Math.max(1, stageSize.width - margin);
   const availableHeight = Math.max(1, stageSize.height - margin);
@@ -367,7 +397,7 @@ export default function Tradeshow() {
                       fill="#ffffff"
                       stroke={COLORS.border}
                       strokeWidth={2}
-                      cornerRadius={16}
+                      cornerRadius={canvasCornerRadius}
                     />
 
                     {pathPoints && (
@@ -417,4 +447,3 @@ export default function Tradeshow() {
     </section>
   );
 }
-

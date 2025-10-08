@@ -41,12 +41,6 @@ export default function ConferencePlannerIntegrated() {
   const [stagePos, setStagePos] = useState({ x: 40, y: 40 });
   const stageRef = useRef(null);
   const [selectedId, setSelectedId] = useState(null);
-  const selectedElement = useMemo(
-    () => elements.find((item) => item.id === selectedId) || null,
-    [elements, selectedId]
-  );
-  const [isCanvasSelected, setIsCanvasSelected] = useState(false);
-  const canvasNodeRef = useRef(null);
 
   const [guests, setGuests] = useState([]);
   const [csvText, setCsvText] = useState('');
@@ -54,25 +48,6 @@ export default function ConferencePlannerIntegrated() {
   const [seatAssignments, setSeatAssignments] = useState({});
   const [isDraggingGuest, setIsDraggingGuest] = useState(false);
   const [isDraggingElement, setIsDraggingElement] = useState(false);
-
-  const [roomWidth, setRoomWidth] = useState(DEFAULT_ROOM_DIMENSIONS.width);
-  const [roomHeight, setRoomHeight] = useState(DEFAULT_ROOM_DIMENSIONS.height);
-  const [canvasShape, setCanvasShape] = useState('rounded');
-  const [canvasCustomPoints, setCanvasCustomPoints] = useState(DEFAULT_CUSTOM_CANVAS_POINTS);
-  const [canvasCorners, setCanvasCorners] = useState(() => [
-    { x: 0, y: 0 },
-    { x: 1, y: 0 },
-    { x: 1, y: 1 },
-    { x: 0, y: 1 }
-  ]);
-  const [customWidgets, setCustomWidgets] = useState([]);
-  const [showCustomWidgetModal, setShowCustomWidgetModal] = useState(false);
-  const [roomCapacity, setRoomCapacity] = useState({ tables: '', attendees: '' });
-
-  const combinedCatalog = useMemo(
-    () => [...CONFERENCE_CATALOG, ...customWidgets],
-    [customWidgets]
-  );
 
   const hasLoadedRef = useRef(false);
   const hasSeededRef = useRef(false);
@@ -111,7 +86,36 @@ export default function ConferencePlannerIntegrated() {
           }))
         );
       }
+      if (parsed.guests) {
+        setGuests(
+          parsed.guests.map((guest) => ({
+            ...guest,
+            tags: Array.isArray(guest.tags) ? guest.tags : []
+          }))
+        );
+      }
       if (parsed.seatAssignments) setSeatAssignments(parsed.seatAssignments);
+      if (parsed.roomWidth) setRoomWidth(parsed.roomWidth);
+      if (parsed.roomHeight) setRoomHeight(parsed.roomHeight);
+      if (parsed.canvasShape) setCanvasShape(parsed.canvasShape);
+      if (Array.isArray(parsed.canvasCustomPoints)) {
+        const validPoints = parsed.canvasCustomPoints.filter(
+          (point) => typeof point?.x === 'number' && typeof point?.y === 'number'
+        );
+        if (validPoints.length >= 3) {
+          setCanvasCustomPoints(validPoints.map((point) => ({ x: point.x, y: point.y })));
+        }
+      }
+      if (Array.isArray(parsed.customWidgets)) setCustomWidgets(parsed.customWidgets);
+      if (parsed.roomCapacity) {
+        setRoomCapacity({
+          tables: parsed.roomCapacity.tables || '',
+          attendees: parsed.roomCapacity.attendees || ''
+        });
+      }
+      if (Array.isArray(parsed.canvasCorners) && parsed.canvasCorners.length === 4) {
+        setCanvasCorners(parsed.canvasCorners);
+      }
       if (parsed.roomWidth) setRoomWidth(parsed.roomWidth);
       if (parsed.roomHeight) setRoomHeight(parsed.roomHeight);
       if (parsed.canvasShape) setCanvasShape(parsed.canvasShape);
@@ -167,6 +171,12 @@ export default function ConferencePlannerIntegrated() {
   }, [canvasShape, canvasCustomPoints]);
 
   useEffect(() => {
+    if (canvasShape === 'custom' && (!Array.isArray(canvasCustomPoints) || canvasCustomPoints.length < 3)) {
+      setCanvasCustomPoints(DEFAULT_CUSTOM_CANVAS_POINTS);
+    }
+  }, [canvasShape, canvasCustomPoints]);
+
+  useEffect(() => {
     if (!hasLoadedRef.current || hasSeededRef.current) return;
     if (elements.length > 0) {
       hasSeededRef.current = true;
@@ -187,6 +197,9 @@ export default function ConferencePlannerIntegrated() {
         scaleX: 1,
         scaleY: 1,
         orientation: 'horizontal',
+        shapeType: 'rect',
+        scaleY: 1,
+        orientation: 'horizontal',
         shapeType: 'rect'
       },
       {
@@ -202,6 +215,9 @@ export default function ConferencePlannerIntegrated() {
         scaleX: 1,
         scaleY: 1,
         orientation: 'horizontal',
+        shapeType: 'rect',
+        scaleY: 1,
+        orientation: 'horizontal',
         shapeType: 'rect'
       },
       {
@@ -215,6 +231,9 @@ export default function ConferencePlannerIntegrated() {
         h: 6,
         rotation: 0,
         scaleX: 1,
+        scaleY: 1,
+        orientation: 'vertical',
+        shapeType: 'rect',
         scaleY: 1,
         orientation: 'vertical',
         shapeType: 'rect'
@@ -245,10 +264,19 @@ export default function ConferencePlannerIntegrated() {
         ? catalogItem.points.map((point) => ({ ...point }))
         : null,
       fillColor: catalogItem.fillColor || null,
+      origin: catalogItem.custom ? 'custom' : 'default',
+      scaleY: 1,
+      orientation: catalogItem.orientation || 'horizontal',
+      shapeType: catalogItem.shapeType || 'rect',
+      points: Array.isArray(catalogItem.points)
+        ? catalogItem.points.map((point) => ({ ...point }))
+        : null,
+      fillColor: catalogItem.fillColor || null,
       origin: catalogItem.custom ? 'custom' : 'default'
     };
     setElements((prev) => [...prev, node]);
     setSelectedId(id);
+    setIsCanvasSelected(false);
     setIsCanvasSelected(false);
   };
 
@@ -265,6 +293,7 @@ export default function ConferencePlannerIntegrated() {
     });
     if (selectedId === id) setSelectedId(null);
   };
+
 
   const handleSaveCustomWidget = (config) => {
     const widgetId = generateId('widget');
@@ -364,121 +393,6 @@ export default function ConferencePlannerIntegrated() {
     }));
   };
 
-  const handleAddTagToGuest = (guestId) => {
-    if (!guestId) return;
-    const tag = window.prompt('Enter a tag for this attendee (e.g., VIP, Team A)');
-    if (!tag) return;
-    const normalized = tag.trim();
-    if (!normalized) return;
-
-    setGuests((prev) =>
-      prev.map((guest) => {
-        if (guest.id !== guestId) return guest;
-        const existing = guest.tags || [];
-        if (existing.includes(normalized)) return guest;
-        return {
-          ...guest,
-          tags: [...existing, normalized]
-        };
-      })
-    );
-  };
-
-  const handleRemoveTagFromGuest = (guestId, tag) => {
-    if (!guestId || !tag) return;
-    setGuests((prev) =>
-      prev.map((guest) => {
-        if (guest.id !== guestId) return guest;
-        return {
-          ...guest,
-          tags: (guest.tags || []).filter((item) => item !== tag)
-        };
-      })
-    );
-  };
-
-  const autoAssignToTables = (groupExtractor, { fallbackLabel } = { fallbackLabel: 'General' }) => {
-    const seatableElements = elements.filter((element) => element.seats > 0);
-    if (seatableElements.length === 0) {
-      alert('Add tables with seats before auto-assigning.');
-      return;
-    }
-    if (guests.length === 0) {
-      alert('Import guests before auto-assigning.');
-      return;
-    }
-
-    const tables = seatableElements.map((element) => ({
-      element,
-      remaining: element.seats,
-      guests: []
-    }));
-    const sortedTables = [...tables].sort((a, b) => b.element.seats - a.element.seats);
-
-    const groupsMap = new Map();
-    guests.forEach((guest) => {
-      const rawLabel = groupExtractor(guest);
-      const cleanedLabel = (rawLabel && rawLabel.trim()) || fallbackLabel;
-      const key = cleanedLabel.toLowerCase();
-      if (!groupsMap.has(key)) {
-        groupsMap.set(key, { key, label: cleanedLabel, guests: [] });
-      }
-      groupsMap.get(key).guests.push(guest);
-    });
-
-    const groupEntries = Array.from(groupsMap.values()).sort((a, b) => b.guests.length - a.guests.length);
-    const assignedIds = new Set();
-
-    groupEntries.forEach((group) => {
-      const queue = [...group.guests];
-      while (queue.length > 0) {
-        let target = sortedTables.find((table) => table.remaining >= queue.length && table.remaining > 0);
-        if (!target) {
-          target = sortedTables.find((table) => table.remaining > 0);
-        }
-        if (!target) break;
-        const take = Math.min(target.remaining, queue.length);
-        const chunk = queue.splice(0, take);
-        target.guests.push(...chunk.map((guest) => guest.id));
-        chunk.forEach((guest) => assignedIds.add(guest.id));
-        target.remaining -= take;
-      }
-    });
-
-    const leftovers = guests.filter((guest) => !assignedIds.has(guest.id));
-    if (leftovers.length > 0) {
-      alert(`Not enough seats for ${leftovers.length} attendee${leftovers.length > 1 ? 's' : ''}.`);
-    }
-
-    const newAssignments = {};
-    tables.forEach((table) => {
-      if (table.guests.length > 0) {
-        newAssignments[table.element.id] = table.guests;
-      }
-    });
-
-    setSeatAssignments(newAssignments);
-    setSelectedId(null);
-    setIsCanvasSelected(false);
-  };
-
-  const handleAutoAssignByDietary = () => {
-    autoAssignToTables(
-      (guest) => guest.dietary || '',
-      { fallbackLabel: 'General' }
-    );
-  };
-
-  const handleAutoAssignByTags = () => {
-    if (!guests.some((guest) => guest.tags && guest.tags.length > 0)) {
-      alert('Add tags to attendees before auto-assigning by tags.');
-      return;
-    }
-    autoAssignToTables(
-      (guest) => (guest.tags && guest.tags.length > 0 ? guest.tags[0] : ''),
-      { fallbackLabel: 'Untagged' }
-    );
-  };
 
   const unassignedGuests = useMemo(() => {
     const assignedIds = new Set();
@@ -537,6 +451,15 @@ export default function ConferencePlannerIntegrated() {
               .map((tag) => tag.trim())
               .filter((tag) => tag.length > 0)
           )
+        ),
+        dietary: row.dietary || row.Dietary || '',
+        tags: Array.from(
+          new Set(
+            (row.tags || row.Tags || '')
+              .split(/[,;]/)
+              .map((tag) => tag.trim())
+              .filter((tag) => tag.length > 0)
+          )
         )
       }))
       .filter((guest) => guest.name && guest.email);
@@ -549,6 +472,7 @@ export default function ConferencePlannerIntegrated() {
 
   useEffect(() => {
     const onKey = (event) => {
+      
       const target = event.target;
       if (target instanceof HTMLElement) {
         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
@@ -564,6 +488,7 @@ export default function ConferencePlannerIntegrated() {
       if (event.key === 'Escape') {
         setSelectedId(null);
         setIsCanvasSelected(false);
+        setIsCanvasSelected(false);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -576,8 +501,21 @@ export default function ConferencePlannerIntegrated() {
     }
   }, [mode]);
 
+  useEffect(() => {
+    if (mode !== 'layout') {
+      setIsCanvasSelected(false);
+    }
+  }, [mode]);
+
   const canvasWidth = mToPx(roomWidth);
   const canvasHeight = mToPx(roomHeight);
+  if (canvasShape === 'rounded') {
+    canvasCornerRadius = 24;
+  } else if (canvasShape === 'oval') {
+    canvasCornerRadius = Math.min(canvasWidth, canvasHeight) / 2;
+  }
+
+  
   let canvasCornerRadius = 0;
   if (canvasShape === 'rounded') {
     canvasCornerRadius = 24;
@@ -749,7 +687,7 @@ export default function ConferencePlannerIntegrated() {
         onExportPDF={handleExportPDF}
         extraCounts={headerCounts}
       />
-
+{/* 
       {mode === 'layout' && (
         <>
           <CatalogToolbar catalog={combinedCatalog} onAdd={handleAddItem} />
@@ -847,7 +785,103 @@ export default function ConferencePlannerIntegrated() {
             </div>
           )}
         </>
-      )}
+        <>
+          <CatalogToolbar catalog={combinedCatalog} onAdd={handleAddItem} />
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              padding: '12px 16px',
+              background: '#fff',
+              borderBottom: `1px solid ${COLORS.border}`
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setShowCustomWidgetModal(true)}
+                style={{
+                  padding: '8px 14px',
+                  background: COLORS.primary,
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 600
+                }}
+              >
+                ➕ Create custom widget
+              </button>
+              <span style={{ fontSize: 12, color: COLORS.textLight }}>
+                Design bespoke layouts for booths, lounges, or any irregular areas.
+              </span>
+            </div>
+            {customWidgets.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {customWidgets.map((widget) => (
+                  <span
+                    key={widget.type}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '6px 10px',
+                      background: '#f1f5f9',
+                      border: `1px solid ${COLORS.border}`,
+                      borderRadius: 999,
+                      fontSize: 12,
+                      color: COLORS.text
+                    }}
+                  >
+                    {widget.label}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCustomWidget(widget.type)}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        fontSize: 12,
+                        cursor: 'pointer',
+                        color: COLORS.textLight
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <CanvasSettingsPanel
+            title="Room Canvas"
+            width={roomWidth}
+            height={roomHeight}
+            onWidthChange={setRoomWidth}
+            onHeightChange={setRoomHeight}
+            shape={canvasShape}
+            onShapeChange={setCanvasShape}
+          />
+
+          <RoomCapacityPanel capacity={roomCapacity} onChange={setRoomCapacity} stats={capacityStats} />
+
+          {(tablesOverCapacity || attendeesOverCapacity) && (
+            <div
+              style={{
+                padding: '8px 16px',
+                background: '#fef2f2',
+                borderBottom: `1px solid ${COLORS.border}`,
+                color: COLORS.danger,
+                fontSize: 12
+              }}
+            >
+              {tablesOverCapacity && <span style={{ marginRight: 12 }}>⚠️ Table count exceeds capacity.</span>}
+              {attendeesOverCapacity && <span>⚠️ Seating exceeds attendee capacity.</span>}
+            </div>
+          )}
+        </>
+      )} */}
 
       <CSVImport
         visible={showCSVPanel}
@@ -1009,6 +1043,116 @@ export default function ConferencePlannerIntegrated() {
                   )}
                 </>
               )}
+              {canvasShape === 'custom' ? (
+                <>
+                  <Line
+                    ref={canvasNodeRef}
+                    points={canvasPolygonPoints}
+                    closed
+                    fill="#fff"
+                    stroke={isCanvasSelected ? COLORS.accent : COLORS.text}
+                    strokeWidth={isCanvasSelected ? 3 : 2}
+                    listening={mode === 'layout'}
+                    onMouseDown={() => {
+                      if (mode !== 'layout') return;
+                      setIsCanvasSelected(true);
+                      setSelectedId(null);
+                    }}
+                    onTap={() => {
+                      if (mode !== 'layout') return;
+                      setIsCanvasSelected(true);
+                      setSelectedId(null);
+                    }}
+                  />
+                  <Group listening={false} clipFunc={canvasClipFunc}>
+                    <Grid width={canvasWidth} height={canvasHeight} visible={gridOn} />
+                  </Group>
+                  {mode === 'layout' && (
+                    <>
+                      {actualCanvasPoints.map((point, index) => (
+                        <Circle
+                          key={`handle-${index}`}
+                          x={point.x}
+                          y={point.y}
+                          radius={8 / zoom}
+                          fill={COLORS.accent}
+                          stroke="#fff"
+                          strokeWidth={1 / zoom}
+                          draggable
+                          onMouseDown={(event) => {
+                            event.cancelBubble = true;
+                            if (mode !== 'layout') return;
+                            setIsCanvasSelected(true);
+                            setSelectedId(null);
+                          }}
+                          onTouchStart={(event) => {
+                            event.cancelBubble = true;
+                            if (mode !== 'layout') return;
+                            setIsCanvasSelected(true);
+                            setSelectedId(null);
+                          }}
+                          onDragMove={(event) => handleCustomHandleDragMove(index, event)}
+                          onDragEnd={(event) => handleCustomHandleDragMove(index, event)}
+                        />
+                      ))}
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Line
+                    ref={canvasNodeRef}
+                    points={canvasCornersPoints}
+                    closed
+                    fill="#fff"
+                    stroke={isCanvasSelected ? COLORS.accent : COLORS.text}
+                    strokeWidth={isCanvasSelected ? 3 : 2}
+                    listening={mode === 'layout'}
+                    onMouseDown={() => {
+                      if (mode !== 'layout') return;
+                      setIsCanvasSelected(true);
+                      setSelectedId(null);
+                    }}
+                    onTap={() => {
+                      if (mode !== 'layout') return;
+                      setIsCanvasSelected(true);
+                      setSelectedId(null);
+                    }}
+                  />
+                  <Grid width={canvasWidth} height={canvasHeight} visible={gridOn} />
+                  {mode === 'layout' && isCanvasSelected && (
+                    <>
+                      {actualCanvasCorners.map((corner, index) => (
+                        <Circle
+                          key={`corner-${index}`}
+                          x={corner.x}
+                          y={corner.y}
+                          radius={8 / zoom}
+                          fill={COLORS.accent}
+                          stroke="#fff"
+                          strokeWidth={1 / zoom}
+                          draggable
+                          onMouseDown={(event) => {
+                            event.cancelBubble = true;
+                          }}
+                          onTouchStart={(event) => {
+                            event.cancelBubble = true;
+                          }}
+                          onDragMove={(event) => {
+                            const newX = Math.max(0, event.target.x());
+                            const newY = Math.max(0, event.target.y());
+                            const normalizedX = newX / canvasWidth;
+                            const normalizedY = newY / canvasHeight;
+                            setCanvasCorners((prev) =>
+                              prev.map((c, i) => (i === index ? { x: normalizedX, y: normalizedY } : c))
+                            );
+                          }}
+                        />
+                      ))}
+                    </>
+                  )}
+                </>
+              )}
             </Layer>
 
             <Layer>
@@ -1021,6 +1165,7 @@ export default function ConferencePlannerIntegrated() {
                     setSelectedId(element.id);
                     setIsCanvasSelected(false);
                   }}
+                  
                   onChange={handleChangeNode}
                   onDelete={handleDeleteNode}
                   assignedGuests={seatAssignments[element.id]}
@@ -1117,10 +1262,57 @@ export default function ConferencePlannerIntegrated() {
             )}
           </SelectionInspector>
 
+          <SelectionInspector
+            visible={mode === 'layout' && !!selectedElement}
+            title="Selected Widget"
+            typeLabel={selectedElement ? catalogLabelForType(selectedElement.type) : ''}
+            name={selectedElement?.label || ''}
+            onNameChange={(value) => selectedElement && handleRenameNode(selectedElement.id, value)}
+            onDelete={() => selectedElement && handleDeleteNode(selectedElement.id)}
+            canToggleOrientation={
+              !!selectedElement && (selectedElement.type === 'window' || selectedElement.type === 'blind_path')
+            }
+            isVertical={
+              !!selectedElement && (selectedElement.orientation === 'vertical' || selectedElement.h > selectedElement.w)
+            }
+            onToggleOrientation={() => toggleOrientationForNode(selectedElement)}
+          >
+            {selectedElement && (
+              <div style={{ fontSize: 12, color: COLORS.textLight }}>
+                Shape: <strong style={{ color: COLORS.text }}>{selectedElement.shapeType || 'rect'}</strong>
+              </div>
+            )}
+            {selectedElement?.fillColor && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: COLORS.textLight }}>
+                Color
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: 16,
+                    height: 16,
+                    borderRadius: 4,
+                    border: `1px solid ${COLORS.border}`,
+                    background: selectedElement.fillColor
+                  }}
+                />
+              </div>
+            )}
+            {selectedElement?.seats > 0 && (
+              <div style={{ fontSize: 12, color: COLORS.textLight }}>
+                Seats available: <strong style={{ color: COLORS.text }}>{selectedElement.seats}</strong>
+              </div>
+            )}
+          </SelectionInspector>
+
           <TipsCard mode={mode} />
           <ScaleIndicator zoom={zoom} pxPerMeter={PX_PER_METER} />
         </div>
       </div>
+      <CustomWidgetModal
+        visible={showCustomWidgetModal}
+        onClose={() => setShowCustomWidgetModal(false)}
+        onSubmit={handleSaveCustomWidget}
+      />
       <CustomWidgetModal
         visible={showCustomWidgetModal}
         onClose={() => setShowCustomWidgetModal(false)}

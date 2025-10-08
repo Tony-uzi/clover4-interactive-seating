@@ -1,8 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { Circle, Rect, Text, Transformer, Line, Group } from 'react-konva';
-import { MdTableRestaurant, MdChair, MdRecordVoiceOver, MdTheaters, MdDoorFront, MdWindow } from 'react-icons/md';
-import { FaWheelchair } from 'react-icons/fa';
-import { TbTableOptions } from 'react-icons/tb';
+import { useEffect, useRef } from 'react';
+import { Circle, Rect, Text, Transformer, Line } from 'react-konva';
 import COLORS from '../colors';
 import { PX_PER_METER, GRID_SIZE_PX, snapPx } from '../utils';
 
