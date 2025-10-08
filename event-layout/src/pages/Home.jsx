@@ -14,7 +14,7 @@ export default function Home() {
             participants, and keep everything updated effortlessly.
           </p>
           <div className="hero-buttons">
-            <NavLink to="/conference" className="btn hero-btn conference">
+            <NavLink to="/conference-planner" className="btn hero-btn conference">
               Conference Planner
             </NavLink>
             <NavLink to="/tradeshow" className="btn hero-btn tradeshow">
@@ -97,7 +97,7 @@ export default function Home() {
           <p>
             Design your dream conference layout with our easy-to-use planner.
           </p>
-          <NavLink to="/conference" className="btn btn-primary">
+          <NavLink to="/conference-planner" className="btn btn-primary">
             Start Planning
           </NavLink>
         </div>
