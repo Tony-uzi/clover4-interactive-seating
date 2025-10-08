@@ -15,6 +15,8 @@ export default function PlannerHeader({
   onZoomOut,
   gridOn,
   onToggleGrid,
+  onExportPNG,
+  onExportPDF,
   extraCounts = {}
 }) {
   return (
@@ -144,6 +146,45 @@ export default function PlannerHeader({
           />
           Grid
         </label>
+
+        {(onExportPNG || onExportPDF) && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 8 }}>
+            {onExportPNG && (
+              <button
+                onClick={onExportPNG}
+                style={{
+                  padding: "6px 12px",
+                  background: "rgba(255,255,255,0.15)",
+                  color: "white",
+                  border: "1px solid rgba(255,255,255,0.4)",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: 600
+                }}
+              >
+                ⬇️ PNG
+              </button>
+            )}
+            {onExportPDF && (
+              <button
+                onClick={onExportPDF}
+                style={{
+                  padding: "6px 12px",
+                  background: "rgba(255,255,255,0.15)",
+                  color: "white",
+                  border: "1px solid rgba(255,255,255,0.4)",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontWeight: 600
+                }}
+              >
+                ⬇️ PDF
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
