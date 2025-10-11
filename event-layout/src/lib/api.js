@@ -11,7 +11,7 @@ function authHeaders() {
 
 export async function listDesigns() {
   const res = await fetch('/api/designs/', { headers: { Authorization: `Bearer ${getAuthToken()}` } });
-  if (!res.ok) throw new Error('无法获取云端文件列表');
+  if (!res.ok) throw new Error('Failed to fetch cloud file list');
   return res.json();
 }
 
@@ -22,7 +22,7 @@ export async function createOrGetDesign(name, kind = 'custom') {
     body: JSON.stringify({ name, kind }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || '创建/获取设计失败');
+  if (!res.ok) throw new Error(data.detail || 'Failed to create/get design');
   return data; // {id, name, kind, latest_version, updated_at}
 }
 
@@ -33,7 +33,7 @@ export async function saveDesignVersion(designId, data, note = '') {
     body: JSON.stringify({ data, note }),
   });
   const out = await res.json();
-  if (!res.ok) throw new Error(out.detail || '保存版本失败');
+  if (!res.ok) throw new Error(out.detail || 'Failed to save version');
   return out; // {version, created_at, note}
 }
 
@@ -42,7 +42,7 @@ export async function getLatestDesign(designId) {
     headers: { Authorization: `Bearer ${getAuthToken()}` },
   });
   const out = await res.json();
-  if (!res.ok) throw new Error(out.detail || '获取最新版本失败');
+  if (!res.ok) throw new Error(out.detail || 'Failed to get latest version');
   return out; // {version, data}
 }
 
@@ -50,7 +50,7 @@ export async function getDesignVersions(designId) {
   const res = await fetch(`/api/designs/${designId}/versions/`, {
     headers: { Authorization: `Bearer ${getAuthToken()}` },
   });
-  if (!res.ok) throw new Error('获取版本列表失败');
+  if (!res.ok) throw new Error('Failed to get version list');
   return res.json(); // [{version, note, created_at}]
 }
 

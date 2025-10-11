@@ -1,7 +1,6 @@
 // src/App.jsx
 import { Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout.jsx";
-import CanvasEditor from "./components/CanvasEditor.jsx";
 
 // 页面
 import Home from "./pages/Home.jsx";
@@ -10,13 +9,17 @@ import About from "./pages/About.jsx";
 import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
 import QRCode from "./pages/QRCode.jsx";
-import Conference from "./pages/Conference.jsx";
-import Tradeshow from "./pages/Tradeshow.jsx";
-import TradeshowPlanner from "./pages/TradeshowPlannerIntegrated.jsx";
 import Profile from "./pages/Profile.jsx";
 import ShareView from "./pages/ShareView.jsx";
-import EditorDesign from "./pages/EditorDesign.jsx";
-import ConferencePlanner from "./pages/ConferencePlannerIntegrated.jsx";
+
+// Planner pages
+import ConferencePlanner from "./pages/ConferencePlanner.jsx";
+import TradeshowPlanner from "./pages/TradeshowPlanner.jsx";
+
+// Kiosk pages
+import KioskConference from "./pages/KioskConference.jsx";
+import KioskTradeshow from "./pages/KioskTradeshow.jsx";
+
 // 404 组件
 function NotFound() {
   return (
@@ -29,35 +32,25 @@ function NotFound() {
 
 export default function App() {
   return (
-    <Layout>
-      <Routes>
+    <Routes>
+      {/* Routes with Layout (header/footer) */}
+      <Route element={<Layout />}>
         <Route path="/" element={<Home />} />
         <Route path="/event" element={<EventVenue />} />
-        {/* <Route path="/event" element={<EventVenue />} /> */}
-        <Route path="/conference" element={<Conference />} />
-        <Route path="/tradeshow" element={<Tradeshow />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-        <Route path="/editor" element={<CanvasEditor />} />
         <Route path="/share/:shareId" element={<ShareView />} />
         <Route path="/qrcode" element={<QRCode />} />
         <Route path="/about" element={<About />} />
+        <Route path="/conference" element={<ConferencePlanner />} />
+        <Route path="/tradeshow" element={<TradeshowPlanner />} />
+        <Route path="/conference-kiosk" element={<KioskConference />} />
+        <Route path="/tradeshow-kiosk" element={<KioskTradeshow />} />
+      </Route>
 
-          {/* <Route path="/qrcode" element={<QRCode />} />
-
-        <Route path="/editor/:designId" element={<EditorDesign />} />
-        <Route path="/share/:shareId" element={<ShareView />} />
-        <Route path="/about" element={<About />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/editor" element={<CanvasEditor />} /> */}
-        <Route path="/conference-planner" element={<ConferencePlanner />} />
-        <Route path="/tradeshow-planner" element={<TradeshowPlanner />} />
-
-        {/* 如果是搜不到,就404 */}
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </Layout>
+      {/* 404 */}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
   );
 }
