@@ -19,7 +19,7 @@ export default function QRCodePage() {
   return (
     <section className="page qr">
       <h1>Event QR Code</h1>
-      <p>输入要编码的链接或文本（例如活动签到页、桌号查询页等）：</p>
+      <p>Enter the link or text to encode (e.g. event check-in page, table lookup page, etc.):</p>
 
       <div
         className="form-inline"

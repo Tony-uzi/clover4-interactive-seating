@@ -22,7 +22,7 @@ export default function EditorDesign() {
           const next = Array.isArray(latest.data) ? latest.data : latest.data.items || [];
           if (mounted) setItems(next);
         } catch (e) {
-          alert(e.message || "加载失败");
+          alert(e.message || "Failed to load");
         } finally {
           if (mounted) setLoading(false);
         }
