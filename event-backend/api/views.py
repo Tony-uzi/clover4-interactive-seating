@@ -1,13 +1,11 @@
-from rest_framework.decorators import api_view, permission_classes, action
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import viewsets, permissions, status
+from rest_framework import status
 from django.shortcuts import get_object_or_404
-from django.db.models import Max, Count
-from .models import *
-from .serializers import *
+from django.db.models import Max
+from .models import Design, DesignVersion, DesignShare, DesignLink
 from django.contrib.auth import get_user_model
-from .authentication import JWTAuthentication
 import secrets
 
 
@@ -56,6 +54,37 @@ def designs(request):
         "latest_version": obj.versions.aggregate(Max("version")).get("version__max") or 0,
     }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
+@api_view(["PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def designs_detail(request, design_id):
+    """Update metadata (rename/kind) or delete a design (owner only)."""
+    design = get_object_or_404(Design, id=design_id, user=request.user)
+    if request.method == "PATCH":
+        name = (request.data.get("name") or "").strip()
+        kind = (request.data.get("kind") or "").strip()
+        changed = False
+        if name and name != design.name:
+            # ensure unique per user
+            if Design.objects.filter(user=request.user, name=name).exclude(id=design.id).exists():
+                return Response({"detail": "name already exists"}, status=400)
+            design.name = name
+            changed = True
+        if kind and kind != design.kind:
+            design.kind = kind
+            changed = True
+        if changed:
+            design.save(update_fields=["name", "kind", "updated_at"])
+        return Response({
+            "id": design.id,
+            "name": design.name,
+            "kind": design.kind,
+            "updated_at": design.updated_at,
+            "latest_version": design.versions.aggregate(Max("version")).get("version__max") or 0,
+        })
+
+    # DELETE
+    design.delete()
+    return Response(status=204)
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
@@ -203,168 +232,3 @@ def invite_user(request, design_id):
     )
     return Response({"user_id": user.id, "email": user.email, "role": share.role})
 
-# ----------------------------------------------------- Main ------------------------------------------------------------------
-class IsOwner(permissions.BasePermission):
-    def has_object_permission(self, request, view, obj):
-        return getattr(obj, "user_id", None) == request.user.id
-
-# ============ Conference ============
-class ConferenceEventViewSet(viewsets.ModelViewSet):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated, IsOwner]
-    serializer_class = ConferenceEventSerializer
-
-    def get_queryset(self):
-        return (ConferenceEvent.objects
-                .filter(user=self.request.user)
-                .annotate(guest_count=Count("guests"), element_count=Count("elements"))
-                .order_by("-updated_at"))
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
-    @action(detail=True, methods=["post"])
-    def elements(self, request, pk=None):
-        """POST /api/conference/events/{id}/elements """
-        event = self.get_object()
-        data = request.data.get("elements", [])
-        created = []
-        for e in data:
-            e["event"] = str(event.id)
-            ser = ConferenceElementSerializer(data=e)
-            ser.is_valid(raise_exception=True)
-            ser.save(event=event)
-            created.append(ser.data)
-        return Response({"success": True, "elements": created})
-
-    @action(detail=True, methods=["post"])
-    def guests_import(self, request, pk=None):
-        """POST /api/conference/events/{id}/guests/import """
-        event = self.get_object()
-        items = request.data.get("guests", [])
-        created = []
-        for g in items:
-            ser = ConferenceGuestSerializer(data=g)
-            ser.is_valid(raise_exception=True)
-            ser.save(event=event)
-            created.append(ser.data)
-        return Response({"success": True, "imported_count": len(created), "guests": created})
-
-    @action(detail=True, methods=["post"])
-    def assignments(self, request, pk=None):
-        """POST /api/conference/events/{id}/assignments """
-        event = self.get_object()
-        payload = request.data
-        ser = ConferenceSeatAssignmentSerializer(data=payload)
-        ser.is_valid(raise_exception=True)
-        ser.save(event=event)
-        return Response({"success": True, "assignment": ser.data})
-
-    @action(detail=True, methods=["post"])
-    def share(self, request, pk=None):
-        """POST /api/conference/events/{id}/share """
-        event = self.get_object()
-        event.ensure_share_token()
-        event.save(update_fields=["share_token"])
-        return Response({"success": True, "share_token": event.share_token})
-
-class ConferenceElementViewSet(viewsets.ModelViewSet):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = ConferenceElementSerializer
-    def get_queryset(self):
-        return ConferenceElement.objects.filter(event__user=self.request.user)
-
-class ConferenceGuestViewSet(viewsets.ModelViewSet):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = ConferenceGuestSerializer
-    def get_queryset(self):
-        return ConferenceGuest.objects.filter(event__user=self.request.user)
-
-class ConferenceSeatAssignmentViewSet(viewsets.ModelViewSet):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = ConferenceSeatAssignmentSerializer
-    def get_queryset(self):
-        return ConferenceSeatAssignment.objects.filter(event__user=self.request.user)
-
-#-------------------------------------------------  分享只读 -------------------------------------------------------------
-from rest_framework.permissions import AllowAny
-class ConferenceShareViewSet(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [AllowAny]
-    serializer_class = ConferenceEventSerializer
-    lookup_field = "share_token"
-    def get_queryset(self):
-        return ConferenceEvent.objects.filter(is_public=True)
-
-# ============ Tradeshow ============
-class TradeshowEventViewSet(viewsets.ModelViewSet):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [permissions.IsAuthenticated, IsOwner]
-    serializer_class = TradeshowEventSerializer
-
-    def get_queryset(self):
-        return (TradeshowEvent.objects
-                .filter(user=self.request.user)
-                .annotate(vendor_count=Count("vendors"), booth_count=Count("booths"))
-                .order_by("-updated_at"))
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
-    @action(detail=True, methods=["post"])
-    def booths(self, request, pk=None):
-        event = self.get_object()
-        items = request.data.get("booths", [])
-        created = []
-        for b in items:
-            ser = TradeshowBoothSerializer(data=b)
-            ser.is_valid(raise_exception=True)
-            ser.save(event=event)
-            created.append(ser.data)
-        return Response({"success": True, "booths": created})
-
-    @action(detail=True, methods=["post"])
-    def vendors_import(self, request, pk=None):
-        event = self.get_object()
-        items = request.data.get("vendors", [])
-        created = []
-        for v in items:
-            ser = TradeshowVendorSerializer(data=v)
-            ser.is_valid(raise_exception=True)
-            ser.save(event=event)
-            created.append(ser.data)
-        return Response({"success": True, "imported_count": len(created), "vendors": created})
-
-    @action(detail=True, methods=["post"])
-    def assignments(self, request, pk=None):
-        event = self.get_object()
-        ser = TradeshowBoothAssignmentSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        ser.save(event=event)
-        return Response({"success": True, "assignment": ser.data})
-
-    @action(detail=True, methods=["post"])
-    def routes(self, request, pk=None):
-        event = self.get_object()
-        ser = TradeshowRouteSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        ser.save(event=event)
-        return Response({"success": True, "route": ser.data})
-
-    @action(detail=True, methods=["post"], url_path="presets/apply")
-    def apply_preset(self, request, pk=None):
-        event = self.get_object()
-        preset_id = request.data.get("preset_id")
-        # 占位：实际根据 preset 生成若干 booth!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        event.preset_layout = preset_id or "custom"
-        event.save(update_fields=["preset_layout"])
-        return Response({"success": True, "preset": event.preset_layout})
-
-class TradeshowShareViewSet(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [AllowAny]
-    serializer_class = TradeshowEventSerializer
-    lookup_field = "share_token"
-    def get_queryset(self):
-        return TradeshowEvent.objects.filter(is_public=True)
