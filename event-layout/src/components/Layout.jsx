@@ -5,14 +5,16 @@ import Footer from "./Footer.jsx";
 
 export default function Layout() {
   return (
-    // 新增 page-shell：flex 列布局，撑满视口高度
-    <div className="page-shell">
-      <Header />
-      {/* main 占据剩余高度 */}
-      <main className="page container" style={{ marginTop: 22 }}>
-        <Outlet />
-      </main>
-      <Footer />
+    // 灰色外背景
+    <div className="page-bg">
+      {/* 中间白色圆角大容器（整页：头/身/尾） */}
+      <div className="page-shell">
+        <Header />
+        <main className="page-content">
+          <Outlet />
+        </main>
+        <Footer />
+      </div>
     </div>
   );
 }

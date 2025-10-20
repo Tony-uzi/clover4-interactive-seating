@@ -1,12 +1,12 @@
 // Tradeshow Planner main page
 
-import React, { useState, useEffect, useRef } from 'react';
-import Toolbar from '../components/shared/Toolbar';
-import BoothToolbar from '../components/tradeshow/BoothToolbar';
-import TradeshowCanvas from '../components/tradeshow/TradeshowCanvas';
-import VendorPanel from '../components/tradeshow/VendorPanel';
-import RouteManager from '../components/tradeshow/RouteManager';
-import PropertiesPanel from '../components/conference/PropertiesPanel';
+import React, { useState, useEffect, useRef } from "react";
+import Toolbar from "../components/shared/Toolbar";
+import BoothToolbar from "../components/tradeshow/BoothToolbar";
+import TradeshowCanvas from "../components/tradeshow/TradeshowCanvas";
+import VendorPanel from "../components/tradeshow/VendorPanel";
+import RouteManager from "../components/tradeshow/RouteManager";
+import PropertiesPanel from "../components/conference/PropertiesPanel";
 import {
   loadTradeshowEvent,
   saveTradeshowEvent,
@@ -16,9 +16,13 @@ import {
   saveTradeshowVendors,
   loadTradeshowRoutes,
   saveTradeshowRoutes,
-} from '../lib/utils/storage';
-import { parseVendorCSV, vendorsToCSV, downloadCSV } from '../lib/utils/csvParser';
-import { jsPDF } from 'jspdf';
+} from "../lib/utils/storage";
+import {
+  parseVendorCSV,
+  vendorsToCSV,
+  downloadCSV,
+} from "../lib/utils/csvParser";
+import { jsPDF } from "jspdf";
 
 export default function TradeshowPlanner() {
   const [event, setEvent] = useState(null);
@@ -29,7 +33,7 @@ export default function TradeshowPlanner() {
   const [activeRouteId, setActiveRouteId] = useState(null);
   const [draggingVendorId, setDraggingVendorId] = useState(null);
   const fileInputRef = useRef(null);
-  
+
   // Track if initial load is complete
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
@@ -44,7 +48,7 @@ export default function TradeshowPlanner() {
     setBooths(loadedLayout);
     setVendors(loadedVendors);
     setRoutes(loadedRoutes);
-    
+
     // Mark initial load as complete after a brief delay
     setTimeout(() => setIsInitialLoad(false), 100);
   }, []);
@@ -75,7 +79,7 @@ export default function TradeshowPlanner() {
   }, [routes, isInitialLoad]);
 
   // Get selected booth
-  const selectedBooth = booths.find(b => b.id === selectedBoothId);
+  const selectedBooth = booths.find((b) => b.id === selectedBoothId);
 
   // Booth operations
   const handleAddBooth = (booth) => {
@@ -84,18 +88,20 @@ export default function TradeshowPlanner() {
   };
 
   const handleUpdateBooth = (updatedBooth) => {
-    setBooths(booths.map(b => (b.id === updatedBooth.id ? updatedBooth : b)));
+    setBooths(booths.map((b) => (b.id === updatedBooth.id ? updatedBooth : b)));
   };
 
   const handleDeleteBooth = (boothId) => {
-    setBooths(booths.filter(b => b.id !== boothId));
+    setBooths(booths.filter((b) => b.id !== boothId));
     setSelectedBoothId(null);
   };
 
   const handleDuplicateBooth = (booth) => {
     const duplicate = {
       ...booth,
-      id: `${booth.type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `${booth.type}_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`,
       x: booth.x + 2,
       y: booth.y + 2,
     };
@@ -109,11 +115,13 @@ export default function TradeshowPlanner() {
   };
 
   const handleUpdateVendor = (vendorId, updates) => {
-    setVendors(vendors.map(v => (v.id === vendorId ? { ...v, ...updates } : v)));
+    setVendors(
+      vendors.map((v) => (v.id === vendorId ? { ...v, ...updates } : v))
+    );
   };
 
   const handleDeleteVendor = (vendorId) => {
-    setVendors(vendors.filter(v => v.id !== vendorId));
+    setVendors(vendors.filter((v) => v.id !== vendorId));
   };
 
   const handleVendorDragStart = (vendorId) => {
@@ -128,8 +136,8 @@ export default function TradeshowPlanner() {
     if (!booth) return;
     const normalizedVendorId = String(vendorId);
 
-    setVendors(prevVendors =>
-      prevVendors.map(vendor =>
+    setVendors((prevVendors) =>
+      prevVendors.map((vendor) =>
         String(vendor.id) === normalizedVendorId
           ? {
               ...vendor,
@@ -148,11 +156,11 @@ export default function TradeshowPlanner() {
   };
 
   const handleUpdateRoute = (routeId, updates) => {
-    setRoutes(routes.map(r => (r.id === routeId ? { ...r, ...updates } : r)));
+    setRoutes(routes.map((r) => (r.id === routeId ? { ...r, ...updates } : r)));
   };
 
   const handleDeleteRoute = (routeId) => {
-    setRoutes(routes.filter(r => r.id !== routeId));
+    setRoutes(routes.filter((r) => r.id !== routeId));
     if (activeRouteId === routeId) {
       setActiveRouteId(null);
     }
@@ -172,11 +180,11 @@ export default function TradeshowPlanner() {
       setVendors([...vendors, ...importedVendors]);
       alert(`Successfully imported ${importedVendors.length} vendor(s)!`);
     } catch (error) {
-      console.error('CSV import error:', error);
-      alert('Import failed, please check CSV format');
+      console.error("CSV import error:", error);
+      alert("Import failed, please check CSV format");
     }
 
-    e.target.value = '';
+    e.target.value = "";
   };
 
   // CSV Export
@@ -188,21 +196,21 @@ export default function TradeshowPlanner() {
   // PDF Export
   const handleExportPDF = () => {
     const pdf = new jsPDF({
-      orientation: 'landscape',
-      unit: 'mm',
-      format: 'a4',
+      orientation: "landscape",
+      unit: "mm",
+      format: "a4",
     });
 
     // Add title
     pdf.setFontSize(20);
-    pdf.text(event?.name || 'Tradeshow Layout', 20, 20);
+    pdf.text(event?.name || "Tradeshow Layout", 20, 20);
 
     // Add date
     pdf.setFontSize(10);
     pdf.text(`Export Time: ${new Date().toLocaleString()}`, 20, 30);
 
     // Add statistics
-    const assignedCount = vendors.filter(v => v.boothNumber).length;
+    const assignedCount = vendors.filter((v) => v.boothNumber).length;
 
     pdf.text(`Hall Size: ${event?.hallWidth}m × ${event?.hallHeight}m`, 20, 40);
     pdf.text(`Total Booths: ${booths.length}`, 20, 46);
@@ -210,10 +218,10 @@ export default function TradeshowPlanner() {
     pdf.text(`Visit Routes: ${routes.length}`, 20, 58);
 
     // Get canvas as image
-    const stage = document.querySelector('canvas');
+    const stage = document.querySelector("canvas");
     if (stage) {
-      const imgData = stage.toDataURL('image/png');
-      pdf.addImage(imgData, 'PNG', 20, 65, 250, 140);
+      const imgData = stage.toDataURL("image/png");
+      pdf.addImage(imgData, "PNG", 20, 65, 250, 140);
     }
 
     // Save PDF
@@ -229,23 +237,33 @@ export default function TradeshowPlanner() {
 
   // Clear
   const handleClear = () => {
-    if (confirm('Are you sure you want to clear the canvas? This action cannot be undone!')) {
+    if (
+      confirm(
+        "Are you sure you want to clear the canvas? This action cannot be undone!"
+      )
+    ) {
       setBooths([]);
       setSelectedBoothId(null);
     }
   };
 
   if (!event) {
-    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+    return (
+      <div className="flex items-center justify-center h-screen">
+        Loading...
+      </div>
+    );
   }
 
   return (
-    <div className="flex flex-col bg-gray-100" style={{
-      // height: 'calc(100vh - 20px)',
-      height: '120vh',
-      margin: '0 calc(-50vw + 50%)',
-      width: '100vw'
-    }}>
+    <div
+      className="flex flex-col bg-gray-100"
+      style={{
+        // height: 'calc(100vh - 20px)',
+        minheight: "100vh",
+        width: "100vw",
+      }}
+    >
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -258,7 +276,7 @@ export default function TradeshowPlanner() {
       {/* Toolbar */}
       <Toolbar
         title={event.name}
-        onSave={() => alert('Auto-saved!')}
+        onSave={() => alert("Auto-saved!")}
         onExportPDF={handleExportPDF}
         onExportCSV={handleExportCSV}
         onImportCSV={handleImportCSV}
@@ -299,7 +317,9 @@ export default function TradeshowPlanner() {
             className="w-20 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
           />
         </div>
-        <span className="text-xs text-gray-500">Tip: Drag corner points to adjust for irregular shapes</span>
+        <span className="text-xs text-gray-500">
+          Tip: Drag corner points to adjust for irregular shapes
+        </span>
       </div>
 
       {/* Main content */}
@@ -327,7 +347,10 @@ export default function TradeshowPlanner() {
 
         {/* Right: Properties, Routes, and Vendor panels */}
         <div className="w-96 flex flex-col overflow-hidden">
-          <div className="flex-shrink-0 overflow-y-auto border-b border-gray-200" style={{ height: '140px' }}>
+          <div
+            className="flex-shrink-0 overflow-y-auto border-b border-gray-200"
+            style={{ height: "140px" }}
+          >
             <PropertiesPanel
               selectedElement={selectedBooth}
               onUpdateElement={handleUpdateBooth}
@@ -335,7 +358,10 @@ export default function TradeshowPlanner() {
               onDuplicateElement={handleDuplicateBooth}
             />
           </div>
-          <div className="flex-shrink-0 border-b border-gray-200" style={{ height: '28%', minHeight: '400px' }}>
+          <div
+            className="flex-shrink-0 border-b border-gray-200"
+            style={{ height: "28%", minHeight: "400px" }}
+          >
             <div className="h-full overflow-y-auto">
               <RouteManager
                 routes={routes}

@@ -5,18 +5,19 @@ from .views import designs, design_versions, design_latest, design_version_detai
 from .views import (
     ConferenceEventViewSet, ConferenceElementViewSet, ConferenceGuestViewSet,
     ConferenceSeatAssignmentViewSet, ConferenceShareViewSet,
-    TradeshowEventViewSet, TradeshowShareViewSet,
+    TradeshowEventViewSet, TradeshowShareViewSet,ConferenceGroupViewSet
 )
 
 app_name = "api"
 
 router = DefaultRouter()
-# Conference
+# Conference viewset
 router.register(r"conference/events", ConferenceEventViewSet, basename="conf-events")
 router.register(r"conference/elements", ConferenceElementViewSet, basename="conf-elements")
 router.register(r"conference/guests", ConferenceGuestViewSet, basename="conf-guests")
 router.register(r"conference/assignments", ConferenceSeatAssignmentViewSet, basename="conf-assignments")
 router.register(r"conference/share", ConferenceShareViewSet, basename="conf-share")
+router.register(r"conference/groups", ConferenceGroupViewSet, basename="conf-groups")
 
 # Tradeshow
 router.register(r"tradeshow/events", TradeshowEventViewSet, basename="ts-events")

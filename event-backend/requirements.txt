@@ -1,5 +1,5 @@
 # --- Core ---
-Django==5.2.7
+Django>=4.2,<5.0
 djangorestframework==3.16.1
 djangorestframework-simplejwt>=5.3,<6
 django-cors-headers>=4.3,<5
@@ -15,6 +15,7 @@ sqlparse>=0.5,<0.6
 tzdata>=2023.3
 
 # --- Optional: 实时/文档 ---
-# channels>=4,<5
-# channels-redis>=4,<5
+channels>=4,<5
+channels-redis>=4,<5
+daphne>=4,<5
 # drf-spectacular>=0.27,<0.28

@@ -17,8 +17,13 @@ import ConferencePlanner from "./pages/ConferencePlanner.jsx";
 import TradeshowPlanner from "./pages/TradeshowPlanner.jsx";
 
 // Kiosk pages
+import KioskHome from "./pages/KioskHome.jsx";
 import KioskConference from "./pages/KioskConference.jsx";
 import KioskTradeshow from "./pages/KioskTradeshow.jsx";
+
+// Live Display pages (for large screens)
+import ConferenceLiveDisplay from "./pages/ConferenceLiveDisplay.jsx";
+import TradeshowLiveDisplay from "./pages/TradeshowLiveDisplay.jsx";
 
 // 404 组件
 function NotFound() {
@@ -45,8 +50,13 @@ export default function App() {
         <Route path="/about" element={<About />} />
         <Route path="/conference" element={<ConferencePlanner />} />
         <Route path="/tradeshow" element={<TradeshowPlanner />} />
+        <Route path="/kiosk" element={<KioskHome />} />
         <Route path="/conference-kiosk" element={<KioskConference />} />
         <Route path="/tradeshow-kiosk" element={<KioskTradeshow />} />
+        
+        {/* Live Display pages (no layout/header) */}
+        <Route path="/conference-display" element={<ConferenceLiveDisplay />} />
+        <Route path="/tradeshow-display" element={<TradeshowLiveDisplay />} />
       </Route>
 
       {/* 404 */}

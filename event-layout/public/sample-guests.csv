@@ -1,0 +1,52 @@
+name,email,group,dietaryPreference,attendance,notes
+John Smith,john.smith@company.com,VIP,None,true,CEO of TechCorp
+Sarah Johnson,sarah.j@email.com,VIP,Vegetarian,true,Board Member
+Michael Chen,m.chen@company.com,Speaker,Vegan,true,Keynote Speaker
+Emily Davis,emily.d@email.com,General,None,true,
+Robert Wilson,robert.w@company.com,General,Halal,true,
+Lisa Anderson,lisa.a@email.com,VIP,None,true,CFO
+David Martinez,david.m@email.com,Speaker,Vegetarian,true,Panel Speaker
+Jennifer Brown,jennifer.b@email.com,General,None,true,
+James Taylor,james.t@email.com,Staff,None,true,Event Coordinator
+Mary Thomas,mary.thomas@email.com,General,Vegan,true,
+Christopher Lee,chris.lee@email.com,VIP,None,true,VP of Sales
+Patricia White,patricia.w@email.com,General,Kosher,true,
+Daniel Harris,daniel.h@email.com,Speaker,None,true,Workshop Leader
+Jessica Clark,jessica.c@email.com,General,Vegetarian,true,
+Matthew Lewis,matthew.l@email.com,Staff,None,true,Technical Support
+Amanda Robinson,amanda.r@email.com,VIP,None,true,Marketing Director
+Andrew Walker,andrew.w@email.com,General,None,true,
+Elizabeth Hall,elizabeth.h@email.com,Speaker,Vegan,true,Research Lead
+Ryan Allen,ryan.a@email.com,General,Halal,true,
+Stephanie Young,stephanie.y@email.com,Staff,None,true,Registration Desk
+Kevin King,kevin.k@email.com,VIP,None,true,CTO
+Laura Wright,laura.w@email.com,General,Vegetarian,true,
+Brian Lopez,brian.l@email.com,Speaker,None,true,Industry Expert
+Nicole Hill,nicole.h@email.com,General,None,true,
+Jason Scott,jason.s@email.com,Staff,None,true,Security
+Karen Green,karen.g@email.com,VIP,Kosher,true,Legal Counsel
+Jeffrey Adams,jeffrey.a@email.com,General,None,true,
+Rachel Baker,rachel.b@email.com,Speaker,Vegan,true,Innovation Lead
+Brandon Nelson,brandon.n@email.com,General,None,true,
+Samantha Carter,samantha.c@email.com,Staff,Vegetarian,true,Catering Manager
+Timothy Mitchell,timothy.m@email.com,VIP,None,true,Investor
+Rebecca Perez,rebecca.p@email.com,General,None,true,
+Eric Roberts,eric.r@email.com,Speaker,None,true,Technology Advisor
+Michelle Turner,michelle.t@email.com,General,Halal,true,
+Gregory Phillips,gregory.p@email.com,Staff,None,true,AV Technician
+Deborah Campbell,deborah.c@email.com,VIP,None,true,Partner
+Steven Parker,steven.p@email.com,General,Vegetarian,true,
+Angela Evans,angela.e@email.com,Speaker,Vegan,true,Sustainability Expert
+Scott Edwards,scott.e@email.com,General,None,true,
+Sandra Collins,sandra.c@email.com,Staff,None,true,Guest Services
+Paul Stewart,paul.s@email.com,VIP,None,true,Advisor
+Donna Sanchez,donna.s@email.com,General,Kosher,true,
+Mark Morris,mark.m@email.com,Speaker,None,true,Data Scientist
+Helen Rogers,helen.r@email.com,General,None,true,
+Kenneth Reed,kenneth.r@email.com,Staff,None,true,Logistics
+Barbara Cook,barbara.c@email.com,VIP,Vegetarian,true,Strategic Partner
+Frank Morgan,frank.m@email.com,General,None,true,
+Carol Bell,carol.b@email.com,Speaker,None,true,UX Designer
+George Murphy,george.m@email.com,General,None,true,
+Ruth Bailey,ruth.b@email.com,Staff,None,true,Documentation
+Raymond Rivera,raymond.r@email.com,VIP,None,true,Angel Investor

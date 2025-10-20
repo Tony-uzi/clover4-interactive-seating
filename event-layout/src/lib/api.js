@@ -1,3 +1,10 @@
+/**
+ * Design System API
+ * Handles save, versioning, and sharing for designs
+ * 
+ * Note: For conference/tradeshow APIs, use server-actions modules
+ */
+
 export function getAuthToken() {
   return localStorage.getItem('token') || '';
 }
@@ -9,9 +16,13 @@ function authHeaders() {
     : { 'Content-Type': 'application/json' };
 }
 
+// ==================== Design Management ====================
+
 export async function listDesigns() {
-  const res = await fetch('/api/designs/', { headers: { Authorization: `Bearer ${getAuthToken()}` } });
-  if (!res.ok) throw new Error('Failed to fetch cloud file list');
+  const res = await fetch('/api/designs/', { 
+    headers: { Authorization: `Bearer ${getAuthToken()}` } 
+  });
+  if (!res.ok) throw new Error('Failed to fetch designs');
   return res.json();
 }
 
@@ -22,8 +33,8 @@ export async function createOrGetDesign(name, kind = 'custom') {
     body: JSON.stringify({ name, kind }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || 'Failed to create/get design');
-  return data; // {id, name, kind, latest_version, updated_at}
+  if (!res.ok) throw new Error(data.detail || 'Failed to create design');
+  return data;
 }
 
 export async function saveDesignVersion(designId, data, note = '') {
@@ -32,42 +43,42 @@ export async function saveDesignVersion(designId, data, note = '') {
     headers: authHeaders(),
     body: JSON.stringify({ data, note }),
   });
-  const out = await res.json();
-  if (!res.ok) throw new Error(out.detail || 'Failed to save version');
-  return out; // {version, created_at, note}
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.detail || 'Failed to save version');
+  return result;
 }
 
 export async function getLatestDesign(designId) {
   const res = await fetch(`/api/designs/${designId}/latest/`, {
     headers: { Authorization: `Bearer ${getAuthToken()}` },
   });
-  const out = await res.json();
-  if (!res.ok) throw new Error(out.detail || 'Failed to get latest version');
-  return out; // {version, data}
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Failed to get latest version');
+  return data;
 }
 
 export async function getDesignVersions(designId) {
   const res = await fetch(`/api/designs/${designId}/versions/`, {
     headers: { Authorization: `Bearer ${getAuthToken()}` },
   });
-  if (!res.ok) throw new Error('Failed to get version list');
-  return res.json(); // [{version, note, created_at}]
+  if (!res.ok) throw new Error('Failed to get versions');
+  return res.json();
 }
 
 export async function getLatestByToken(designId, token) {
   const res = await fetch(`/api/designs/${designId}/latest/?token=${encodeURIComponent(token)}`, {
     headers: { Authorization: `Bearer ${getAuthToken()}` },
   });
-  const out = await res.json();
-  if (!res.ok) throw new Error(out.detail || 'Fetch by token failed');
-  return out; // {version, data}
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Fetch by token failed');
+  return data;
 }
 
 export async function listSharedDesigns() {
   const res = await fetch('/api/designs/shared/', {
     headers: { Authorization: `Bearer ${getAuthToken()}` },
   });
-  if (!res.ok) throw new Error('Fetch shared designs failed');
+  if (!res.ok) throw new Error('Failed to fetch shared designs');
   return res.json();
 }
 
@@ -77,9 +88,9 @@ export async function createShareLink(designId, role = 'view') {
     headers: authHeaders(),
     body: JSON.stringify({ role }),
   });
-  const out = await res.json();
-  if (!res.ok) throw new Error(out.detail || 'Create share link failed');
-  return out; // {token, role}
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Failed to create share link');
+  return data;
 }
 
 export async function inviteUser(designId, email, role = 'view') {
@@ -88,9 +99,9 @@ export async function inviteUser(designId, email, role = 'view') {
     headers: authHeaders(),
     body: JSON.stringify({ email, role }),
   });
-  const out = await res.json();
-  if (!res.ok) throw new Error(out.detail || 'Invite failed');
-  return out; // {user_id, email, role}
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Invite failed');
+  return data;
 }
 
 

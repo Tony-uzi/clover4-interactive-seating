@@ -210,78 +210,140 @@ class IsOwner(permissions.BasePermission):
 
 # ============ Conference ============
 class ConferenceEventViewSet(viewsets.ModelViewSet):
+    # 使用JWT（JSON Web Token）认证
+    # 用户必须在请求头中携带有效的token
+    # 格式：`Authorization: Bearer <token>`
     authentication_classes = [JWTAuthentication]
+    # 只有认证用户且是对象所有者才能访问 `IsAuthenticated`：必须登录 IsOwner`：必须是资源的所有者
     permission_classes = [permissions.IsAuthenticated, IsOwner]
+    # 负责数据转换（Python对象 ↔ JSON）
     serializer_class = ConferenceEventSerializer
 
+    # 定义查询集，返回当前用户的所有会议事件，并附加嘉宾和元素的计数
+    # 控制用户只能看到自己创建的会议事件
     def get_queryset(self):
         return (ConferenceEvent.objects
-                .filter(user=self.request.user)
+                .filter(user=self.request.user) # # 只查询当前用户的会议
+                # # 统计嘉宾数量和元素数量
                 .annotate(guest_count=Count("guests"), element_count=Count("elements"))
+                # 按更新时间倒序排列
                 .order_by("-updated_at"))
 
+    # 在创建会议事件时，自动将当前用户设置为事件的所有者
+    # 前端创建会议时只发送会议信息，不发送user字段： user字段由后端自动设置
+    # 这样可以防止用户伪造请求创建不属于自己的会议
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
+    #  自定义动作：添加会议元素
+    #  url:POST /api/conference/events/{id}/elements
+    #  接收一个包含多个元素的列表
+    #  为每个元素创建一个 ConferenceElement 实例，并关联到当前会议事件
+    #  一次性添加多个会议元素（桌子、椅子等）。
     @action(detail=True, methods=["post"])
     def elements(self, request, pk=None):
         """POST /api/conference/events/{id}/elements """
+        # 1. 获取当前会议对象
         event = self.get_object()
+        # 2. 从请求数据中提取元素列表
         data = request.data.get("elements", [])
+        
         created = []
+        # 3. 遍历每个元素数据,逐个创建
         for e in data:
+            # 确保元素数据中包含 event 字段，指向当前会议的 ID,3.1 添加事件ID
             e["event"] = str(event.id)
+            # 3.2 使用序列化器验证并保存元素,验证数据格式
             ser = ConferenceElementSerializer(data=e)
             ser.is_valid(raise_exception=True)
+            # 3.3 保存元素到数据库
             ser.save(event=event)
+            # 3.4 将创建的元素数据添加到结果列表，记录返回对象
             created.append(ser.data)
+        # 4. 返回成功响应，包含所有创建的元素数据
         return Response({"success": True, "elements": created})
 
+    # 自定义动作：批量导入嘉宾
+    # url:POST /api/conference/events/{id}/guests/import
+    # 接收一个包含多个嘉宾信息的列表
+    # 为每个嘉宾创建一个 ConferenceGuest 实例，并关联到当前会议事件，通常来自于csv文件
     @action(detail=True, methods=["post"])
     def guests_import(self, request, pk=None):
         """POST /api/conference/events/{id}/guests/import """
+        # 1. 获取会议对象
         event = self.get_object()
+        # 2. 从请求数据中提取嘉宾列表
         items = request.data.get("guests", [])
+        # 3. 遍历每个嘉宾数据,逐个创建
+         # 3.1 使用序列化器验证并保存嘉宾
         created = []
         for g in items:
             ser = ConferenceGuestSerializer(data=g)
             ser.is_valid(raise_exception=True)
             ser.save(event=event)
             created.append(ser.data)
+        # 4. 返回成功响应，包含导入的嘉宾数量和数据
+        # 然后通知前端导入成功，并返回导入的嘉宾数量和数据，以便前端更新界面
+        # 前端收到响应后，可以显示导入成功的消息，并更新嘉宾列表，是json格式
         return Response({"success": True, "imported_count": len(created), "guests": created})
 
+    # 自定义动作：分配座位，将嘉宾分配到指定座位
+    # url:POST /api/conference/events/{id}/assignments
+    # 接收一个包含分配信息的对象
+    # 创建一个 ConferenceSeatAssignment 实例，并关联到当前会议事件
     @action(detail=True, methods=["post"])
     def assignments(self, request, pk=None):
         """POST /api/conference/events/{id}/assignments """
+        # 1. 获取会议对象 self.get_object() 是 Django REST framework 在 ModelViewSet 里提供的工具方法
         event = self.get_object()
+        # 2. 从请求数据中提取分配信息
         payload = request.data
+        # 3. 使用序列化器验证并保存分配信息
         ser = ConferenceSeatAssignmentSerializer(data=payload)
         ser.is_valid(raise_exception=True)
+        # 4. 保存分配到数据库
         ser.save(event=event)
+        # 5. 返回成功响应，包含创建的分配数据
         return Response({"success": True, "assignment": ser.data})
 
+    # 自定义动作：生成或获取分享链接
+    # url:POST /api/conference/events/{id}/share
+    # 为当前会议事件生成一个唯一的分享令牌（share_token），共享给其他人
+    # 该令牌可用于只读访问会议详情
+    # 如果已经存在分享令牌，则直接返回
     @action(detail=True, methods=["post"])
     def share(self, request, pk=None):
         """POST /api/conference/events/{id}/share """
+        # 1. 获取会议对象
         event = self.get_object()
+        # 2. 生成或获取分享令牌, 确保有分享token（如果没有就生成）
         event.ensure_share_token()
+        # 3. 保存更新（如果生成了新token）
+         # 4. 返回成功响应，包含分享令牌
         event.save(update_fields=["share_token"])
         return Response({"success": True, "share_token": event.share_token})
 
+
+        # 下面都是些辅助类viewset
+        
+        # 单独管理会议元素（增删改查）
+        # 负责处理会议的元素、嘉宾和座位分配
+        # 这些视图集都要求用户认证，并且只能访问自己创建的资源
+        # 每个视图集都指定了相应的序列化器和查询集过滤逻辑
 class ConferenceElementViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = ConferenceElementSerializer
     def get_queryset(self):
         return ConferenceElement.objects.filter(event__user=self.request.user)
-
+        # 单独管理会议嘉宾（增删改查）
 class ConferenceGuestViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = ConferenceGuestSerializer
     def get_queryset(self):
         return ConferenceGuest.objects.filter(event__user=self.request.user)
-
+        # 单独管理会议嘉宾座位分配（增删改查）
 class ConferenceSeatAssignmentViewSet(viewsets.ModelViewSet):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
@@ -289,12 +351,25 @@ class ConferenceSeatAssignmentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return ConferenceSeatAssignment.objects.filter(event__user=self.request.user)
 
+# 这是一个 ViewSet（视图集），它为 ConferenceGroup（会议嘉宾分组）模型提供完整的 CRUD API。
+class ConferenceGroupViewSet(viewsets.ModelViewSet):
+    queryset = ConferenceGroup.objects.all()
+    serializer_class = ConferenceGroupSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        # 只返回当前用户创建的会议的分组
+        return ConferenceGroup.objects.filter(event__user=user)
+
 #-------------------------------------------------  分享只读 -------------------------------------------------------------
+        # 提供只读的公开访问，无需登录
+
 from rest_framework.permissions import AllowAny
 class ConferenceShareViewSet(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [AllowAny]
+    permission_classes = [AllowAny] # 任何人都可以访问我
     serializer_class = ConferenceEventSerializer
-    lookup_field = "share_token"
+    lookup_field = "share_token"    # # 通过share的token查找
     def get_queryset(self):
         return ConferenceEvent.objects.filter(is_public=True)
 

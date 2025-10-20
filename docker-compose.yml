@@ -1,0 +1,103 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  db:
+    image: postgres:16-alpine
+    container_name: event-db
+    environment:
+      POSTGRES_DB: tableplanner
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1234598
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - event-network
+
+  # Redis (用于 WebSocket channels)
+  redis:
+    image: redis:7-alpine
+    container_name: event-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - event-network
+
+  # Django 后端
+  backend:
+    build:
+      context: ./event-backend
+      dockerfile: Dockerfile
+    container_name: event-backend
+    environment:
+      - DEBUG=True
+      - DATABASE_ENGINE=django.db.backends.postgresql
+      - DATABASE_NAME=tableplanner
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=1234598
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ALLOWED_HOSTS=localhost,127.0.0.1,backend
+      - CORS_ALLOWED_ORIGINS=http://localhost,http://localhost:80,http://localhost:5173
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./event-backend:/app
+      - backend_media:/app/media
+      - backend_static:/app/staticfiles
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "
+        python manage.py migrate &&
+        python manage.py collectstatic --noinput &&
+        daphne -b 0.0.0.0 -p 8000 clover.asgi:application
+      "
+    networks:
+      - event-network
+
+  # React 前端
+  frontend:
+    build:
+      context: ./event-layout
+      dockerfile: Dockerfile
+    container_name: event-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - event-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  backend_media:
+    driver: local
+  backend_static:
+    driver: local
+
+networks:
+  event-network:
+    driver: bridge

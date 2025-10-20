@@ -1,9 +1,22 @@
 // Tradeshow canvas component with Konva
 
-import React, { useRef, useState, useEffect } from 'react';
-import { Stage, Layer, Rect, Text, Group, Line, Arrow, Circle } from 'react-konva';
-import { TRADESHOW_BOOTHS, getElementConfig } from '../../lib/canvas/shapes';
-import ScaleRuler from '../shared/ScaleRuler';
+import React, { useRef, useState, useEffect } from "react";
+import {
+  Stage,
+  Layer,
+  Rect,
+  Text,
+  Group,
+  Line,
+  Arrow,
+  Circle,
+} from "react-konva";
+import {
+  TRADESHOW_BOOTHS,
+  getElementConfig,
+  snapToGrid,
+} from "../../lib/canvas/shapes";
+import ScaleRuler from "../shared/ScaleRuler";
 
 const PIXELS_PER_METER = 30; // 30 pixels = 1 meter (smaller scale for larger halls)
 const GRID_SIZE = 1; // Grid every 1 meter
@@ -46,7 +59,9 @@ export default function TradeshowCanvas({
   // Update vertices when hallWidth/hallHeight changes (only if not manually modified)
   useEffect(() => {
     const prevDimensions = prevDimensionsRef.current;
-    const dimensionsChanged = prevDimensions.width !== hallWidth || prevDimensions.height !== hallHeight;
+    const dimensionsChanged =
+      prevDimensions.width !== hallWidth ||
+      prevDimensions.height !== hallHeight;
 
     if (dimensionsChanged && !verticesModified) {
       setHallVertices([
@@ -60,10 +75,12 @@ export default function TradeshowCanvas({
   }, [hallWidth, hallHeight, verticesModified]);
 
   // Calculate canvas bounds from vertices
-  const canvasWidth = Math.max(...hallVertices.map(p => p.x)) * PIXELS_PER_METER + 100;
-  const canvasHeight = Math.max(...hallVertices.map(p => p.y)) * PIXELS_PER_METER + 100;
-  const realWidth = Math.max(...hallVertices.map(p => p.x));
-  const realHeight = Math.max(...hallVertices.map(p => p.y));
+  const canvasWidth =
+    Math.max(...hallVertices.map((p) => p.x)) * PIXELS_PER_METER + 100;
+  const canvasHeight =
+    Math.max(...hallVertices.map((p) => p.y)) * PIXELS_PER_METER + 100;
+  const realWidth = Math.max(...hallVertices.map((p) => p.x));
+  const realHeight = Math.max(...hallVertices.map((p) => p.y));
 
   // Clear drop target when dragging ends
   useEffect(() => {
@@ -81,12 +98,17 @@ export default function TradeshowCanvas({
 
   const handleDragEnd = (e, booth) => {
     if (readOnly) return;
-    const newBooths = booths.map(b =>
+    const rawX = e.target.x() / PIXELS_PER_METER;
+    const rawY = e.target.y() / PIXELS_PER_METER;
+    const snappedX = snapToGrid(rawX, GRID_SIZE);
+    const snappedY = snapToGrid(rawY, GRID_SIZE);
+
+    const newBooths = booths.map((b) =>
       b.id === booth.id
         ? {
             ...b,
-            x: e.target.x() / PIXELS_PER_METER,
-            y: e.target.y() / PIXELS_PER_METER,
+            x: snappedX,
+            y: snappedY,
           }
         : b
     );
@@ -99,7 +121,7 @@ export default function TradeshowCanvas({
     const newX = e.target.x() / PIXELS_PER_METER;
     const newY = e.target.y() / PIXELS_PER_METER;
 
-    const newVertices = hallVertices.map(v =>
+    const newVertices = hallVertices.map((v) =>
       v.id === vertexId ? { ...v, x: newX, y: newY } : v
     );
 
@@ -153,7 +175,7 @@ export default function TradeshowCanvas({
     setDropTargetId(targetBooth ? targetBooth.id : null);
 
     if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = targetBooth ? 'move' : 'none';
+      event.dataTransfer.dropEffect = targetBooth ? "move" : "none";
     }
   };
 
@@ -174,10 +196,12 @@ export default function TradeshowCanvas({
     const targetBooth = findDroppableBoothAt(coords);
 
     const dataTransfer = event.dataTransfer || event.nativeEvent?.dataTransfer;
-    const vendorIdFromData = dataTransfer?.getData('application/vendor-id') || dataTransfer?.getData('text/plain');
+    const vendorIdFromData =
+      dataTransfer?.getData("application/vendor-id") ||
+      dataTransfer?.getData("text/plain");
     const vendorId = vendorIdFromData || draggingVendorId;
 
-    if (targetBooth && vendorId && typeof onAssignVendor === 'function') {
+    if (targetBooth && vendorId && typeof onAssignVendor === "function") {
       onAssignVendor(vendorId, targetBooth);
     }
 
@@ -244,19 +268,14 @@ export default function TradeshowCanvas({
   // Render hall boundary as polygon with draggable vertices
   const renderHallBoundary = () => {
     const points = [];
-    hallVertices.forEach(v => {
+    hallVertices.forEach((v) => {
       points.push(v.x * PIXELS_PER_METER, v.y * PIXELS_PER_METER);
     });
 
     return (
       <>
         {/* Hall fill */}
-        <Line
-          points={points}
-          fill="#ffffff"
-          closed={true}
-          listening={false}
-        />
+        <Line points={points} fill="#ffffff" closed={true} listening={false} />
 
         {/* Hall boundary lines */}
         <Line
@@ -274,8 +293,8 @@ export default function TradeshowCanvas({
             Math.pow(nextV.x - v.x, 2) + Math.pow(nextV.y - v.y, 2)
           );
 
-          const midX = (v.x + nextV.x) / 2 * PIXELS_PER_METER;
-          const midY = (v.y + nextV.y) / 2 * PIXELS_PER_METER;
+          const midX = ((v.x + nextV.x) / 2) * PIXELS_PER_METER;
+          const midY = ((v.y + nextV.y) / 2) * PIXELS_PER_METER;
 
           return (
             <Text
@@ -291,28 +310,29 @@ export default function TradeshowCanvas({
         })}
 
         {/* Draggable vertices */}
-        {!readOnly && hallVertices.map((vertex) => (
-          <Circle
-            key={`vertex-${vertex.id}`}
-            x={vertex.x * PIXELS_PER_METER}
-            y={vertex.y * PIXELS_PER_METER}
-            radius={10}
-            fill="#4CAF50"
-            stroke="#fff"
-            strokeWidth={2}
-            draggable={true}
-            name="hall-vertex"
-            onDragMove={(e) => handleVertexDrag(e, vertex.id)}
-            onMouseEnter={(e) => {
-              const container = e.target.getStage().container();
-              container.style.cursor = 'move';
-            }}
-            onMouseLeave={(e) => {
-              const container = e.target.getStage().container();
-              container.style.cursor = 'default';
-            }}
-          />
-        ))}
+        {!readOnly &&
+          hallVertices.map((vertex) => (
+            <Circle
+              key={`vertex-${vertex.id}`}
+              x={vertex.x * PIXELS_PER_METER}
+              y={vertex.y * PIXELS_PER_METER}
+              radius={10}
+              fill="#4CAF50"
+              stroke="#fff"
+              strokeWidth={2}
+              draggable={true}
+              name="hall-vertex"
+              onDragMove={(e) => handleVertexDrag(e, vertex.id)}
+              onMouseEnter={(e) => {
+                const container = e.target.getStage().container();
+                container.style.cursor = "move";
+              }}
+              onMouseLeave={(e) => {
+                const container = e.target.getStage().container();
+                container.style.cursor = "default";
+              }}
+            />
+          ))}
       </>
     );
   };
@@ -321,7 +341,7 @@ export default function TradeshowCanvas({
   const renderRoutes = () => {
     if (!activeRouteId || routes.length === 0) return null;
 
-    const route = routes.find(r => r.id === activeRouteId);
+    const route = routes.find((r) => r.id === activeRouteId);
     if (!route || !route.boothOrder || route.boothOrder.length < 2) return null;
 
     const arrows = [];
@@ -330,8 +350,8 @@ export default function TradeshowCanvas({
       const startBoothId = route.boothOrder[i];
       const endBoothId = route.boothOrder[i + 1];
 
-      const startBooth = booths.find(b => b.id === startBoothId);
-      const endBooth = booths.find(b => b.id === endBoothId);
+      const startBooth = booths.find((b) => b.id === startBoothId);
+      const endBooth = booths.find((b) => b.id === endBoothId);
 
       if (!startBooth || !endBooth) continue;
 
@@ -344,9 +364,9 @@ export default function TradeshowCanvas({
         <Arrow
           key={`arrow-${i}`}
           points={[startX, startY, endX, endY]}
-          stroke={route.color || '#3B82F6'}
+          stroke={route.color || "#3B82F6"}
           strokeWidth={3}
-          fill={route.color || '#3B82F6'}
+          fill={route.color || "#3B82F6"}
           pointerLength={10}
           pointerWidth={10}
           dash={[10, 5]}
@@ -361,27 +381,38 @@ export default function TradeshowCanvas({
   const renderBooth = (booth) => {
     const config = getElementConfig(booth.type);
     if (!config) return null;
-
-    const x = booth.x * PIXELS_PER_METER;
-    const y = booth.y * PIXELS_PER_METER;
     const width = booth.width * PIXELS_PER_METER;
     const height = booth.height * PIXELS_PER_METER;
+    const x = booth.x * PIXELS_PER_METER + width / 2;
+    const y = booth.y * PIXELS_PER_METER + height / 2;
+    // 在 renderElement 里拿到旋转值 修改的
+    const rotation = booth.rotation || 0;
+
     const isSelected = selectedBoothId === booth.id;
     const isDropTarget = dropTargetId === booth.id;
 
     // Find assigned vendor
-    const vendor = vendors.find(v => v.boothNumber === booth.label || v.boothId === booth.id);
+    const vendor = vendors.find(
+      (v) => v.boothNumber === booth.label || v.boothId === booth.id
+    );
 
     // Check if booth is in active route
     const isInRoute =
       activeRouteId &&
-      routes.find(r => r.id === activeRouteId)?.boothOrder?.includes(booth.id);
+      routes
+        .find((r) => r.id === activeRouteId)
+        ?.boothOrder?.includes(booth.id);
 
     return (
       <Group
         key={booth.id}
         x={x}
         y={y}
+        //  把renderelement中的旋转值，把这个角度传给 <Group>
+        //  为了让旋转围绕元素中心，而不是左上角，再在同一个 <Group> 上加上
+        rotation={rotation}
+        offsetX={width / 2}
+        offsetY={height / 2}
         draggable={!readOnly}
         onDragStart={(e) => handleDragStart(e, booth)}
         onDragEnd={(e) => handleDragEnd(e, booth)}
@@ -392,8 +423,16 @@ export default function TradeshowCanvas({
         <Rect
           width={width}
           height={height}
-          fill={isInRoute ? '#FFF9C4' : config.color}
-          stroke={isSelected ? '#2196F3' : isDropTarget ? '#FF9800' : isInRoute ? '#FF9800' : config.stroke}
+          fill={isInRoute ? "#FFF9C4" : config.color}
+          stroke={
+            isSelected
+              ? "#2196F3"
+              : isDropTarget
+              ? "#FF9800"
+              : isInRoute
+              ? "#FF9800"
+              : config.stroke
+          }
           strokeWidth={isSelected || isDropTarget ? 4 : isInRoute ? 3 : 2}
           cornerRadius={4}
         />

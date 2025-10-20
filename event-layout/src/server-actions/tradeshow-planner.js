@@ -1,325 +1,427 @@
-// Tradeshow Planner API Actions with Fake Data
-// TODO: Replace fake data with real API calls when backend is ready
+/**
+ * Tradeshow Planner API
+ * 展会规划器后端API调用封装
+ * 
+ * 包括：展会事件、展位、展商、展位分配、参观路线
+ */
 
-// Fake data for development
-const FAKE_VENDORS = [
-  {
-    id: 1,
-    name: 'Tech Solutions Inc',
-    contactName: 'John Doe',
-    email: 'john@techsolutions.com',
-    phone: '+1-555-0100',
-    boothNumber: 'A101',
-    category: 'Technology',
-    notes: 'Premium sponsor'
-  },
-  {
-    id: 2,
-    name: 'Green Energy Co',
-    contactName: 'Jane Smith',
-    email: 'jane@greenenergy.com',
-    phone: '+1-555-0200',
-    boothNumber: 'B205',
-    category: 'Energy',
-    notes: ''
-  },
-  {
-    id: 3,
-    name: 'Innovation Labs',
-    contactName: 'Mike Johnson',
-    email: 'mike@innovationlabs.com',
-    phone: '+1-555-0300',
-    boothNumber: 'C301',
-    category: 'Research',
-    notes: 'Island booth required'
-  }
-];
-
-const FAKE_EVENT = {
-  id: 1,
-  name: 'Tech Expo 2025',
-  description: 'Annual technology trade show',
-  date: '2025-12-20',
-  hallWidth: 40,
-  hallHeight: 30,
-  shareToken: 'fake-tradeshow-token-456'
-};
-
-const FAKE_BOOTHS = [
-  {
-    id: 1,
-    type: 'booth_standard',
-    x: 3,
-    y: 3,
-    width: 3,
-    height: 3,
-    rotation: 0,
-    label: 'A101',
-    vendorId: 1
-  },
-  {
-    id: 2,
-    type: 'booth_large',
-    x: 8,
-    y: 3,
-    width: 6,
-    height: 3,
-    rotation: 0,
-    label: 'B205',
-    vendorId: 2
-  },
-  {
-    id: 3,
-    type: 'booth_island',
-    x: 16,
-    y: 8,
-    width: 6,
-    height: 6,
-    rotation: 0,
-    label: 'C301',
-    vendorId: 3
-  }
-];
-
-const FAKE_ROUTES = [
-  {
-    id: 1,
-    name: 'Main Route',
-    description: 'Primary visitor path through hall',
-    boothOrder: [1, 2, 3],
-    color: '#3B82F6'
-  },
-  {
-    id: 2,
-    name: 'VIP Route',
-    description: 'Premium sponsor route',
-    boothOrder: [3, 1],
-    color: '#EF4444'
-  }
-];
-
-// Simulated delay for API calls
-const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
+// ==================== 辅助函数 ====================
 
 /**
- * Get all vendors for an event
- * @param {number} eventId - Event ID
- * @returns {Promise<Array>} List of vendors
+ * 从LocalStorage获取JWT Token
+ * @returns {string} Token字符串
  */
-export async function getAllVendors(eventId) {
-  await delay();
-  console.log('Fetching vendors for event:', eventId);
-  return { success: true, data: FAKE_VENDORS };
+function getAuthToken() {
+  return localStorage.getItem('token') || '';
 }
 
 /**
- * Get a single vendor by ID
- * @param {number} vendorId - Vendor ID
- * @returns {Promise<Object>} Vendor details
+ * 构建请求头（包含Token认证）
+ * @returns {object} Headers对象
  */
-export async function getVendor(vendorId) {
-  await delay();
-  const vendor = FAKE_VENDORS.find(v => v.id === vendorId);
-  return { success: !!vendor, data: vendor };
-}
-
-/**
- * Create a new vendor
- * @param {Object} vendorData - Vendor information
- * @returns {Promise<Object>} Created vendor
- */
-export async function createVendor(vendorData) {
-  await delay();
-  const newVendor = {
-    id: Math.max(...FAKE_VENDORS.map(v => v.id), 0) + 1,
-    ...vendorData
+function authHeaders() {
+  const token = getAuthToken();
+  return {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
   };
-  FAKE_VENDORS.push(newVendor);
-  return { success: true, data: newVendor };
 }
 
+// ==================== 展会事件 API ====================
+
 /**
- * Update an existing vendor
- * @param {number} vendorId - Vendor ID
- * @param {Object} updates - Updated fields
- * @returns {Promise<Object>} Updated vendor
+ * 获取当前用户的所有展会事件
+ * @returns {Promise<{success: boolean, data?: array, error?: string}>}
  */
-export async function updateVendor(vendorId, updates) {
-  await delay();
-  const index = FAKE_VENDORS.findIndex(v => v.id === vendorId);
-  if (index !== -1) {
-    FAKE_VENDORS[index] = { ...FAKE_VENDORS[index], ...updates };
-    return { success: true, data: FAKE_VENDORS[index] };
+export async function getAllEvents() {
+  try {
+    const response = await fetch('/api/tradeshow/events/', {
+      method: 'GET',
+      headers: authHeaders()
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { success: false, error: data.detail || '获取展会列表失败' };
+    }
+
+    return { success: true, data };
+
+  } catch (error) {
+    return { success: false, error: error.message };
   }
-  return { success: false, error: 'Vendor not found' };
 }
 
 /**
- * Delete a vendor
- * @param {number} vendorId - Vendor ID
- * @returns {Promise<Object>} Success status
- */
-export async function deleteVendor(vendorId) {
-  await delay();
-  const index = FAKE_VENDORS.findIndex(v => v.id === vendorId);
-  if (index !== -1) {
-    FAKE_VENDORS.splice(index, 1);
-    return { success: true };
-  }
-  return { success: false, error: 'Vendor not found' };
-}
-
-/**
- * Get all booths for an event
- * @param {number} eventId - Event ID
- * @returns {Promise<Array>} List of booths
- */
-export async function getBooths(eventId) {
-  await delay();
-  console.log('Fetching booths for event:', eventId);
-  return { success: true, data: FAKE_BOOTHS };
-}
-
-/**
- * Save layout (booths and their positions)
- * @param {number} eventId - Event ID
- * @param {Array} booths - Array of booth data
- * @returns {Promise<Object>} Success status
- */
-export async function saveLayout(eventId, booths) {
-  await delay();
-  console.log('Saving layout for event:', eventId, booths);
-  // In real implementation, this would send to backend
-  // For now, save to localStorage
-  localStorage.setItem(`tradeshow-layout-${eventId}`, JSON.stringify(booths));
-  return { success: true, data: { saved: booths.length } };
-}
-
-/**
- * Load saved layout from storage
- * @param {number} eventId - Event ID
- * @returns {Promise<Array>} Saved booths
- */
-export async function loadLayout(eventId) {
-  await delay();
-  const saved = localStorage.getItem(`tradeshow-layout-${eventId}`);
-  if (saved) {
-    return { success: true, data: JSON.parse(saved) };
-  }
-  return { success: false, data: [] };
-}
-
-/**
- * Get event details
- * @param {number} eventId - Event ID
- * @returns {Promise<Object>} Event details
+ * 获取单个展会事件详情
+ * @param {string} eventId - 展会ID
+ * @returns {Promise<{success: boolean, data?: object, error?: string}>}
  */
 export async function getEvent(eventId) {
-  await delay();
-  return { success: true, data: FAKE_EVENT };
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/`, {
+      method: 'GET',
+      headers: authHeaders()
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { success: false, error: data.detail || '获取展会详情失败' };
+    }
+
+    return { success: true, data };
+
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 }
 
 /**
- * Update event details
- * @param {number} eventId - Event ID
- * @param {Object} updates - Updated fields
- * @returns {Promise<Object>} Updated event
+ * 创建新的展会事件
+ * @param {object} eventData - 展会数据 { name, description, event_date_start, event_date_end, hall_width, hall_height, preset_layout }
+ * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ */
+export async function createEvent(eventData) {
+  try {
+    const response = await fetch('/api/tradeshow/events/', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(eventData)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { success: false, error: data.detail || '创建展会失败' };
+    }
+
+    return { success: true, data };
+
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 更新展会事件
+ * @param {string} eventId - 展会ID
+ * @param {object} updates - 要更新的字段
+ * @returns {Promise<{success: boolean, data?: object, error?: string}>}
  */
 export async function updateEvent(eventId, updates) {
-  await delay();
-  const updatedEvent = { ...FAKE_EVENT, ...updates };
-  return { success: true, data: updatedEvent };
-}
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify(updates)
+    });
 
-/**
- * Assign vendor to booth
- * @param {number} vendorId - Vendor ID
- * @param {string} boothNumber - Booth number
- * @returns {Promise<Object>} Success status
- */
-export async function assignVendorToBooth(vendorId, boothNumber) {
-  await delay();
-  return updateVendor(vendorId, { boothNumber });
-}
+    const data = await response.json();
 
-/**
- * Get all routes for an event
- * @param {number} eventId - Event ID
- * @returns {Promise<Array>} List of routes
- */
-export async function getRoutes(eventId) {
-  await delay();
-  console.log('Fetching routes for event:', eventId);
-  return { success: true, data: FAKE_ROUTES };
-}
+    if (!response.ok) {
+      return { success: false, error: data.detail || '更新展会失败' };
+    }
 
-/**
- * Create a new route
- * @param {Object} routeData - Route information
- * @returns {Promise<Object>} Created route
- */
-export async function createRoute(routeData) {
-  await delay();
-  const newRoute = {
-    id: Math.max(...FAKE_ROUTES.map(r => r.id), 0) + 1,
-    ...routeData,
-    color: routeData.color || '#3B82F6'
-  };
-  FAKE_ROUTES.push(newRoute);
-  return { success: true, data: newRoute };
-}
+    return { success: true, data };
 
-/**
- * Update an existing route
- * @param {number} routeId - Route ID
- * @param {Object} updates - Updated fields
- * @returns {Promise<Object>} Updated route
- */
-export async function updateRoute(routeId, updates) {
-  await delay();
-  const index = FAKE_ROUTES.findIndex(r => r.id === routeId);
-  if (index !== -1) {
-    FAKE_ROUTES[index] = { ...FAKE_ROUTES[index], ...updates };
-    return { success: true, data: FAKE_ROUTES[index] };
+  } catch (error) {
+    return { success: false, error: error.message };
   }
-  return { success: false, error: 'Route not found' };
 }
 
 /**
- * Delete a route
- * @param {number} routeId - Route ID
- * @returns {Promise<Object>} Success status
+ * 删除展会事件
+ * @param {string} eventId - 展会ID
+ * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function deleteRoute(routeId) {
-  await delay();
-  const index = FAKE_ROUTES.findIndex(r => r.id === routeId);
-  if (index !== -1) {
-    FAKE_ROUTES.splice(index, 1);
+export async function deleteEvent(eventId) {
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/`, {
+      method: 'DELETE',
+      headers: authHeaders()
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      return { success: false, error: data.detail || '删除展会失败' };
+    }
+
     return { success: true };
+
+  } catch (error) {
+    return { success: false, error: error.message };
   }
-  return { success: false, error: 'Route not found' };
+}
+
+// ==================== 展位 API ====================
+
+/**
+ * 批量创建展位
+ * @param {string} eventId - 展会ID
+ * @param {array} booths - 展位数组
+ * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ */
+export async function batchCreateBooths(eventId, booths) {
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/booths/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ booths })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { success: false, error: data.detail || '批量创建展位失败' };
+    }
+
+    return { success: true, data };
+
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 }
 
 /**
- * Apply preset layout to event
- * @param {number} eventId - Event ID
- * @param {string} presetId - Preset layout ID
- * @returns {Promise<Object>} Applied layout data
+ * 创建单个展位
+ * @param {object} boothData - 展位数据 { event, booth_type, category, label, position_x, position_y, width, height, ... }
+ * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ */
+export async function createBooth(boothData) {
+  try {
+    // 注意：如果后端有单个创建展位的端点，使用它；否则使用批量创建
+    const response = await fetch(`/api/tradeshow/events/${boothData.event}/booths/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ booths: [boothData] })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { success: false, error: data.detail || '创建展位失败' };
+    }
+
+    return { success: true, data: data.booths?.[0] || data };
+
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 注意：后端未提供单个展位的更新/删除端点
+ * 需要通过重新批量创建来更新展位布局
+ */
+
+// 以下函数暂不可用，后端未注册 booths ViewSet
+// export async function updateBooth(boothId, updates) { ... }
+// export async function deleteBooth(boothId) { ... }
+
+// ==================== 展商 API ====================
+
+/**
+ * 批量导入展商
+ * @param {string} eventId - 展会ID
+ * @param {array} vendors - 展商数组
+ * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ */
+export async function batchImportVendors(eventId, vendors) {
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/vendors_import/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ vendors })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { success: false, error: data.detail || '批量导入展商失败' };
+    }
+
+    return { success: true, data };
+
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 创建单个展商
+ * @param {object} vendorData - 展商数据 { event, company_name, contact_name, contact_email, contact_phone, category, ... }
+ * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ */
+export async function createVendor(vendorData) {
+  try {
+    const response = await fetch(`/api/tradeshow/events/${vendorData.event}/vendors_import/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ vendors: [vendorData] })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { success: false, error: data.detail || '创建展商失败' };
+    }
+
+    return { success: true, data: data.vendors?.[0] || data };
+
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 注意：后端未提供单个展商的更新/删除端点
+ * 需要通过重新批量导入来更新展商信息
+ */
+
+// 以下函数暂不可用，后端未注册 vendors ViewSet
+// export async function updateVendor(vendorId, updates) { ... }
+// export async function deleteVendor(vendorId) { ... }
+// export async function getAllVendors(eventId) { ... }
+
+// ==================== 展位分配 API ====================
+
+/**
+ * 创建展位分配
+ * @param {string} eventId - 展会ID
+ * @param {object} assignmentData - 分配数据 { booth, vendor }
+ * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ */
+export async function createBoothAssignment(eventId, assignmentData) {
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/assignments/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(assignmentData)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { success: false, error: data.detail || '创建展位分配失败' };
+    }
+
+    return { success: true, data };
+
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 注意：后端未提供单个分配的删除/查询端点
+ * 只能通过事件创建新分配
+ */
+
+// 以下函数暂不可用，后端未注册 assignments ViewSet
+// export async function deleteBoothAssignment(assignmentId) { ... }
+// export async function getAllAssignments(eventId) { ... }
+
+// ==================== 参观路线 API ====================
+
+/**
+ * 创建参观路线
+ * @param {string} eventId - 展会ID
+ * @param {object} routeData - 路线数据 { name, route_type, booth_order }
+ * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ */
+export async function createRoute(eventId, routeData) {
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/routes/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(routeData)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { success: false, error: data.detail || '创建参观路线失败' };
+    }
+
+    return { success: true, data };
+
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 注意：后端未提供单个路线的更新/删除/查询端点
+ * 只能通过事件创建新路线
+ */
+
+// 以下函数暂不可用，后端未注册 routes ViewSet
+// export async function updateRoute(routeId, updates) { ... }
+// export async function deleteRoute(routeId) { ... }
+// export async function getAllRoutes(eventId) { ... }
+
+// ==================== 预设布局 API ====================
+
+/**
+ * 应用预设布局
+ * @param {string} eventId - 展会ID
+ * @param {string} presetId - 预设布局ID (如 'standard', 'compact', 'premium')
+ * @returns {Promise<{success: boolean, data?: object, error?: string}>}
  */
 export async function applyPresetLayout(eventId, presetId) {
-  await delay();
-  console.log('Applying preset layout:', presetId, 'to event:', eventId);
-  // In real implementation, this would load preset from backend
-  return { success: true, data: { presetId, applied: true } };
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/presets/apply/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ preset_id: presetId })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { success: false, error: data.detail || '应用预设布局失败' };
+    }
+
+    return { success: true, data };
+
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 }
 
+// ==================== 分享 API ====================
+
 /**
- * Generate share token for event
- * @param {number} eventId - Event ID
- * @returns {Promise<Object>} Share token
+ * 注意：后端未提供生成分享Token的端点
+ * TradeshowEventViewSet 没有 share action
  */
-export async function generateShareToken(eventId) {
-  await delay();
-  const token = `share-tradeshow-${eventId}-${Date.now()}`;
-  return { success: true, data: { shareToken: token } };
+
+// 以下函数暂不可用，后端未实现
+// export async function generateShareToken(eventId) { ... }
+
+/**
+ * 通过分享Token获取展会（只读）
+ * @param {string} shareToken - 分享Token
+ * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ */
+export async function getEventByShareToken(shareToken) {
+  try {
+    const response = await fetch(`/api/tradeshow/share/${shareToken}/`, {
+      method: 'GET'
+      // 注意：这个API不需要认证
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { success: false, error: data.detail || '获取分享展会失败' };
+    }
+
+    return { success: true, data };
+
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 }

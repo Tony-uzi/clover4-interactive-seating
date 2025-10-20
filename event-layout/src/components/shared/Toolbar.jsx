@@ -14,6 +14,7 @@ export default function Toolbar({
   onShare,
   onClear,
   title,
+  children,
 }) {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef(null);
@@ -158,6 +159,9 @@ export default function Toolbar({
               <span className="text-sm">Clear</span>
             </button>
           )}
+          
+          {/* Additional children (like LoadSampleDataButton, status indicators) */}
+          {children}
         </div>
       </div>
     </div>

@@ -36,6 +36,12 @@ class ConferenceEventSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ("id", "created_at", "updated_at", "user", "share_token")
 
+class ConferenceGroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConferenceGroup
+        fields = ['id', 'event', 'name', 'color', 'is_system', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
 # Tradeshow
 class TradeshowBoothSerializer(serializers.ModelSerializer):
     class Meta:
@@ -68,44 +74,3 @@ class TradeshowEventSerializer(serializers.ModelSerializer):
         model = TradeshowEvent
         fields = "__all__"
         read_only_fields = ("id", "created_at", "updated_at", "user", "share_token")
-
-# 具体流程：
-# 例子，后续删掉，创建会议事件：
-# POST /api/conference/events/
-# {
-#   "name": "Annual Meeting",
-#   "description": "VIP dinner",
-#   "room_width": 24.0,
-#   "room_height": 16.0
-# }
-
-# 响应（由 ConferenceEventSerializer 输出）：
-# {
-#   "id": "f5e8...-uuid",
-#   "user": 1,
-#   "name": "Annual Meeting",
-#   "description": "VIP dinner",
-#   "room_width": "24.00",
-#   "room_height": "16.00",
-#   "is_public": false,
-#   "share_token": null,
-#   "guest_count": 0,
-#   "element_count": 0,
-#   "created_at": "2025-10-06T10:20:30Z",
-#   "updated_at": "2025-10-06T10:20:30Z"
-# }
-
-# 批量新增元素（elements action 内部还是逐个用 ConferenceElementSerializer 校验）：
-# POST /api/conference/events/<event_id>/elements/
-# {
-#   "elements": [
-#     {
-#       "element_type": "table_round",
-#       "label": "T1",
-#       "seats": 8,
-#       "position_x": 100, "position_y": 120,
-#       "width": 1.8, "height": 1.8,
-#       "rotation": 0, "scale_x": 1, "scale_y": 1
-#     }
-#   ]
-# }

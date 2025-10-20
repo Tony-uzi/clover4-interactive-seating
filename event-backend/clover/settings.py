@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -23,14 +24,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-8(pjrjnofge28%zooth-$ukuwm!*m&ah=hc8gt&gh7cge7hysp'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',') if os.environ.get('ALLOWED_HOSTS') else ['*']
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',  # Must be before django.contrib.staticfiles
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -40,6 +42,7 @@ INSTALLED_APPS = [
     "django_filters",
     'rest_framework',
     'corsheaders',
+    'channels',
     "api.apps.ApiConfig",
 ]
 
@@ -72,22 +75,55 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'clover.wsgi.application'
+ASGI_APPLICATION = 'clover.asgi.application'
+
+# Channels configuration
+REDIS_HOST = os.environ.get('REDIS_HOST', '127.0.0.1')
+REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
+
+# 使用 Redis 如果配置了 REDIS_HOST 环境变量，否则使用内存
+if os.environ.get('REDIS_HOST'):
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [(REDIS_HOST, REDIS_PORT)],
+            },
+        },
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer"
+        }
+    }
 
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-  "default": {
-    "ENGINE": "django.db.backends.postgresql",
-    "NAME": "tableplanner",
-    "USER": "postgres",
-    "PASSWORD": "20000921Lkl",
-    "HOST": "localhost",
-    "PORT": "5432",
-    "CONN_MAX_AGE": 60,
-  }
-}
+# Database configuration - 支持环境变量
+DATABASE_ENGINE = os.environ.get('DATABASE_ENGINE', 'django.db.backends.sqlite3')
+
+if DATABASE_ENGINE == 'django.db.backends.postgresql':
+    DATABASES = {
+        "default": {
+            "ENGINE": DATABASE_ENGINE,
+            "NAME": os.environ.get('DATABASE_NAME', 'tableplanner'),
+            "USER": os.environ.get('DATABASE_USER', 'postgres'),
+            "PASSWORD": os.environ.get('DATABASE_PASSWORD', '1234598'),
+            "HOST": os.environ.get('DATABASE_HOST', 'localhost'),
+            "PORT": os.environ.get('DATABASE_PORT', '5432'),
+            "CONN_MAX_AGE": 60,
+        }
+    }
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
 # Password validation
@@ -134,14 +170,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # 3. 允许前端开发端口
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-]
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-]
+
+# 从环境变量读取，否则使用默认值
+CORS_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:5173,http://localhost:3000')
+CORS_ALLOWED_ORIGINS = CORS_ORIGINS.split(',')
+CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
 # 4. REST 框架默认配置
 REST_FRAMEWORK = {

@@ -117,9 +117,31 @@ class ConferenceElement(TimeStamped):
     class Meta:
         indexes = [models.Index(fields=["event"])]
 
+class ConferenceGroup(TimeStamped):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event = models.ForeignKey(
+        ConferenceEvent, 
+        on_delete=models.CASCADE, 
+        related_name="groups"
+    )
+    name = models.CharField(max_length=100)
+    color = models.CharField(max_length=20, default="#3B82F6")  # 存储颜色代码
+    is_system = models.BooleanField(default=False)  # 是否为系统预设分组
+    
+    class Meta:
+        unique_together = ("event", "name")
+        indexes = [models.Index(fields=["event"])]
+# 嘉宾
 class ConferenceGuest(TimeStamped):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     event = models.ForeignKey(ConferenceEvent, on_delete=models.CASCADE, related_name="guests")
+    group = models.ForeignKey(
+        "api.ConferenceGroup",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="guests",
+    )
     name = models.CharField(max_length=255)
     email = models.EmailField()
     dietary_requirements = models.TextField(blank=True)
@@ -130,8 +152,10 @@ class ConferenceGuest(TimeStamped):
         indexes = [
             models.Index(fields=["event"]),
             models.Index(fields=["email"]),
+            models.Index(fields=["group"]),  # 新索引，便于按分组查询
         ]
-
+        
+# 嘉宾座位分配
 class ConferenceSeatAssignment(TimeStamped):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     event = models.ForeignKey(ConferenceEvent, on_delete=models.CASCADE, related_name="seat_assignments")
@@ -141,10 +165,13 @@ class ConferenceSeatAssignment(TimeStamped):
 
     class Meta:
         constraints = [
+            # 同一活动中，每个嘉宾只能有一个座位
             models.UniqueConstraint(fields=["event", "guest"], name="unique_guest_per_event"),
+            # 同一活动中，同一元素的同一座位只能分配给一个嘉宾
             models.UniqueConstraint(fields=["event", "element", "seat_number"], name="unique_seat_per_element_event"),
         ]
         indexes = [
+            # 便于按活动、元素、嘉宾查询
             models.Index(fields=["event"]),
             models.Index(fields=["element"]),
             models.Index(fields=["guest"]),

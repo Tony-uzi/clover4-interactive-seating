@@ -1,89 +1,93 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import * as AuthAPI from "../server-actions/auth";
 
 export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
-  const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
 
-  const onSubmit = async (e) => {
-  e.preventDefault();
-  try {
-    const res = await fetch('/api/auth/login/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Login failed');
-    // success
-    localStorage.setItem('token', data.token);
-    alert('Logged in. Token saved.');
-    // navigate (support redirect back)
-    const params = new URLSearchParams(window.location.search);
-    const redirect = params.get('redirect');
-    window.location.href = redirect || '/';
-  } catch (err) {
-    alert(err.message || 'Login failed');
-  }
-};
+  const onChange = (event) => {
+    const { name, value } = event.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const onSubmit = async (event) => {
+    event.preventDefault();
+    if (loading) return;
+    setLoading(true);
+    setError("");
+
+    try {
+      const result = await AuthAPI.login(form.email, form.password);
+      
+      if (result.success) {
+        // 登录成功
+        const params = new URLSearchParams(window.location.search);
+        const redirect = params.get("redirect");
+        navigate(redirect || "/conference");
+      } else {
+        // 登录失败
+        setError(result.error || "Invalid credentials");
+        setLoading(false);
+      }
+    } catch (err) {
+      setError("Network error. Please check if the backend is running.");
+      setLoading(false);
+    }
+  };
 
   return (
-    <section className="page auth">
-      <h1>Log In</h1>
+    <section className="auth">
+      <h1>Welcome Back</h1>
 
       <form className="form-card" onSubmit={onSubmit}>
-        <label htmlFor="email">Email</label>
-        <input
-          id="email"
-          name="email"
-          type="email"
-          placeholder="you@example.com"
-          value={form.email}
-          onChange={onChange}
-          required
-        />
+        <div>
+          <label htmlFor="email">Email Address</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            placeholder="your@email.com"
+            value={form.email}
+            onChange={onChange}
+            autoComplete="email"
+            required
+          />
+        </div>
 
-        <label htmlFor="password" style={{ marginTop: 8 }}>
-          Password
-        </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          placeholder="••••••••"
-          value={form.password}
-          onChange={onChange}
-          required
-        />
+        <div>
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            placeholder="Enter your password"
+            value={form.password}
+            onChange={onChange}
+            autoComplete="current-password"
+            required
+          />
+        </div>
+
+        {error && (
+          <div className="error-message">
+            {error}
+          </div>
+        )}
 
         <button
           type="submit"
           className="btn btn-primary"
-          style={{ marginTop: 12 }}
+          disabled={loading}
         >
-          Log In
+          {loading ? "Signing in..." : "Log In"}
         </button>
       </form>
 
-      <div className="alt-actions" style={{ marginTop: 12 }}>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => alert("TODO: Google OAuth")}
-        >
-          <i className="fab fa-google" /> &nbsp;Continue with Google
-        </button>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => alert("TODO: SSO")}
-        >
-          <i className="fas fa-user" /> &nbsp;Single Sign-On
-        </button>
-      </div>
-
-      <p style={{ marginTop: 12 }}>
-        Don't have an account? <Link to="/signup">Sign up</Link>
+      <p style={{ marginTop: 24, textAlign: 'center', color: '#64748b' }}>
+        Don't have an account? <Link to="/signup" style={{ color: '#667eea', fontWeight: 600, textDecoration: 'none' }}>Sign up</Link>
       </p>
     </section>
   );

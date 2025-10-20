@@ -1,11 +1,13 @@
-import { NavLink, Link } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 
 export default function Header() {
   const link = ({ isActive }) => (isActive ? "active" : "");
   return (
     <header className="site-header">
-      <div className="container header-inner">
-        <span className="logo">CLOVER 4 your tableplanner</span>
+      <div className="header-inner">
+        <NavLink to="/" className="logo">
+          Clover Events
+        </NavLink>
         <nav className="main-nav">
           <NavLink to="/" end className={link}>
             Home
@@ -16,11 +18,8 @@ export default function Header() {
           <NavLink to="/tradeshow" className={link}>
             Trade Show
           </NavLink>
-          <NavLink to="/conference-kiosk" className={link}>
-            Conference Kiosk
-          </NavLink>
-          <NavLink to="/tradeshow-kiosk" className={link}>
-            Trade Show Kiosk
+          <NavLink to="/kiosk" className={link}>
+            Kiosk
           </NavLink>
           <NavLink to="/signup" className={link}>
             Sign Up
