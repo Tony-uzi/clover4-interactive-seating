@@ -29,6 +29,7 @@ import {
 } from '../lib/utils/storage';
 import * as ConferenceAPI from '../server-actions/conference-planner';
 import * as TradeshowAPI from '../server-actions/tradeshow-planner';
+import { normalizeConferenceGuest, normalizeTradeshowVendor } from '../lib/utils/normalizers';
 
 const REFRESH_INTERVAL = 60000; // 60 seconds
 const UUID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -122,22 +123,9 @@ export function ConferenceKiosk() {
             roomHeight: eventResponse.data.room_height,
           };
 
-          const updatedGuests = guestsResponse.data.map(g => ({
-            id: g.id,
-            name: g.name,
-            email: g.email,
-            company: g.company,
-            phone: g.phone,
-            group: g.group_name || g.group,
-            tableNumber: g.seat_info?.element_label || g.table_number || null,
-            seatNumber: g.seat_info?.seat_number || g.seat_number || null,
-            dietaryPreference: g.dietary_requirements,
-            attendance: g.attendance !== undefined ? g.attendance : true,
-            notes: g.notes,
-            checkedIn: g.checked_in || false,
-            checkInTime: g.check_in_time || null,
-            elementId: g.seat_info?.element_id || g.element_id || null,
-          }));
+          const updatedGuests = guestsResponse.data
+            .map(normalizeConferenceGuest)
+            .filter(Boolean);
 
           const updatedElements = elementsResponse.data.map(el => ({
             id: el.id,
@@ -217,7 +205,7 @@ export function ConferenceKiosk() {
     setGuests(prevGuests => {
       const nextGuests = prevGuests.map(g => {
         if (String(g.id) === String(guestId)) {
-          return { ...g, ...patch };
+          return normalizeConferenceGuest({ ...g, ...patch });
         }
         return g;
       });
@@ -227,7 +215,7 @@ export function ConferenceKiosk() {
 
     setSelectedGuest(prev => {
       if (prev && String(prev.id) === String(guestId)) {
-        return { ...prev, ...patch };
+        return normalizeConferenceGuest({ ...prev, ...patch });
       }
       return prev;
     });
@@ -693,22 +681,9 @@ export function TradeshowKiosk() {
             hallHeight: eventResponse.data.hall_height,
           };
 
-          const updatedVendors = vendorsResponse.data.map(v => {
-            const boothInfo = v.booth_info || {};
-            return {
-              id: v.id,
-              name: v.name || v.company_name || v.contact_name || '',
-              contactName: v.contact_name || v.contactName || '',
-              email: v.contact_email || v.email || '',
-              phone: v.contact_phone || v.phone || '',
-              category: v.category || '',
-              boothNumber: v.booth_number || boothInfo.booth_label || '',
-              notes: v.notes || v.description || '',
-              boothId: v.booth_id || boothInfo.booth_id || boothInfo.boothId || null,
-              checkedIn: v.checked_in || false,
-              checkInTime: v.check_in_time || null,
-            };
-          });
+          const updatedVendors = vendorsResponse.data
+            .map(normalizeTradeshowVendor)
+            .filter(Boolean);
 
           const updatedBooths = boothsResponse.data.map(booth => ({
             id: booth.id,
@@ -804,7 +779,7 @@ export function TradeshowKiosk() {
     setVendors(prevVendors => {
       const nextVendors = prevVendors.map(v => {
         if (String(v.id) === String(vendorId)) {
-          return { ...v, ...patch };
+          return normalizeTradeshowVendor({ ...v, ...patch });
         }
         return v;
       });
@@ -814,7 +789,7 @@ export function TradeshowKiosk() {
 
     setSelectedVendor(prev => {
       if (prev && String(prev.id) === String(vendorId)) {
-        return { ...prev, ...patch };
+        return normalizeTradeshowVendor({ ...prev, ...patch });
       }
       return prev;
     });

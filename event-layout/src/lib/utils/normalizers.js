@@ -101,17 +101,26 @@ export function normalizeTradeshowVendor(raw) {
     raw.boothLabel ??
     null;
 
+  const companyName = raw.companyName || raw.company_name || raw.name || '';
+  const contactName = raw.contactName || raw.contact_name || '';
+  const contactEmail = raw.contactEmail || raw.contact_email || raw.email || '';
+  const contactPhone = raw.contactPhone || raw.contact_phone || raw.phone || '';
+
   return {
     id: id ? String(id) : null,
-    companyName: raw.companyName || raw.company_name || raw.name || '',
-    contactName: raw.contactName || raw.contact_name || '',
-    contactEmail: raw.contactEmail || raw.contact_email || raw.email || '',
-    contactPhone: raw.contactPhone || raw.contact_phone || raw.phone || '',
+    companyName,
+    name: companyName,
+    contactName,
+    contactEmail,
+    email: contactEmail,
+    contactPhone,
+    phone: contactPhone,
     category: raw.category || '',
     boothPreference: raw.boothPreference || raw.booth_preference || raw.booth_size_preference || '',
     website: raw.website || '',
     logoUrl: raw.logoUrl || raw.logo_url || '',
     description: raw.description || '',
+    notes: raw.notes || raw.description || '',
     boothAssignmentId: boothAssignmentId ? String(boothAssignmentId) : null,
     boothId: boothId ? String(boothId) : null,
     boothNumber: boothLabel ? String(boothLabel) : null,
@@ -124,9 +133,26 @@ export function normalizeTradeshowVendor(raw) {
 
 export function normalizeConferenceElement(raw) {
   if (!raw) return null;
+  const resolvedId =
+    raw.id ??
+    raw.element_id ??
+    raw.elementId ??
+    raw.tempId ??
+    raw.uuid ??
+    null;
+  if (!resolvedId) return null;
+  
+  // Validate element type - only accept known conference element types
+  const elementType = raw.type || raw.element_type;
+  const validTypes = ['table_round', 'table_rectangle', 'table_rect', 'table_square', 'chair', 'podium', 'door', 'outlet'];
+  if (!elementType || !validTypes.includes(elementType)) {
+    console.warn('Invalid element type, skipping:', elementType, raw);
+    return null;
+  }
+  
   return {
-    id: String(raw.id),
-    type: raw.type || raw.element_type,
+    id: String(resolvedId),
+    type: elementType,
     label: raw.label || raw.element_label || '',
     x: raw.x ?? raw.position_x ?? 0,
     y: raw.y ?? raw.position_y ?? 0,
@@ -139,9 +165,26 @@ export function normalizeConferenceElement(raw) {
 
 export function normalizeTradeshowBooth(raw) {
   if (!raw) return null;
+  const resolvedId =
+    raw.id ??
+    raw.booth_id ??
+    raw.boothId ??
+    raw.tempId ??
+    raw.uuid ??
+    null;
+  if (!resolvedId) return null;
+  
+  // Validate booth type - only accept known tradeshow booth types
+  const boothType = raw.type || raw.booth_type;
+  const validTypes = ['booth_standard', 'booth_large', 'booth_premium', 'booth_island'];
+  if (!boothType || !validTypes.includes(boothType)) {
+    console.warn('Invalid booth type, skipping:', boothType, raw);
+    return null;
+  }
+  
   return {
-    id: String(raw.id),
-    type: raw.type || raw.booth_type,
+    id: String(resolvedId),
+    type: boothType,
     label: raw.label || raw.booth_label || '',
     x: raw.x ?? raw.position_x ?? 0,
     y: raw.y ?? raw.position_y ?? 0,

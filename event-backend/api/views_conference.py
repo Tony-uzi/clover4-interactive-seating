@@ -116,19 +116,44 @@ def conference_element_detail(request, event_id, element_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def conference_elements_bulk(request, event_id):
-    """Bulk create/update elements"""
+    """Bulk create/update elements - only creates new elements, doesn't delete existing ones"""
     event = get_object_or_404(ConferenceEvent, id=event_id, user=request.user)
     elements_data = request.data.get('elements', [])
 
     created_elements = []
     for element_data in elements_data:
         element_data['event'] = str(event.id)
-        serializer = ConferenceElementSerializer(data=element_data)
-        if serializer.is_valid():
-            element = serializer.save(event=event)
-            created_elements.append(serializer.data)
+        
+        # Check if element has an ID (if it's a valid UUID, try to update; otherwise create new)
+        element_id = element_data.get('id')
+        if element_id:
+            try:
+                # Try to get existing element
+                existing_element = ConferenceElement.objects.get(id=element_id, event=event)
+                # Update existing element
+                serializer = ConferenceElementSerializer(existing_element, data=element_data, partial=True)
+                if serializer.is_valid():
+                    element = serializer.save()
+                    created_elements.append(serializer.data)
+                else:
+                    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            except (ConferenceElement.DoesNotExist, ValueError):
+                # Element doesn't exist or invalid UUID, create new one
+                element_data.pop('id', None)  # Remove invalid ID
+                serializer = ConferenceElementSerializer(data=element_data)
+                if serializer.is_valid():
+                    element = serializer.save(event=event)
+                    created_elements.append(serializer.data)
+                else:
+                    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            # No ID provided, create new element
+            serializer = ConferenceElementSerializer(data=element_data)
+            if serializer.is_valid():
+                element = serializer.save(event=event)
+                created_elements.append(serializer.data)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     return Response(created_elements, status=status.HTTP_201_CREATED)
 

@@ -1,5 +1,12 @@
 // LocalStorage utility functions for data persistence
 
+import {
+  normalizeConferenceGuest,
+  normalizeTradeshowVendor,
+  normalizeConferenceElement,
+  normalizeTradeshowBooth,
+} from './normalizers';
+
 // Storage keys
 export const STORAGE_KEYS = {
   // Conference
@@ -75,19 +82,31 @@ export function loadConferenceEvent() {
 }
 
 export function saveConferenceLayout(elements) {
-  return saveToStorage(STORAGE_KEYS.CONFERENCE_LAYOUT, elements);
+  const normalized = Array.isArray(elements)
+    ? elements.map(normalizeConferenceElement).filter(Boolean)
+    : [];
+  return saveToStorage(STORAGE_KEYS.CONFERENCE_LAYOUT, normalized);
 }
 
 export function loadConferenceLayout() {
-  return loadFromStorage(STORAGE_KEYS.CONFERENCE_LAYOUT, []);
+  const stored = loadFromStorage(STORAGE_KEYS.CONFERENCE_LAYOUT, []);
+  return Array.isArray(stored)
+    ? stored.map(normalizeConferenceElement).filter(Boolean)
+    : [];
 }
 
 export function saveConferenceGuests(guests) {
-  return saveToStorage(STORAGE_KEYS.CONFERENCE_GUESTS, guests);
+  const normalized = Array.isArray(guests)
+    ? guests.map(normalizeConferenceGuest).filter(Boolean)
+    : [];
+  return saveToStorage(STORAGE_KEYS.CONFERENCE_GUESTS, normalized);
 }
 
 export function loadConferenceGuests() {
-  return loadFromStorage(STORAGE_KEYS.CONFERENCE_GUESTS, []);
+  const stored = loadFromStorage(STORAGE_KEYS.CONFERENCE_GUESTS, []);
+  return Array.isArray(stored)
+    ? stored.map(normalizeConferenceGuest).filter(Boolean)
+    : [];
 }
 
 export function saveConferenceGroups(groups) {
@@ -133,19 +152,31 @@ export function loadTradeshowEvent() {
 }
 
 export function saveTradeshowLayout(booths) {
-  return saveToStorage(STORAGE_KEYS.TRADESHOW_LAYOUT, booths);
+  const normalized = Array.isArray(booths)
+    ? booths.map(normalizeTradeshowBooth).filter(Boolean)
+    : [];
+  return saveToStorage(STORAGE_KEYS.TRADESHOW_LAYOUT, normalized);
 }
 
 export function loadTradeshowLayout() {
-  return loadFromStorage(STORAGE_KEYS.TRADESHOW_LAYOUT, []);
+  const stored = loadFromStorage(STORAGE_KEYS.TRADESHOW_LAYOUT, []);
+  return Array.isArray(stored)
+    ? stored.map(normalizeTradeshowBooth).filter(Boolean)
+    : [];
 }
 
 export function saveTradeshowVendors(vendors) {
-  return saveToStorage(STORAGE_KEYS.TRADESHOW_VENDORS, vendors);
+  const normalized = Array.isArray(vendors)
+    ? vendors.map(normalizeTradeshowVendor).filter(Boolean)
+    : [];
+  return saveToStorage(STORAGE_KEYS.TRADESHOW_VENDORS, normalized);
 }
 
 export function loadTradeshowVendors() {
-  return loadFromStorage(STORAGE_KEYS.TRADESHOW_VENDORS, []);
+  const stored = loadFromStorage(STORAGE_KEYS.TRADESHOW_VENDORS, []);
+  return Array.isArray(stored)
+    ? stored.map(normalizeTradeshowVendor).filter(Boolean)
+    : [];
 }
 
 export function saveTradeshowRoutes(routes) {

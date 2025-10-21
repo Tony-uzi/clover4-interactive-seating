@@ -21,6 +21,7 @@ import { parseGuestCSV, guestsToCSV, guestsToCSVFiltered, exportGuestsByGroup, d
 import { jsPDF } from 'jspdf';
 import * as ConferenceAPI from '../server-actions/conference-planner';
 import { createOrGetDesign, saveDesignVersion } from '../lib/api';
+import { normalizeConferenceGuest, normalizeConferenceElement } from '../lib/utils/normalizers';
 
 export default function ConferencePlanner() {
   const location = useLocation();
@@ -38,22 +39,7 @@ export default function ConferencePlanner() {
   const [dirty, setDirty] = useState(false);
   const [canvasVersion, setCanvasVersion] = useState(0);
 
-  const mapBackendGuest = (guest) => ({
-    id: guest.id,
-    name: guest.name,
-    email: guest.email,
-    company: guest.company,
-    phone: guest.phone,
-    dietaryPreference: guest.dietary_requirements,
-    notes: guest.notes,
-    group: guest.group_name || guest.group,
-    tableNumber: guest.seat_info?.table_number ?? guest.table_number ?? null,
-    seatNumber: guest.seat_info?.seat_number ?? guest.seat_number ?? null,
-    seatAssignmentId: guest.seat_info?.assignment_id ?? guest.assignment_id ?? null,
-    elementId: guest.seat_info?.element_id ?? guest.element_id ?? null,
-    attendance: guest.attendance !== undefined ? guest.attendance : true,
-    checkedIn: guest.checked_in || false,
-  });
+  const mapBackendGuest = normalizeConferenceGuest;
 
   // Track if initial load is complete
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -84,43 +70,46 @@ export default function ConferencePlanner() {
         console.warn('Ensure event failed:', e);
       }
 
+      // Set initial state from localStorage (will be overwritten by backend data if available)
       setEvent(ensuredEvent);
       setElements(loadedLayout);
       setGuests(loadedGuests);
       setGroups(loadedGroups);
 
-      // Try to load guests and elements from backend if event ID exists
+      // ALWAYS try to load from backend if event ID exists - backend is source of truth
       if (ensuredEvent?.id) {
         try {
           // Load guests from backend
           const guestsResp = await ConferenceAPI.getGuests(ensuredEvent.id);
-          if (guestsResp.success && guestsResp.data.length > 0) {
+          if (guestsResp.success) {
             const backendGuests = guestsResp.data.map(mapBackendGuest);
             setGuests(backendGuests);
             saveConferenceGuests(backendGuests);
-            console.log(`✓ Loaded ${backendGuests.length} guests from backend`);
+            console.log(`✓ Loaded ${backendGuests.length} guests from backend (source of truth)`);
+          } else {
+            console.warn('Failed to load guests from backend:', guestsResp.error);
           }
 
-          // Load elements from backend
+          // Load elements from backend - ALWAYS use backend data, not localStorage
           const elementsResp = await ConferenceAPI.getElements(ensuredEvent.id);
-          if (elementsResp.success && elementsResp.data.length > 0) {
-            const backendElements = elementsResp.data.map(el => ({
-              id: el.id,
-              type: el.element_type,
-              label: el.label,
-              seats: el.seats,
-              x: el.position_x,
-              y: el.position_y,
-              width: el.width,
-              height: el.height,
-              rotation: el.rotation || 0,
-            }));
+          if (elementsResp.success) {
+            const backendElements = elementsResp.data
+              .map(normalizeConferenceElement)
+              .filter(Boolean);
             setElements(backendElements);
             saveConferenceLayout(backendElements);
-            console.log(`✓ Loaded ${backendElements.length} elements from backend`);
+            console.log(`✓ Loaded ${backendElements.length} elements from backend (source of truth)`);
+          } else {
+            console.warn('Failed to load elements from backend:', elementsResp.error);
+            // If backend fails, use empty array to avoid confusion
+            setElements([]);
+            saveConferenceLayout([]);
           }
         } catch (e) {
-          console.warn('Failed to load from backend, using localStorage:', e);
+          console.error('Failed to load from backend:', e);
+          // On error, clear elements to avoid showing stale localStorage data
+          setElements([]);
+          saveConferenceLayout([]);
         }
       }
 
@@ -252,7 +241,12 @@ export default function ConferencePlanner() {
       ...guest,
       id: guest.id || `temp_${Date.now()}`,
     };
-    setGuests(prevGuests => [...prevGuests, tempGuest]);
+    const normalizedTempGuest = normalizeConferenceGuest(tempGuest);
+    setGuests(prevGuests => {
+      const updated = [...prevGuests, normalizedTempGuest];
+      saveConferenceGuests(updated);
+      return updated;
+    });
     
     // Try to save to backend if event exists
     if (event?.id) {
@@ -261,9 +255,11 @@ export default function ConferencePlanner() {
         if (result.success && result.data) {
           // Replace temp guest with backend guest (which has real UUID)
           const backendGuest = mapBackendGuest(result.data);
-          setGuests(prevGuests => 
-            prevGuests.map(g => g.id === tempGuest.id ? backendGuest : g)
-          );
+          setGuests(prevGuests => {
+            const updated = prevGuests.map(g => g.id === tempGuest.id ? backendGuest : g);
+            saveConferenceGuests(updated);
+            return updated;
+          });
           console.log('✓ Guest created in backend with ID:', result.data.id);
         } else {
           console.warn('Failed to create guest in backend:', result.error);
@@ -276,7 +272,13 @@ export default function ConferencePlanner() {
   };
 
   const handleUpdateGuest = (guestId, updates) => {
-    setGuests(prevGuests => prevGuests.map(g => (g.id === guestId ? { ...g, ...updates } : g)));
+    setGuests(prevGuests => {
+      const updated = prevGuests.map(g =>
+        g.id === guestId ? normalizeConferenceGuest({ ...g, ...updates }) : g
+      );
+      saveConferenceGuests(updated);
+      return updated;
+    });
   };
 
   const handleDeleteGuest = (guestId) => {
@@ -353,10 +355,11 @@ export default function ConferencePlanner() {
           validGuestId = backendGuest.id;
           
           // Update guest state with backend UUID
-          setGuests(prevGuests => 
-            prevGuests.map(g => g.id === normalizedGuestId ? backendGuest : g)
-          );
-          saveConferenceGuests(guests.map(g => g.id === normalizedGuestId ? backendGuest : g));
+          setGuests(prevGuests => {
+            const updated = prevGuests.map(g => g.id === normalizedGuestId ? backendGuest : g);
+            saveConferenceGuests(updated);
+            return updated;
+          });
           console.log('✓ Guest saved to backend with UUID:', validGuestId);
         }
         
@@ -367,38 +370,48 @@ export default function ConferencePlanner() {
           // Element has a temporary frontend ID, need to save layout first
           console.log('Element has temporary ID, saving layout to get backend UUID...');
           
+          // Create a mapping of temp IDs to their original data for matching
+          const tempIdMap = new Map();
+          elements.forEach(el => {
+            if (!isValidUUID(el.id)) {
+              tempIdMap.set(el.id, {
+                x: el.x,
+                y: el.y,
+                type: el.type,
+                label: el.label
+              });
+            }
+          });
+          
           // Save the layout
           const saveResult = await ConferenceAPI.saveLayout(event.id, elements);
           if (!saveResult.success) {
             throw new Error('Failed to save layout before assignment');
           }
           
-          // Reload elements from backend to get real UUIDs
-          const elementsResp = await ConferenceAPI.getElements(event.id);
-          if (!elementsResp.success || !elementsResp.data.length) {
-            throw new Error('Failed to reload elements after saving');
+          // The saveLayout response includes the saved elements with UUIDs
+          const savedElements = saveResult.data?.elements || [];
+          
+          if (!savedElements || savedElements.length === 0) {
+            throw new Error('No elements returned from save layout');
           }
           
-          const backendElements = elementsResp.data.map(el => ({
-            id: el.id,
-            type: el.element_type,
-            label: el.label,
-            seats: el.seats,
-            x: el.position_x,
-            y: el.position_y,
-            width: el.width,
-            height: el.height,
-            rotation: el.rotation || 0,
-          }));
+          // Map saved elements to frontend format
+          const backendElements = savedElements
+            .map(normalizeConferenceElement)
+            .filter(Boolean);
           
-          // Find the matching element by label and position
-          const matchingElement = backendElements.find(el => 
-            el.label === element.label && 
-            Math.abs(el.x - element.x) < 0.1 && 
-            Math.abs(el.y - element.y) < 0.1
-          );
+          // Find matching element by comparing original temp element data with saved elements
+          const tempData = tempIdMap.get(element.id);
+          const matchingElement = backendElements.find(el => {
+            return tempData && 
+              Math.abs(parseFloat(el.x) - parseFloat(tempData.x)) < 0.01 && 
+              Math.abs(parseFloat(el.y) - parseFloat(tempData.y)) < 0.01 &&
+              (el.type === tempData.type || el.type === 'table_rectangle' && tempData.type === 'table_rect');
+          });
           
           if (!matchingElement) {
+            console.error('Failed to find matching element. Looking for:', tempData, 'in:', backendElements);
             throw new Error('Could not find matching element after saving layout');
           }
           
@@ -473,10 +486,13 @@ export default function ConferencePlanner() {
 
     try {
       const importedGuests = await parseGuestCSV(file);
-      if (importedGuests.length === 0) {
+      const normalizedImported = importedGuests
+        .map(normalizeConferenceGuest)
+        .filter(Boolean);
+      if (normalizedImported.length === 0) {
         alert('No valid guest information found, please check CSV content');
       } else {
-        let importedCount = importedGuests.length;
+        let importedCount = normalizedImported.length;
         let syncedWithBackend = false;
 
         if (event?.id) {
@@ -509,7 +525,7 @@ export default function ConferencePlanner() {
 
         if (!syncedWithBackend) {
           setGuests(prevGuests => {
-            const updated = [...prevGuests, ...importedGuests];
+            const updated = [...prevGuests, ...normalizedImported];
             saveConferenceGuests(updated);
             return updated;
           });
@@ -589,19 +605,39 @@ export default function ConferencePlanner() {
     pdf.save(`conference-layout-${Date.now()}.pdf`);
   };
 
-  // Clear
-  const handleClear = () => {
-    if (confirm('Are you sure you want to clear the canvas? This action cannot be undone!')) {
+  // Clear - clears both backend and localStorage
+  const handleClear = async () => {
+    if (!confirm('Are you sure you want to clear ALL layout elements? This will delete all tables, chairs, and other elements from both the canvas and the backend. This action cannot be undone!')) {
+      return;
+    }
+    
+    try {
+      // Clear local state first for immediate UI feedback
       setElements([]);
       setSelectedElementId(null);
       setDraggingGuestId(null);
+      
+      // Clear localStorage
       saveConferenceLayout([]);
+      
+      // Clear backend by saving empty layout
       if (event?.id) {
-        ConferenceAPI.saveLayout(event.id, []).catch((e) => {
-          console.warn('Failed to persist cleared layout:', e);
-        });
+        const result = await ConferenceAPI.saveLayout(event.id, []);
+        if (result.success) {
+          console.log('✓ Layout cleared from backend');
+        } else {
+          console.warn('Failed to clear layout from backend:', result.error);
+          alert('Failed to clear layout from backend. Please try again.');
+        }
       }
+      
+      // Force canvas refresh
       setCanvasVersion((prev) => prev + 1);
+      
+      alert('Canvas cleared successfully!');
+    } catch (error) {
+      console.error('Failed to clear canvas:', error);
+      alert('Failed to clear canvas. Please try again.');
     }
   };
 

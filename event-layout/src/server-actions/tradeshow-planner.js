@@ -174,13 +174,13 @@ export const getVendors = getAllVendors;
 /**
  * Create a new vendor
  */
-export async function createVendor(vendorData) {
+export async function createVendor(eventId, vendorData) {
   try {
     const response = await fetch('/api/tradeshow/vendors/', {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
-        event: vendorData.eventId || vendorData.event,
+        event: eventId || vendorData.eventId || vendorData.event,
         company_name: vendorData.name || vendorData.company_name,
         contact_name: vendorData.contactName || vendorData.contact_name || '',
         contact_email: vendorData.email || vendorData.contact_email || '',
@@ -290,22 +290,18 @@ export async function deleteVendor(vendorId) {
 /**
  * Bulk import vendors from CSV
  */
-export async function bulkImportVendors(eventId, vendorsData) {
+export async function bulkImportVendors(eventId, file) {
   try {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const token = getAuthToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
     const response = await fetch(`/api/tradeshow/events/${eventId}/vendors/import/`, {
       method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({
-        vendors: vendorsData.map(v => ({
-          company_name: v.name || v.company_name,
-          contact_name: v.contactName || v.contact_name || '',
-          contact_email: v.email || v.contact_email || '',
-          contact_phone: v.phone || v.contact_phone || '',
-          category: v.category || '',
-          booth_preference: v.boothPreference || v.booth_preference || '',
-          notes: v.notes || ''
-        }))
-      })
+      headers,
+      body: formData,
     });
     const data = await handleResponse(response);
     return { success: true, data };
@@ -340,21 +336,54 @@ export async function getBooths(eventId) {
  */
 export async function saveLayout(eventId, booths) {
   try {
+    // Map frontend booth types to backend types
+    const mapBoothType = (type) => {
+      const typeMap = {
+        'booth_island': 'booth_premium',
+      };
+      return typeMap[type] || type;
+    };
+
+    // Round to 2 decimal places
+    const roundTo2 = (num) => {
+      if (num === undefined || num === null) return 0;
+      return Math.round(num * 100) / 100;
+    };
+
+    // Generate default label based on booth type
+    const generateLabel = (type, index) => {
+      const typeLabels = {
+        'booth_standard': 'Booth',
+        'booth_large': 'Large Booth',
+        'booth_premium': 'Premium Booth',
+        'booth_island': 'Premium Booth',
+      };
+      const baseLabel = typeLabels[type] || 'Booth';
+      return `${baseLabel} ${index + 1}`;
+    };
+
     const response = await fetch(`/api/tradeshow/events/${eventId}/booths/bulk/`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
-        booths: booths.map(b => ({
-          event: eventId,
-          booth_type: b.type || b.booth_type,
-          category: b.category || 'booth',
-          label: b.label || '',
-          position_x: b.x !== undefined ? b.x : b.position_x,
-          position_y: b.y !== undefined ? b.y : b.position_y,
-          width: b.width,
-          height: b.height,
-          rotation: b.rotation || 0
-        }))
+        booths: booths.map((b, index) => {
+          const mapped = {
+            event: eventId,
+            booth_type: mapBoothType(b.type || b.booth_type),
+            category: b.category || 'booth',
+            label: b.label || generateLabel(b.type || b.booth_type, index),
+            position_x: roundTo2(b.x !== undefined ? b.x : b.position_x),
+            position_y: roundTo2(b.y !== undefined ? b.y : b.position_y),
+            width: roundTo2(b.width),
+            height: roundTo2(b.height),
+            rotation: roundTo2(b.rotation || 0)
+          };
+          // Include ID if it exists and looks like a valid UUID
+          if (b.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(b.id)) {
+            mapped.id = b.id;
+          }
+          return mapped;
+        })
       })
     });
     const data = await handleResponse(response);

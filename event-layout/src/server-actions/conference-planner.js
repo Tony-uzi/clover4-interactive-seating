@@ -381,23 +381,62 @@ export async function getElements(eventId) {
  */
 export async function saveLayout(eventId, elements) {
   try {
+    // Map frontend element types to backend types
+    const mapElementType = (type) => {
+      const typeMap = {
+        'table_rect': 'table_rectangle',
+        'table_square': 'table_rectangle',
+      };
+      return typeMap[type] || type;
+    };
+
+    // Round to 2 decimal places
+    const roundTo2 = (num) => {
+      if (num === undefined || num === null) return 0;
+      return Math.round(num * 100) / 100;
+    };
+
+    // Generate default label based on element type
+    const generateLabel = (type, index) => {
+      const typeLabels = {
+        'chair': 'Chair',
+        'table_round': 'Table',
+        'table_rectangle': 'Table',
+        'table_rect': 'Table',
+        'table_square': 'Table',
+        'podium': 'Podium',
+        'door': 'Door',
+        'outlet': 'Outlet',
+      };
+      const baseLabel = typeLabels[type] || 'Element';
+      return `${baseLabel} ${index + 1}`;
+    };
+
     const response = await fetch(`/api/conference/events/${eventId}/elements/bulk/`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
-        elements: elements.map(el => ({
-          event: eventId,
-          element_type: el.type || el.element_type,
-          label: el.label || '',
-          seats: el.seats || 0,
-          position_x: el.x !== undefined ? el.x : el.position_x,
-          position_y: el.y !== undefined ? el.y : el.position_y,
-          width: el.width,
-          height: el.height,
-          rotation: el.rotation || 0,
-          scale_x: el.scaleX || el.scale_x || 1.0,
-          scale_y: el.scaleY || el.scale_y || 1.0
-        }))
+        elements: elements.map((el, index) => {
+          const elementType = mapElementType(el.type || el.element_type);
+          const mapped = {
+            event: eventId,
+            element_type: elementType,
+            label: el.label || generateLabel(el.type || el.element_type, index),
+            seats: el.seats || 0,
+            position_x: roundTo2(el.x !== undefined ? el.x : el.position_x),
+            position_y: roundTo2(el.y !== undefined ? el.y : el.position_y),
+            width: roundTo2(el.width),
+            height: roundTo2(el.height),
+            rotation: roundTo2(el.rotation || 0),
+            scale_x: roundTo2(el.scaleX || el.scale_x || 1.0),
+            scale_y: roundTo2(el.scaleY || el.scale_y || 1.0)
+          };
+          // Include ID if it exists and looks like a valid UUID
+          if (el.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(el.id)) {
+            mapped.id = el.id;
+          }
+          return mapped;
+        })
       })
     });
     const data = await handleResponse(response);

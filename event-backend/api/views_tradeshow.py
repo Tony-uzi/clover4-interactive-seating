@@ -116,19 +116,44 @@ def tradeshow_booth_detail(request, event_id, booth_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def tradeshow_booths_bulk(request, event_id):
-    """Bulk create/update booths"""
+    """Bulk create/update booths - only creates new booths, doesn't delete existing ones"""
     event = get_object_or_404(TradeshowEvent, id=event_id, user=request.user)
     booths_data = request.data.get('booths', [])
 
     created_booths = []
     for booth_data in booths_data:
         booth_data['event'] = str(event.id)
-        serializer = TradeshowBoothSerializer(data=booth_data)
-        if serializer.is_valid():
-            booth = serializer.save(event=event)
-            created_booths.append(serializer.data)
+        
+        # Check if booth has an ID (if it's a valid UUID, try to update; otherwise create new)
+        booth_id = booth_data.get('id')
+        if booth_id:
+            try:
+                # Try to get existing booth
+                existing_booth = TradeshowBooth.objects.get(id=booth_id, event=event)
+                # Update existing booth
+                serializer = TradeshowBoothSerializer(existing_booth, data=booth_data, partial=True)
+                if serializer.is_valid():
+                    booth = serializer.save()
+                    created_booths.append(serializer.data)
+                else:
+                    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            except (TradeshowBooth.DoesNotExist, ValueError):
+                # Booth doesn't exist or invalid UUID, create new one
+                booth_data.pop('id', None)  # Remove invalid ID
+                serializer = TradeshowBoothSerializer(data=booth_data)
+                if serializer.is_valid():
+                    booth = serializer.save(event=event)
+                    created_booths.append(serializer.data)
+                else:
+                    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            # No ID provided, create new booth
+            serializer = TradeshowBoothSerializer(data=booth_data)
+            if serializer.is_valid():
+                booth = serializer.save(event=event)
+                created_booths.append(serializer.data)
+            else:
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     return Response(created_booths, status=status.HTTP_201_CREATED)
 

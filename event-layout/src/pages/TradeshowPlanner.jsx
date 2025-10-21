@@ -22,6 +22,7 @@ import { parseVendorCSV, vendorsToCSV, downloadCSV } from '../lib/utils/csvParse
 import { jsPDF } from 'jspdf';
 import * as TradeshowAPI from '../server-actions/tradeshow-planner';
 import { createOrGetDesign, saveDesignVersion } from '../lib/api';
+import { normalizeTradeshowVendor, normalizeTradeshowBooth } from '../lib/utils/normalizers';
 
 export default function TradeshowPlanner() {
   const location = useLocation();
@@ -42,22 +43,7 @@ export default function TradeshowPlanner() {
   // Track if initial load is complete
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  const mapBackendVendor = (vendor) => ({
-    id: vendor.id,
-    companyName: vendor.company_name,
-    contactName: vendor.contact_name,
-    contactEmail: vendor.contact_email,
-    contactPhone: vendor.contact_phone,
-    category: vendor.category,
-    boothSizePreference: vendor.booth_size_preference,
-    website: vendor.website,
-    logoUrl: vendor.logo_url,
-    description: vendor.description,
-    boothId: vendor.booth_info?.booth_id ?? vendor.booth_id ?? null,
-    boothNumber: vendor.booth_info?.booth_label ?? vendor.booth_label ?? null,
-    boothAssignmentId: vendor.booth_info?.assignment_id ?? vendor.assignment_id ?? null,
-    checkedIn: vendor.checked_in || false,
-  });
+  const mapBackendVendor = normalizeTradeshowVendor;
 
   // Load data on mount and ensure backend event exists
   useEffect(() => {
@@ -85,6 +71,7 @@ export default function TradeshowPlanner() {
         console.warn('Ensure tradeshow event failed:', e);
       }
 
+      // Set initial state from localStorage (will be overwritten by backend data if available)
       setEvent(ensuredEvent);
       setBooths(loadedLayout);
       setVendors(loadedVendors);
@@ -104,24 +91,27 @@ export default function TradeshowPlanner() {
             try { localStorage.setItem('designId.tradeshow', String(providedDesignId)); } catch {}
           }
         } else if (ensuredEvent?.id) {
+          // ALWAYS load from backend - backend is source of truth
           const layoutResp = await TradeshowAPI.loadLayout(ensuredEvent.id);
-          if (layoutResp.success && Array.isArray(layoutResp.data) && layoutResp.data.length > 0) {
-            const normalized = layoutResp.data.map(b => ({
-              id: b.id,  // Use the backend UUID directly
-              type: b.booth_type,
-              label: b.label || '',
-              x: b.position_x ?? b.x ?? 0,
-              y: b.position_y ?? b.y ?? 0,
-              width: b.width || 1,
-              height: b.height || 1,
-              rotation: b.rotation || 0,
-            }));
+          if (layoutResp.success) {
+            const normalized = layoutResp.data
+              .map(normalizeTradeshowBooth)
+              .filter(Boolean);
             setBooths(normalized);
             saveTradeshowLayout(normalized);
+            console.log(`✓ Loaded ${normalized.length} booths from backend (source of truth)`);
+          } else {
+            console.warn('Failed to load layout from backend:', layoutResp.error);
+            // If backend fails, use empty array to avoid confusion
+            setBooths([]);
+            saveTradeshowLayout([]);
           }
         }
       } catch (e) {
-        console.warn('Load tradeshow backend layout failed:', e);
+        console.error('Load tradeshow backend layout failed:', e);
+        // On error, clear booths to avoid showing stale localStorage data
+        setBooths([]);
+        saveTradeshowLayout([]);
       }
 
       setTimeout(() => setIsInitialLoad(false), 100);
@@ -227,11 +217,15 @@ export default function TradeshowPlanner() {
   // Vendor operations
   const handleAddVendor = async (vendor) => {
     // Add to local state immediately with temporary ID
-    const tempVendor = {
+    const tempVendor = normalizeTradeshowVendor({
       ...vendor,
       id: vendor.id || `temp_${Date.now()}`,
-    };
-    setVendors(prevVendors => [...prevVendors, tempVendor]);
+    });
+    setVendors(prevVendors => {
+      const updated = [...prevVendors, tempVendor];
+      saveTradeshowVendors(updated);
+      return updated;
+    });
     
     // Try to save to backend if event exists
     if (event?.id) {
@@ -240,9 +234,13 @@ export default function TradeshowPlanner() {
         if (result.success && result.data) {
           // Replace temp vendor with backend vendor (which has real UUID)
           const backendVendor = mapBackendVendor(result.data);
-          setVendors(prevVendors => 
-            prevVendors.map(v => v.id === tempVendor.id ? backendVendor : v)
-          );
+          setVendors(prevVendors => {
+            const updated = prevVendors.map(v =>
+              v.id === tempVendor.id ? backendVendor : v
+            ).map(normalizeTradeshowVendor).filter(Boolean);
+            saveTradeshowVendors(updated);
+            return updated;
+          });
           console.log('✓ Vendor created in backend with ID:', result.data.id);
         } else {
           console.warn('Failed to create vendor in backend:', result.error);
@@ -255,11 +253,21 @@ export default function TradeshowPlanner() {
   };
 
   const handleUpdateVendor = (vendorId, updates) => {
-    setVendors(vendors.map(v => (v.id === vendorId ? { ...v, ...updates } : v)));
+    setVendors(prevVendors => {
+      const updated = prevVendors.map(v =>
+        v.id === vendorId ? normalizeTradeshowVendor({ ...v, ...updates }) : v
+      );
+      saveTradeshowVendors(updated);
+      return updated;
+    });
   };
 
   const handleDeleteVendor = (vendorId) => {
-    setVendors(vendors.filter(v => v.id !== vendorId));
+    setVendors(prevVendors => {
+      const updated = prevVendors.filter(v => v.id !== vendorId);
+      saveTradeshowVendors(updated);
+      return updated;
+    });
   };
 
   const handleVendorDragStart = (vendorId) => {
@@ -284,16 +292,17 @@ export default function TradeshowPlanner() {
     };
 
     setVendors(prevVendors => {
-      const updated = prevVendors.map(vendor =>
-        String(vendor.id) === normalizedVendorId
-          ? {
-              ...vendor,
-              boothAssignmentId: vendor.boothAssignmentId || null,
-              boothId: booth.id,
-              boothNumber: booth.label || null,
-            }
-          : vendor
-      );
+      const updated = prevVendors.map(vendor => {
+        if (String(vendor.id) === normalizedVendorId) {
+          return normalizeTradeshowVendor({
+            ...vendor,
+            boothAssignmentId: vendor.boothAssignmentId || null,
+            boothId: booth.id,
+            boothNumber: booth.label || null,
+          });
+        }
+        return normalizeTradeshowVendor(vendor);
+      }).filter(Boolean);
       saveTradeshowVendors(updated);
       return updated;
     });
@@ -317,10 +326,13 @@ export default function TradeshowPlanner() {
           validVendorId = backendVendor.id;
           
           // Update vendor state with backend UUID
-          setVendors(prevVendors => 
-            prevVendors.map(v => v.id === normalizedVendorId ? backendVendor : v)
-          );
-          saveTradeshowVendors(vendors.map(v => v.id === normalizedVendorId ? backendVendor : v));
+          setVendors(prevVendors => {
+            const updated = prevVendors.map(v =>
+              v.id === normalizedVendorId ? backendVendor : normalizeTradeshowVendor(v)
+            ).filter(Boolean);
+            saveTradeshowVendors(updated);
+            return updated;
+          });
           console.log('✓ Vendor saved to backend with UUID:', validVendorId);
         }
         
@@ -331,38 +343,48 @@ export default function TradeshowPlanner() {
           // Booth has a temporary frontend ID, need to save layout first
           console.log('Booth has temporary ID, saving layout to get backend UUID...');
           
+          // Create a mapping of temp IDs to their original data for matching
+          const tempIdMap = new Map();
+          booths.forEach(b => {
+            if (!isValidUUID(b.id)) {
+              tempIdMap.set(b.id, {
+                x: b.x,
+                y: b.y,
+                type: b.type,
+                label: b.label
+              });
+            }
+          });
+          
           // Save the layout
           const saveResult = await TradeshowAPI.saveLayout(event.id, booths);
           if (!saveResult.success) {
             throw new Error('Failed to save layout before assignment');
           }
           
-          // Reload booths from backend to get real UUIDs
-          const boothsResp = await TradeshowAPI.getBooths(event.id);
-          if (!boothsResp.success || !boothsResp.data.length) {
-            throw new Error('Failed to reload booths after saving');
+          // The saveLayout response includes the saved booths with UUIDs
+          const savedBooths = saveResult.data?.booths || [];
+          
+          if (!savedBooths || savedBooths.length === 0) {
+            throw new Error('No booths returned from save layout');
           }
           
-          const backendBooths = boothsResp.data.map(b => ({
-            id: b.id,
-            type: b.booth_type,
-            label: b.label,
-            category: b.category,
-            x: b.position_x,
-            y: b.position_y,
-            width: b.width,
-            height: b.height,
-            rotation: b.rotation || 0,
-          }));
+          // Map saved booths to frontend format
+          const backendBooths = savedBooths
+            .map(normalizeTradeshowBooth)
+            .filter(Boolean);
           
-          // Find the matching booth by label and position
-          const matchingBooth = backendBooths.find(b => 
-            b.label === booth.label && 
-            Math.abs(b.x - booth.x) < 0.1 && 
-            Math.abs(b.y - booth.y) < 0.1
-          );
+          // Find matching booth by comparing original temp booth data with saved booths
+          const tempData = tempIdMap.get(booth.id);
+          const matchingBooth = backendBooths.find(b => {
+            return tempData && 
+              Math.abs(parseFloat(b.x) - parseFloat(tempData.x)) < 0.01 && 
+              Math.abs(parseFloat(b.y) - parseFloat(tempData.y)) < 0.01 &&
+              (b.type === tempData.type || b.type === 'booth_premium' && tempData.type === 'booth_island');
+          });
           
           if (!matchingBooth) {
+            console.error('Failed to find matching booth. Looking for:', tempData, 'in:', backendBooths);
             throw new Error('Could not find matching booth after saving layout');
           }
           
@@ -388,18 +410,17 @@ export default function TradeshowPlanner() {
           setVendors(prevVendors => {
             const updated = prevVendors.map(vendor => {
               const vendorIdStr = String(vendor.id);
-              // Match by either the original temp ID or the new valid ID
               if (vendorIdStr === normalizedVendorId || vendorIdStr === validVendorId) {
-                return {
+                return normalizeTradeshowVendor({
                   ...vendor,
-                  id: validVendorId,  // Ensure we use the valid UUID
+                  id: validVendorId,
                   boothAssignmentId: assignmentResp.data.id,
                   boothId: validBoothId,
                   boothNumber: booth.label || null,
-                };
+                });
               }
-              return vendor;
-            });
+              return normalizeTradeshowVendor(vendor);
+            }).filter(Boolean);
             saveTradeshowVendors(updated);
             return updated;
           });
@@ -451,8 +472,56 @@ export default function TradeshowPlanner() {
 
     try {
       const importedVendors = await parseVendorCSV(file);
-      setVendors([...vendors, ...importedVendors]);
-      alert(`Successfully imported ${importedVendors.length} vendor(s)!`);
+      const normalizedImported = importedVendors
+        .map(normalizeTradeshowVendor)
+        .filter(Boolean);
+
+      if (normalizedImported.length === 0) {
+        alert('No valid vendor information found, please check CSV content');
+      } else {
+        let importedCount = normalizedImported.length;
+        let syncedWithBackend = false;
+
+        if (event?.id) {
+          try {
+            const result = await TradeshowAPI.bulkImportVendors(event.id, file);
+            if (result.success) {
+              importedCount = result.data?.imported || result.data?.count || importedCount;
+              syncedWithBackend = true;
+
+              try {
+                const refreshedVendorsResp = await TradeshowAPI.getVendors(event.id);
+                if (refreshedVendorsResp.success) {
+                  const backendVendors = refreshedVendorsResp.data
+                    .map(mapBackendVendor)
+                    .filter(Boolean);
+                  setVendors(backendVendors);
+                  saveTradeshowVendors(backendVendors);
+                  console.log(`✓ Synced ${backendVendors.length} vendors from backend after import`);
+                } else {
+                  console.warn('Failed to refresh vendors: backend response unsuccessful');
+                }
+              } catch (refreshError) {
+                console.warn('Failed to refresh vendors from backend after import:', refreshError);
+              }
+            } else {
+              console.warn('Bulk vendor import API reported failure, using local storage only:', result.error);
+            }
+          } catch (backendError) {
+            console.warn('Failed to save vendors to backend, saved to localStorage only:', backendError);
+          }
+        }
+
+        if (!syncedWithBackend) {
+          setVendors(prevVendors => {
+            const updated = [...prevVendors, ...normalizedImported];
+            saveTradeshowVendors(updated);
+            return updated;
+          });
+        }
+
+        alert(`Successfully imported ${importedCount} vendor(s)!${syncedWithBackend ? '' : '（仅保存在本地，尚未同步至后台）'}`);
+      }
     } catch (error) {
       console.error('CSV import error:', error);
       alert('Import failed, please check CSV format');
@@ -502,19 +571,39 @@ export default function TradeshowPlanner() {
     pdf.save(`tradeshow-layout-${Date.now()}.pdf`);
   };
 
-  // Clear
-  const handleClear = () => {
-    if (confirm('Are you sure you want to clear the canvas? This action cannot be undone!')) {
+  // Clear - clears both backend and localStorage
+  const handleClear = async () => {
+    if (!confirm('Are you sure you want to clear ALL layout elements? This will delete all booths and other elements from both the canvas and the backend. This action cannot be undone!')) {
+      return;
+    }
+    
+    try {
+      // Clear local state first for immediate UI feedback
       setBooths([]);
       setSelectedBoothId(null);
       setDraggingVendorId(null);
+      
+      // Clear localStorage
       saveTradeshowLayout([]);
+      
+      // Clear backend by saving empty layout
       if (event?.id) {
-        TradeshowAPI.saveLayout(event.id, []).catch((e) => {
-          console.warn('Failed to persist cleared tradeshow layout:', e);
-        });
+        const result = await TradeshowAPI.saveLayout(event.id, []);
+        if (result.success) {
+          console.log('✓ Layout cleared from backend');
+        } else {
+          console.warn('Failed to clear layout from backend:', result.error);
+          alert('Failed to clear layout from backend. Please try again.');
+        }
       }
+      
+      // Force canvas refresh
       setCanvasVersion((prev) => prev + 1);
+      
+      alert('Canvas cleared successfully!');
+    } catch (error) {
+      console.error('Failed to clear canvas:', error);
+      alert('Failed to clear canvas. Please try again.');
     }
   };
 
