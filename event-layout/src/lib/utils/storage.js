@@ -7,12 +7,14 @@ export const STORAGE_KEYS = {
   CONFERENCE_LAYOUT: 'conference-layout',
   CONFERENCE_GUESTS: 'conference-guests',
   CONFERENCE_GROUPS: 'conference-groups',
+  CONFERENCE_SESSIONS: 'conference-sessions',
 
   // Tradeshow
   TRADESHOW_EVENT: 'tradeshow-event',
   TRADESHOW_LAYOUT: 'tradeshow-layout',
   TRADESHOW_VENDORS: 'tradeshow-vendors',
   TRADESHOW_ROUTES: 'tradeshow-routes',
+  TRADESHOW_SESSIONS: 'tradeshow-sessions',
 };
 
 // Generic storage functions
@@ -152,6 +154,25 @@ export function saveTradeshowRoutes(routes) {
 
 export function loadTradeshowRoutes() {
   return loadFromStorage(STORAGE_KEYS.TRADESHOW_ROUTES, []);
+}
+
+// ========================================
+// Schedule/Session storage
+// ========================================
+export function saveConferenceSessions(sessions) {
+  return saveToStorage(STORAGE_KEYS.CONFERENCE_SESSIONS, sessions);
+}
+
+export function loadConferenceSessions() {
+  return loadFromStorage(STORAGE_KEYS.CONFERENCE_SESSIONS, []);
+}
+
+export function saveTradeshowSessions(sessions) {
+  return saveToStorage(STORAGE_KEYS.TRADESHOW_SESSIONS, sessions);
+}
+
+export function loadTradeshowSessions() {
+  return loadFromStorage(STORAGE_KEYS.TRADESHOW_SESSIONS, []);
 }
 
 // Export all data (for backup/restore)

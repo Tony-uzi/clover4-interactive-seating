@@ -36,9 +36,21 @@ export default function Signup() {
       
       if (result.success) {
         setSuccess(true);
-        setTimeout(() => {
-          navigate('/login');
-        }, 2000);
+        
+        // Auto-login after successful registration
+        const loginResult = await AuthAPI.login(form.email, form.password);
+        
+        if (loginResult.success) {
+          // Redirect to home page after successful login
+          setTimeout(() => {
+            navigate('/');
+          }, 1500);
+        } else {
+          // If auto-login fails, redirect to login page
+          setTimeout(() => {
+            navigate('/login');
+          }, 2000);
+        }
       } else {
         setError(result.error || 'Registration failed');
         setLoading(false);
@@ -61,7 +73,7 @@ export default function Signup() {
               Account Created Successfully!
             </h2>
             <p className="text-gray-600 mb-4">
-              Redirecting you to login page...
+              Logging you in and redirecting to home...
             </p>
             <div className="inline-block">
               <svg className="animate-spin h-6 w-6 text-blue-600" viewBox="0 0 24 24">

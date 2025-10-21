@@ -36,8 +36,11 @@ export default function KioskDirectory() {
       const cachedEvent = loadConferenceEvent();
       const cachedGuests = loadConferenceGuests();
 
+      const hasCachedGuests = Array.isArray(cachedGuests) && cachedGuests.length > 0;
       if (cachedEvent) {
         setConferenceEvent(cachedEvent);
+      }
+      if (hasCachedGuests) {
         setGuests(cachedGuests);
       }
 
@@ -65,9 +68,20 @@ export default function KioskDirectory() {
           }));
 
           setConferenceEvent(updatedEvent);
-          setGuests(updatedGuests);
           saveConferenceEvent(updatedEvent);
-          saveConferenceGuests(updatedGuests);
+
+          // Prevent cached guests from being wiped out by an empty API payload
+          if (updatedGuests.length > 0) {
+            setGuests(updatedGuests);
+            saveConferenceGuests(updatedGuests);
+          } else if (hasCachedGuests && cachedEvent.id === updatedEvent.id) {
+            console.info('Keeping cached conference guests (API returned empty list)');
+            setGuests(cachedGuests);
+          } else {
+            setGuests(updatedGuests);
+            saveConferenceGuests(updatedGuests);
+          }
+
           setIsOnline(true);
         }
       }
@@ -83,8 +97,11 @@ export default function KioskDirectory() {
       const cachedEvent = loadTradeshowEvent();
       const cachedVendors = loadTradeshowVendors();
 
+      const hasCachedVendors = Array.isArray(cachedVendors) && cachedVendors.length > 0;
       if (cachedEvent) {
         setTradeshowEvent(cachedEvent);
+      }
+      if (hasCachedVendors) {
         setVendors(cachedVendors);
       }
 
@@ -111,9 +128,19 @@ export default function KioskDirectory() {
           }));
 
           setTradeshowEvent(updatedEvent);
-          setVendors(updatedVendors);
           saveTradeshowEvent(updatedEvent);
-          saveTradeshowVendors(updatedVendors);
+
+          if (updatedVendors.length > 0) {
+            setVendors(updatedVendors);
+            saveTradeshowVendors(updatedVendors);
+          } else if (hasCachedVendors && cachedEvent.id === updatedEvent.id) {
+            console.info('Keeping cached tradeshow vendors (API returned empty list)');
+            setVendors(cachedVendors);
+          } else {
+            setVendors(updatedVendors);
+            saveTradeshowVendors(updatedVendors);
+          }
+
           setIsOnline(true);
         }
       }

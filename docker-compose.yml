@@ -16,21 +16,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-  # redis:
-  #   image: redis:7-alpine
-  #   container_name: event-redis
-  #   ports:
-  #     - "6379:6379"
-  #   volumes:
-  #     - redis_data:/data
-  #   healthcheck:
-  #     test: ["CMD", "redis-cli", "ping"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-
   # Django Backend
-  backend:
+  backend-service:
     build:
       context: ./event-backend
       dockerfile: Dockerfile
@@ -52,7 +39,7 @@ services:
       - DATABASE_PASSWORD=event_password
       - DATABASE_HOST=db
       - DATABASE_PORT=5432
-      - ALLOWED_HOSTS=localhost,127.0.0.1,backend
+      - ALLOWED_HOSTS=localhost,127.0.0.1,backend-service
       - CORS_ALLOW_ALL_ORIGINS=True
     depends_on:
       db:
@@ -67,7 +54,7 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - backend
+      - backend-service
     environment:
       - VITE_API_URL=http://localhost:8000
 

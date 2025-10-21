@@ -5,7 +5,8 @@ from .models import (
     ConferenceEvent, ConferenceElement, ConferenceGroup,
     ConferenceGuest, ConferenceSeatAssignment,
     TradeshowEvent, TradeshowBooth, TradeshowVendor,
-    TradeshowBoothAssignment, TradeshowRoute
+    TradeshowBoothAssignment, TradeshowRoute,
+    EventSession
 )
 
 User = get_user_model()
@@ -93,6 +94,7 @@ class ConferenceGuestSerializer(serializers.ModelSerializer):
         assignment = obj.seat_assignments.first()
         if assignment:
             return {
+                'assignment_id': str(assignment.id),
                 'element_id': str(assignment.element_id),
                 'element_label': assignment.element.label,
                 'seat_number': assignment.seat_number
@@ -213,3 +215,18 @@ class BulkVendorImportSerializer(serializers.Serializer):
     vendors = serializers.ListField(
         child=serializers.DictField()
     )
+
+
+# ========================================== Session/Schedule Serializers ==========================================
+class EventSessionSerializer(serializers.ModelSerializer):
+    """Serializer for event sessions (agenda items)"""
+    class Meta:
+        model = EventSession
+        fields = [
+            'id', 'conference_event', 'tradeshow_event',
+            'title', 'speaker', 'speaker_title',
+            'session_date', 'start_time', 'end_time',
+            'location', 'description', 'category', 'capacity',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']

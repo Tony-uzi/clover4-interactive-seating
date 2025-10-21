@@ -37,15 +37,33 @@ export default function TradeshowPlanner() {
   const saveEventTimerRef = useRef(null);
   const [designId, setDesignId] = useState(null);
   const [dirty, setDirty] = useState(false);
+  const [canvasVersion, setCanvasVersion] = useState(0);
   
   // Track if initial load is complete
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  const mapBackendVendor = (vendor) => ({
+    id: vendor.id,
+    companyName: vendor.company_name,
+    contactName: vendor.contact_name,
+    contactEmail: vendor.contact_email,
+    contactPhone: vendor.contact_phone,
+    category: vendor.category,
+    boothSizePreference: vendor.booth_size_preference,
+    website: vendor.website,
+    logoUrl: vendor.logo_url,
+    description: vendor.description,
+    boothId: vendor.booth_info?.booth_id ?? vendor.booth_id ?? null,
+    boothNumber: vendor.booth_info?.booth_label ?? vendor.booth_label ?? null,
+    boothAssignmentId: vendor.booth_info?.assignment_id ?? vendor.assignment_id ?? null,
+    checkedIn: vendor.checked_in || false,
+  });
 
   // Load data on mount and ensure backend event exists
   useEffect(() => {
     (async () => {
       const loadedEvent = loadTradeshowEvent();
-      const loadedLayout = [];
+      const loadedLayout = loadTradeshowLayout();
       const loadedVendors = loadTradeshowVendors();
       const loadedRoutes = loadTradeshowRoutes();
 
@@ -89,7 +107,7 @@ export default function TradeshowPlanner() {
           const layoutResp = await TradeshowAPI.loadLayout(ensuredEvent.id);
           if (layoutResp.success && Array.isArray(layoutResp.data) && layoutResp.data.length > 0) {
             const normalized = layoutResp.data.map(b => ({
-              id: `${b.booth_type}_${b.id || Math.random().toString(36).slice(2)}`,
+              id: b.id,  // Use the backend UUID directly
               type: b.booth_type,
               label: b.label || '',
               x: b.position_x ?? b.x ?? 0,
@@ -207,8 +225,33 @@ export default function TradeshowPlanner() {
   };
 
   // Vendor operations
-  const handleAddVendor = (vendor) => {
-    setVendors([...vendors, vendor]);
+  const handleAddVendor = async (vendor) => {
+    // Add to local state immediately with temporary ID
+    const tempVendor = {
+      ...vendor,
+      id: vendor.id || `temp_${Date.now()}`,
+    };
+    setVendors(prevVendors => [...prevVendors, tempVendor]);
+    
+    // Try to save to backend if event exists
+    if (event?.id) {
+      try {
+        const result = await TradeshowAPI.createVendor(event.id, vendor);
+        if (result.success && result.data) {
+          // Replace temp vendor with backend vendor (which has real UUID)
+          const backendVendor = mapBackendVendor(result.data);
+          setVendors(prevVendors => 
+            prevVendors.map(v => v.id === tempVendor.id ? backendVendor : v)
+          );
+          console.log('✓ Vendor created in backend with ID:', result.data.id);
+        } else {
+          console.warn('Failed to create vendor in backend:', result.error);
+        }
+      } catch (error) {
+        console.warn('Failed to save vendor to backend:', error);
+        // Keep the local vendor even if backend fails
+      }
+    }
   };
 
   const handleUpdateVendor = (vendorId, updates) => {
@@ -227,22 +270,158 @@ export default function TradeshowPlanner() {
     setDraggingVendorId(null);
   };
 
-  const handleAssignVendorToBooth = (vendorId, booth) => {
+  const handleAssignVendorToBooth = async (vendorId, booth) => {
     if (!booth) return;
     const normalizedVendorId = String(vendorId);
 
-    setVendors(prevVendors =>
-      prevVendors.map(vendor =>
+    const existingVendor = vendors.find(v => String(v.id) === normalizedVendorId);
+    const previousAssignmentId = existingVendor?.boothAssignmentId;
+
+    // Helper to check if a string is a valid UUID
+    const isValidUUID = (str) => {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      return uuidRegex.test(str);
+    };
+
+    setVendors(prevVendors => {
+      const updated = prevVendors.map(vendor =>
         String(vendor.id) === normalizedVendorId
           ? {
               ...vendor,
+              boothAssignmentId: vendor.boothAssignmentId || null,
               boothId: booth.id,
               boothNumber: booth.label || null,
             }
           : vendor
-      )
-    );
+      );
+      saveTradeshowVendors(updated);
+      return updated;
+    });
     setDraggingVendorId(null);
+
+    if (event?.id && existingVendor) {
+      try {
+        // Check if vendor has a valid UUID (from backend)
+        let validVendorId = normalizedVendorId;
+        
+        if (!isValidUUID(normalizedVendorId)) {
+          // Vendor has a temporary frontend ID, need to save vendor first
+          console.log('Vendor has temporary ID, saving to backend to get UUID...');
+          
+          const result = await TradeshowAPI.createVendor(event.id, existingVendor);
+          if (!result.success || !result.data) {
+            throw new Error('Failed to create vendor in backend before assignment');
+          }
+          
+          const backendVendor = mapBackendVendor(result.data);
+          validVendorId = backendVendor.id;
+          
+          // Update vendor state with backend UUID
+          setVendors(prevVendors => 
+            prevVendors.map(v => v.id === normalizedVendorId ? backendVendor : v)
+          );
+          saveTradeshowVendors(vendors.map(v => v.id === normalizedVendorId ? backendVendor : v));
+          console.log('✓ Vendor saved to backend with UUID:', validVendorId);
+        }
+        
+        // Check if booth has a valid UUID (from backend)
+        let validBoothId = booth.id;
+        
+        if (!isValidUUID(booth.id)) {
+          // Booth has a temporary frontend ID, need to save layout first
+          console.log('Booth has temporary ID, saving layout to get backend UUID...');
+          
+          // Save the layout
+          const saveResult = await TradeshowAPI.saveLayout(event.id, booths);
+          if (!saveResult.success) {
+            throw new Error('Failed to save layout before assignment');
+          }
+          
+          // Reload booths from backend to get real UUIDs
+          const boothsResp = await TradeshowAPI.getBooths(event.id);
+          if (!boothsResp.success || !boothsResp.data.length) {
+            throw new Error('Failed to reload booths after saving');
+          }
+          
+          const backendBooths = boothsResp.data.map(b => ({
+            id: b.id,
+            type: b.booth_type,
+            label: b.label,
+            category: b.category,
+            x: b.position_x,
+            y: b.position_y,
+            width: b.width,
+            height: b.height,
+            rotation: b.rotation || 0,
+          }));
+          
+          // Find the matching booth by label and position
+          const matchingBooth = backendBooths.find(b => 
+            b.label === booth.label && 
+            Math.abs(b.x - booth.x) < 0.1 && 
+            Math.abs(b.y - booth.y) < 0.1
+          );
+          
+          if (!matchingBooth) {
+            throw new Error('Could not find matching booth after saving layout');
+          }
+          
+          validBoothId = matchingBooth.id;
+          
+          // Update booths state with backend UUIDs
+          setBooths(backendBooths);
+          saveTradeshowLayout(backendBooths);
+          console.log('✓ Layout saved and reloaded with backend UUIDs');
+        }
+        
+        // Now proceed with booth assignment using valid UUIDs
+        if (previousAssignmentId) {
+          await TradeshowAPI.deleteBoothAssignment(event.id, previousAssignmentId);
+        }
+        
+        const assignmentResp = await TradeshowAPI.createBoothAssignment(event.id, {
+          vendorId: validVendorId,
+          boothId: validBoothId,
+        });
+        
+        if (assignmentResp.success && assignmentResp.data?.id) {
+          setVendors(prevVendors => {
+            const updated = prevVendors.map(vendor => {
+              const vendorIdStr = String(vendor.id);
+              // Match by either the original temp ID or the new valid ID
+              if (vendorIdStr === normalizedVendorId || vendorIdStr === validVendorId) {
+                return {
+                  ...vendor,
+                  id: validVendorId,  // Ensure we use the valid UUID
+                  boothAssignmentId: assignmentResp.data.id,
+                  boothId: validBoothId,
+                  boothNumber: booth.label || null,
+                };
+              }
+              return vendor;
+            });
+            saveTradeshowVendors(updated);
+            return updated;
+          });
+          console.log(`✓ Saved vendor booth assignment to backend`);
+        } else if (!assignmentResp.success) {
+          throw new Error(assignmentResp.error || 'Unknown assignment error');
+        }
+      } catch (backendError) {
+        console.warn('Failed to save vendor booth assignment to backend:', backendError);
+        alert(`Failed to assign vendor: ${backendError.message || 'Unknown error'}`);
+        try {
+          const refreshedVendorsResp = await TradeshowAPI.getVendors(event.id);
+          if (refreshedVendorsResp.success) {
+            const backendVendors = refreshedVendorsResp.data.map(mapBackendVendor);
+            setVendors(backendVendors);
+            saveTradeshowVendors(backendVendors);
+          }
+        } catch (refreshError) {
+          console.warn('Failed to refresh vendors after assignment error:', refreshError);
+        }
+      }
+    }
   };
 
   // Route operations
@@ -328,6 +507,14 @@ export default function TradeshowPlanner() {
     if (confirm('Are you sure you want to clear the canvas? This action cannot be undone!')) {
       setBooths([]);
       setSelectedBoothId(null);
+      setDraggingVendorId(null);
+      saveTradeshowLayout([]);
+      if (event?.id) {
+        TradeshowAPI.saveLayout(event.id, []).catch((e) => {
+          console.warn('Failed to persist cleared tradeshow layout:', e);
+        });
+      }
+      setCanvasVersion((prev) => prev + 1);
     }
   };
 
@@ -433,6 +620,7 @@ export default function TradeshowPlanner() {
         {/* Center: Canvas - now takes full height */}
         <div className="flex-1 min-w-0 flex flex-col">
           <TradeshowCanvas
+            key={canvasVersion}
             booths={booths}
             onBoothsChange={setBooths}
             hallWidth={event.hallWidth}

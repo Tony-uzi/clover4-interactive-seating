@@ -2,19 +2,122 @@
 
 import React, { useState, useEffect } from 'react';
 import { FiClock, FiMapPin, FiUser, FiCalendar } from 'react-icons/fi';
+import {
+  loadConferenceEvent,
+  loadConferenceSessions,
+  saveConferenceEvent,
+  saveConferenceSessions,
+} from '../lib/utils/storage';
+import * as ConferenceAPI from '../server-actions/conference-planner';
 
 const REFRESH_INTERVAL = 60000; // 60 seconds
 
 export default function KioskSchedule() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState('all');
-  const [isOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState(true);
+  const [event, setEvent] = useState(null);
+  const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Sample schedule data - in production, this would come from backend API
+  // Load data from backend API with fallback to localStorage
+  const loadData = async () => {
+    try {
+      // Try to load from localStorage first for immediate display
+      const cachedEvent = loadConferenceEvent();
+      const cachedSessions = loadConferenceSessions();
+      const hasCachedSessions = Array.isArray(cachedSessions) && cachedSessions.length > 0;
+
+      // Use cached data immediately if available
+      if (cachedEvent) {
+        setEvent(cachedEvent);
+      }
+      if (hasCachedSessions) {
+        setSessions(cachedSessions);
+        setLoading(false);
+      }
+
+      // Then fetch from backend API for latest data
+      if (cachedEvent?.id) {
+        const eventResponse = await ConferenceAPI.getEvent(cachedEvent.id);
+        const sessionsResponse = await ConferenceAPI.getSessions(cachedEvent.id);
+
+        if (eventResponse.success && sessionsResponse.success) {
+          const updatedEvent = {
+            id: eventResponse.data.id,
+            name: eventResponse.data.name,
+            description: eventResponse.data.description,
+            date: eventResponse.data.event_date,
+          };
+
+          const updatedSessions = sessionsResponse.data.map(s => ({
+            id: s.id,
+            title: s.title,
+            speaker: s.speaker,
+            speakerTitle: s.speaker_title,
+            date: s.session_date,
+            startTime: s.start_time,
+            endTime: s.end_time,
+            location: s.location,
+            description: s.description,
+            category: s.category,
+            capacity: s.capacity,
+          }));
+
+          setEvent(updatedEvent);
+
+          if (updatedSessions.length > 0) {
+            setSessions(updatedSessions);
+            saveConferenceSessions(updatedSessions);
+          } else if (hasCachedSessions && cachedEvent.id === updatedEvent.id) {
+            console.info('Keeping cached conference sessions (API returned empty list)');
+            setSessions(cachedSessions);
+          } else {
+            setSessions(updatedSessions);
+            saveConferenceSessions(updatedSessions);
+          }
+
+          // Cache the updated event data
+          saveConferenceEvent(updatedEvent);
+
+          setIsOnline(true);
+          setLoading(false);
+          console.log('✓ Schedule data refreshed from backend API');
+        }
+      } else {
+        setLoading(false);
+      }
+    } catch (error) {
+      console.warn('Failed to load from backend, using cached data:', error);
+      setIsOnline(false);
+      setLoading(false);
+
+      // Fallback to localStorage
+      const loadedEvent = loadConferenceEvent();
+      const loadedSessions = loadConferenceSessions();
+
+      setEvent(loadedEvent);
+      setSessions(loadedSessions);
+    }
+  };
+
+  // Initial load and auto-refresh
+  useEffect(() => {
+    loadData();
+
+    const interval = setInterval(() => {
+      console.log('Auto-refreshing schedule data...');
+      loadData();
+    }, REFRESH_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Temporary fallback data structure if no backend data
   const [scheduleData] = useState({
-    eventName: 'Tech Innovation Conference 2025',
-    eventDescription: 'Annual gathering of technology leaders and innovators',
-    dates: ['2025-03-15', '2025-03-16', '2025-03-17'],
+    eventName: event?.name || 'Tech Innovation Conference 2025',
+    eventDescription: event?.description || 'Annual gathering of technology leaders and innovators',
+    dates: [], // Will be computed from sessions
     sessions: [
       {
         id: 1,
@@ -133,10 +236,17 @@ export default function KioskSchedule() {
     return () => clearInterval(timer);
   }, []);
 
+  // Use actual sessions if available, otherwise use hardcoded fallback
+  const actualSessions = sessions.length > 0 ? sessions : scheduleData.sessions;
+  
+  // Extract unique dates from sessions
+  const uniqueDates = [...new Set(actualSessions.map(s => s.date))].sort();
+  const eventDates = uniqueDates.length > 0 ? uniqueDates : scheduleData.dates;
+
   // Filter sessions by selected date
   const filteredSessions = selectedDate === 'all'
-    ? scheduleData.sessions
-    : scheduleData.sessions.filter(session => session.date === selectedDate);
+    ? actualSessions
+    : actualSessions.filter(session => session.date === selectedDate);
 
   // Group sessions by date
   const sessionsByDate = filteredSessions.reduce((acc, session) => {
@@ -199,6 +309,20 @@ export default function KioskSchedule() {
     return date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-100">
+        <div className="text-center">
+          <div className="text-2xl font-bold text-gray-800 mb-2">Loading...</div>
+          <div className="text-gray-600">Loading schedule information</div>
+        </div>
+      </div>
+    );
+  }
+
+  const displayEventName = event?.name || scheduleData.eventName;
+  const displayEventDescription = event?.description || scheduleData.eventDescription;
+
   return (
     <div className="flex flex-col bg-gray-100" style={{
       minHeight: 'calc(100vh - 64px)',
@@ -207,13 +331,15 @@ export default function KioskSchedule() {
     }}>
       {/* Header */}
       <div className="bg-indigo-600 text-white px-6 py-4">
-        <h1 className="text-2xl font-bold">{scheduleData.eventName}</h1>
-        <p className="text-indigo-100 mt-1">{scheduleData.eventDescription}</p>
+        <h1 className="text-2xl font-bold">{displayEventName}</h1>
+        <p className="text-indigo-100 mt-1">{displayEventDescription}</p>
         <div className="flex items-center gap-4 mt-2 text-indigo-200 text-sm">
-          <span className="flex items-center gap-1">
-            <FiCalendar className="w-4 h-4" />
-            {formatDate(scheduleData.dates[0])} - {formatDate(scheduleData.dates[scheduleData.dates.length - 1])}
-          </span>
+          {eventDates.length > 0 && (
+            <span className="flex items-center gap-1">
+              <FiCalendar className="w-4 h-4" />
+              {formatDate(eventDates[0])} {eventDates.length > 1 && `- ${formatDate(eventDates[eventDates.length - 1])}`}
+            </span>
+          )}
           <span className="flex items-center gap-1">
             <FiClock className="w-4 h-4" />
             Current Time: {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
@@ -234,7 +360,7 @@ export default function KioskSchedule() {
           >
             All Days
           </button>
-          {scheduleData.dates.map(date => (
+          {eventDates.map(date => (
             <button
               key={date}
               onClick={() => setSelectedDate(date)}
@@ -339,7 +465,7 @@ export default function KioskSchedule() {
             {isOnline ? '🟢 Online' : '🟡 Offline (Cached)'}
           </span>
           <span>•</span>
-          <span>Total Sessions: {scheduleData.sessions.length}</span>
+          <span>Total Sessions: {actualSessions.length}</span>
         </div>
       </div>
     </div>

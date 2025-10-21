@@ -1,21 +1,2 @@
 name,email,group,dietaryPreference,notes
 John Smith,john.smith@example.com,VIP,Vegetarian,Allergy: Peanuts
-Jane Doe,jane.doe@example.com,General,None,
-Robert Johnson,robert.johnson@example.com,VIP,Vegan,Needs window seat
-Emily Williams,emily.williams@example.com,Staff,Halal,
-Michael Brown,michael.brown@example.com,Speaker,None,Main speaker
-Sarah Davis,sarah.davis@example.com,General,Kosher,
-James Wilson,james.wilson@example.com,VIP,Vegetarian,Arriving 30 min late
-Patricia Garcia,patricia.garcia@example.com,Media,None,Needs front row seat
-Christopher Martinez,christopher.martinez@example.com,General,None,
-Jennifer Rodriguez,jennifer.rodriguez@example.com,VIP,Vegan,Bringing assistant
-Daniel Lee,daniel.lee@example.com,Staff,None,
-Linda Anderson,linda.anderson@example.com,General,Vegetarian,
-David Taylor,david.taylor@example.com,Speaker,None,
-Barbara Thomas,barbara.thomas@example.com,VIP,Halal,Important client
-Richard Jackson,richard.jackson@example.com,General,None,
-Karen White,karen.white@example.com,Media,Kosher,Reporter
-Matthew Harris,matthew.harris@example.com,Staff,None,
-Susan Martin,susan.martin@example.com,VIP,Vegetarian,
-Joseph Thompson,joseph.thompson@example.com,General,None,
-Nancy Garcia,nancy.garcia@example.com,Speaker,Vegan,Guest speaker

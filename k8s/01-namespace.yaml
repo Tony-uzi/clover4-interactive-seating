@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: event-app
+  labels:
+    name: event-app
+    app: deco3801-demo

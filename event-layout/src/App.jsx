@@ -18,6 +18,7 @@ import ConferencePlanner from "./pages/ConferencePlanner.jsx";
 import TradeshowPlanner from "./pages/TradeshowPlanner.jsx";
 
 // Kiosk pages
+import Kiosk from "./pages/Kiosk.jsx";
 import KioskConference from "./pages/KioskConference.jsx";
 import KioskTradeshow from "./pages/KioskTradeshow.jsx";
 import KioskDirectory from "./pages/KioskDirectory.jsx";
@@ -36,6 +37,13 @@ function NotFound() {
 export default function App() {
   return (
     <Routes>
+      {/* Kiosk routes (no auth, no layout/header) */}
+      <Route path="/kiosk" element={<Kiosk />} />
+      {/* <Route path="/kiosk-conference" element={<KioskConference />} /> */}
+      {/* <Route path="/kiosk-tradeshow" element={<KioskTradeshow />} /> */}
+      <Route path="/kiosk-directory" element={<KioskDirectory />} />
+      <Route path="/kiosk-schedule" element={<KioskSchedule />} />
+
       {/* Protected routes with Layout (requires auth) */}
       <Route element={<RequireAuth><Layout /></RequireAuth>}>
         <Route path="/" element={<Home />} />
@@ -45,10 +53,6 @@ export default function App() {
         <Route path="/about" element={<About />} />
         <Route path="/conference" element={<ConferencePlanner />} />
         <Route path="/tradeshow" element={<TradeshowPlanner />} />
-        <Route path="/kiosk-conference" element={<KioskConference />} />
-        <Route path="/kiosk-tradeshow" element={<KioskTradeshow />} />
-        <Route path="/kiosk-directory" element={<KioskDirectory />} />
-        <Route path="/kiosk-schedule" element={<KioskSchedule />} />
         <Route path="/editor/:designId" element={<EditorDesign />} />
       </Route>
 

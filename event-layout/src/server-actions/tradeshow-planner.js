@@ -225,6 +225,50 @@ export async function updateVendor(vendorId, updates) {
 }
 
 /**
+ * Authenticated kiosk/staff vendor check-in
+ */
+export async function checkInVendor(eventId, vendorId) {
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/vendors/${vendorId}/checkin/`, {
+      method: 'POST',
+      headers: authHeaders()
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = data.detail || data.error || data.message || `HTTP Error ${response.status}`;
+      return { success: false, error: message, status: response.status, data };
+    }
+    return { success: true, data, status: response.status };
+  } catch (error) {
+    console.error('Vendor check-in failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Public kiosk vendor check-in (no auth required)
+ */
+export async function publicVendorCheckIn(eventId, vendorId) {
+  try {
+    const response = await fetch(`/api/qr/tradeshow/${eventId}/vendor/${vendorId}/checkin/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = data.detail || data.error || data.message || `HTTP Error ${response.status}`;
+      return { success: false, error: message, data };
+    }
+    return { success: true, data };
+  } catch (error) {
+    console.error('Public vendor check-in failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Delete a vendor
  */
 export async function deleteVendor(vendorId) {
@@ -248,7 +292,7 @@ export async function deleteVendor(vendorId) {
  */
 export async function bulkImportVendors(eventId, vendorsData) {
   try {
-    const response = await fetch(`/api/tradeshow/events/${eventId}/vendors_import/`, {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/vendors/import/`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
@@ -296,11 +340,12 @@ export async function getBooths(eventId) {
  */
 export async function saveLayout(eventId, booths) {
   try {
-    const response = await fetch(`/api/tradeshow/events/${eventId}/booths/`, {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/booths/bulk/`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
         booths: booths.map(b => ({
+          event: eventId,
           booth_type: b.type || b.booth_type,
           category: b.category || 'booth',
           label: b.label || '',
@@ -315,7 +360,7 @@ export async function saveLayout(eventId, booths) {
     const data = await handleResponse(response);
     return { 
       success: true, 
-      data: { saved: data.booths?.length || 0 }
+      data: { booths: data, saved: data?.length || 0 }
     };
   } catch (error) {
     console.error('Save layout failed:', error);
@@ -349,11 +394,52 @@ export async function assignVendorToBooth(vendorId, boothNumber) {
 }
 
 /**
+ * Create a booth assignment
+ */
+export async function createBoothAssignment(eventId, { vendorId, boothId }) {
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/booth-assignments/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        event: eventId,
+        vendor: vendorId,
+        booth: boothId
+      })
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Create booth assignment failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Delete a booth assignment
+ */
+export async function deleteBoothAssignment(eventId, assignmentId) {
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/booth-assignments/${assignmentId}/`, {
+      method: 'DELETE',
+      headers: authHeaders()
+    });
+    if (!response.ok) {
+      throw new Error(`Delete failed: ${response.status}`);
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Delete booth assignment failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Get booth assignments for an event
  */
 export async function getBoothAssignments(eventId) {
   try {
-    const response = await fetch(`/api/tradeshow/events/${eventId}/assignments/`, {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/booth-assignments/`, {
       headers: authHeaders()
     });
     const data = await handleResponse(response);

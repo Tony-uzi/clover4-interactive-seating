@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: event-app
+  labels:
+    app: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      initContainers:
+      - name: wait-for-db
+        image: busybox:1.36
+        command: ['sh', '-c', 'until nc -z postgres-service 5432; do echo waiting for postgres; sleep 2; done;']
+      containers:
+      - name: backend
+        image: australia-southeast1-docker.pkg.dev/linen-striker-451222-k9/deco3801-demo-project-registry/event-backend:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DEBUG
+          value: "False"
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: django-secret
+              key: SECRET_KEY
+        - name: DATABASE_ENGINE
+          value: "django.db.backends.postgresql"
+        - name: DATABASE_NAME
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: POSTGRES_DB
+        - name: DATABASE_USER
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: POSTGRES_USER
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: POSTGRES_PASSWORD
+        - name: DATABASE_HOST
+          value: "postgres-service"
+        - name: DATABASE_PORT
+          value: "5432"
+        - name: ALLOWED_HOSTS
+          value: "*"
+        - name: CORS_ALLOW_ALL_ORIGINS
+          value: "True"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /api/health/
+            port: 8000
+            httpHeaders:
+            - name: Host
+              value: localhost
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health/
+            port: 8000
+            httpHeaders:
+            - name: Host
+              value: localhost
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: event-app
+spec:
+  selector:
+    app: backend
+  ports:
+  - protocol: TCP
+    port: 8000
+    targetPort: 8000
+  type: ClusterIP

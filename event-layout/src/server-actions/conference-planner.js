@@ -172,13 +172,12 @@ export async function getGuest(guestId) {
 /**
  * Create a new guest
  */
-export async function createGuest(guestData) {
+export async function createGuest(eventId, guestData) {
   try {
-    const response = await fetch('/api/conference/guests/', {
+    const response = await fetch(`/api/conference/events/${eventId}/guests/`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
-        event: guestData.eventId || guestData.event,
         name: guestData.name,
         email: guestData.email || '',
         company: guestData.company || '',
@@ -213,13 +212,58 @@ export async function updateGuest(guestId, updates) {
         dietary_requirements: updates.dietaryPreference || updates.dietary_requirements,
         notes: updates.notes,
         group: updates.group,
-        attendance: updates.attendance
+        attendance: updates.attendance,
+        checked_in: updates.checked_in !== undefined ? updates.checked_in : updates.checkedIn
       })
     });
     const data = await handleResponse(response);
     return { success: true, data };
   } catch (error) {
     console.error('Update guest failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Authenticated kiosk/staff guest check-in
+ */
+export async function checkInGuest(eventId, guestId) {
+  try {
+    const response = await fetch(`/api/conference/events/${eventId}/guests/${guestId}/checkin/`, {
+      method: 'POST',
+      headers: authHeaders()
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = data.detail || data.error || data.message || `HTTP Error ${response.status}`;
+      return { success: false, error: message, status: response.status, data };
+    }
+    return { success: true, data, status: response.status };
+  } catch (error) {
+    console.error('Guest check-in failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Public kiosk guest check-in (no auth required)
+ */
+export async function publicGuestCheckIn(eventId, guestId) {
+  try {
+    const response = await fetch(`/api/qr/conference/${eventId}/guest/${guestId}/checkin/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const message = data.detail || data.error || data.message || `HTTP Error ${response.status}`;
+      return { success: false, error: message, data };
+    }
+    return { success: true, data };
+  } catch (error) {
+    console.error('Public guest check-in failed:', error);
     return { success: false, error: error.message };
   }
 }
@@ -246,23 +290,18 @@ export async function deleteGuest(guestId) {
 /**
  * Bulk import guests from CSV data
  */
-export async function bulkImportGuests(eventId, guestsData) {
+export async function bulkImportGuests(eventId, file) {
   try {
-    const response = await fetch(`/api/conference/events/${eventId}/guests_import/`, {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const token = getAuthToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+    const response = await fetch(`/api/conference/events/${eventId}/guests/import/`, {
       method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({
-        guests: guestsData.map(g => ({
-          name: g.name,
-          email: g.email || '',
-          company: g.company || '',
-          phone: g.phone || '',
-          dietary_requirements: g.dietaryPreference || g.dietary_requirements || '',
-          notes: g.notes || '',
-          group: g.group || '',
-          attendance: g.attendance !== undefined ? g.attendance : true
-        }))
-      })
+      headers,
+      body: formData,
     });
     const data = await handleResponse(response);
     return { 
@@ -342,11 +381,12 @@ export async function getElements(eventId) {
  */
 export async function saveLayout(eventId, elements) {
   try {
-    const response = await fetch(`/api/conference/events/${eventId}/elements/`, {
+    const response = await fetch(`/api/conference/events/${eventId}/elements/bulk/`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
         elements: elements.map(el => ({
+          event: eventId,
           element_type: el.type || el.element_type,
           label: el.label || '',
           seats: el.seats || 0,
@@ -363,7 +403,7 @@ export async function saveLayout(eventId, elements) {
     const data = await handleResponse(response);
     return { 
       success: true, 
-      data: { saved: data.elements?.length || 0 }
+      data: { elements: data, saved: data?.length || 0 }
     };
   } catch (error) {
     console.error('Save layout failed:', error);
@@ -400,11 +440,53 @@ export async function assignGuestToSeat(guestId, tableNumber, seatNumber) {
 }
 
 /**
+ * Create a seat assignment
+ */
+export async function createSeatAssignment(eventId, { guestId, elementId, seatNumber = null }) {
+  try {
+    const response = await fetch(`/api/conference/events/${eventId}/seat-assignments/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        event: eventId,
+        guest: guestId,
+        element: elementId,
+        seat_number: seatNumber
+      })
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Create seat assignment failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Delete a seat assignment
+ */
+export async function deleteSeatAssignment(eventId, assignmentId) {
+  try {
+    const response = await fetch(`/api/conference/events/${eventId}/seat-assignments/${assignmentId}/`, {
+      method: 'DELETE',
+      headers: authHeaders()
+    });
+    if (!response.ok) {
+      throw new Error(`Delete failed: ${response.status}`);
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Delete seat assignment failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Get seat assignments for an event
  */
 export async function getSeatAssignments(eventId) {
   try {
-    const response = await fetch(`/api/conference/events/${eventId}/assignments/`, {
+    const response = await fetch(`/api/conference/events/${eventId}/seat-assignments/`, {
       headers: authHeaders()
     });
     const data = await handleResponse(response);
@@ -435,6 +517,103 @@ export async function generateShareToken(eventId) {
     };
   } catch (error) {
     console.error('Generate share token failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ========================================
+// 会议日程/议程 API
+// ========================================
+
+/**
+ * Get all sessions for an event
+ */
+export async function getSessions(eventId) {
+  try {
+    const response = await fetch(`/api/conference/events/${eventId}/sessions/`, {
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Get sessions failed:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+}
+
+/**
+ * Create a new session
+ */
+export async function createSession(sessionData) {
+  try {
+    const response = await fetch(`/api/conference/events/${sessionData.eventId}/sessions/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        title: sessionData.title,
+        speaker: sessionData.speaker || '',
+        speaker_title: sessionData.speakerTitle || sessionData.speaker_title || '',
+        session_date: sessionData.sessionDate || sessionData.session_date,
+        start_time: sessionData.startTime || sessionData.start_time,
+        end_time: sessionData.endTime || sessionData.end_time,
+        location: sessionData.location || '',
+        description: sessionData.description || '',
+        category: sessionData.category || 'other',
+        capacity: sessionData.capacity || 0
+      })
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Create session failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Update an existing session
+ */
+export async function updateSession(sessionId, updates) {
+  try {
+    const response = await fetch(`/api/conference/sessions/${sessionId}/`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        title: updates.title,
+        speaker: updates.speaker,
+        speaker_title: updates.speakerTitle || updates.speaker_title,
+        session_date: updates.sessionDate || updates.session_date,
+        start_time: updates.startTime || updates.start_time,
+        end_time: updates.endTime || updates.end_time,
+        location: updates.location,
+        description: updates.description,
+        category: updates.category,
+        capacity: updates.capacity
+      })
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Update session failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Delete a session
+ */
+export async function deleteSession(sessionId) {
+  try {
+    const response = await fetch(`/api/conference/sessions/${sessionId}/`, {
+      method: 'DELETE',
+      headers: authHeaders()
+    });
+    if (!response.ok) {
+      throw new Error(`Delete failed: ${response.status}`);
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Delete session failed:', error);
     return { success: false, error: error.message };
   }
 }

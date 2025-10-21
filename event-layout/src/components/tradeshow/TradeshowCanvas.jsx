@@ -1,12 +1,19 @@
 // Tradeshow canvas component with Konva
 
 import React, { useRef, useState, useEffect } from 'react';
-import { Stage, Layer, Rect, Text, Group, Line, Arrow, Circle } from 'react-konva';
+import { Stage, Layer, Rect, Text, Group, Line, Arrow, Circle, Image, Transformer } from 'react-konva';
+import useImage from 'use-image';
 import { TRADESHOW_BOOTHS, getElementConfig } from '../../lib/canvas/shapes';
 import ScaleRuler from '../shared/ScaleRuler';
 
 const PIXELS_PER_METER = 30; // 30 pixels = 1 meter (smaller scale for larger halls)
 const GRID_SIZE = 1; // Grid every 1 meter
+
+// Simple Konva image wrapper
+function KonvaImage({ src, ...props }) {
+  const [image] = useImage(src);
+  return <Image image={image} {...props} />;
+}
 
 export default function TradeshowCanvas({
   booths,
@@ -24,6 +31,7 @@ export default function TradeshowCanvas({
   onVendorDragEnd,
 }) {
   const stageRef = useRef(null);
+  const transformerRef = useRef(null);
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 20, y: 20 });
   const [draggedBooth, setDraggedBooth] = useState(null);
@@ -72,6 +80,23 @@ export default function TradeshowCanvas({
     }
   }, [draggingVendorId]);
 
+  // Update transformer when selection changes
+  useEffect(() => {
+    if (!transformerRef.current || readOnly) return;
+
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const selectedNode = stage.findOne(`#booth-${selectedBoothId}`);
+
+    if (selectedNode) {
+      transformerRef.current.nodes([selectedNode]);
+      transformerRef.current.getLayer().batchDraw();
+    } else {
+      transformerRef.current.nodes([]);
+    }
+  }, [selectedBoothId, readOnly]);
+
   // Handle booth drag
   const handleDragStart = (e, booth) => {
     if (readOnly) return;
@@ -92,6 +117,32 @@ export default function TradeshowCanvas({
     );
     onBoothsChange(newBooths);
     setDraggedBooth(null);
+  };
+
+  // Handle booth transform (scale/rotate)
+  const handleTransformEnd = (e, booth) => {
+    if (readOnly) return;
+
+    const node = e.target;
+    const scaleX = node.scaleX();
+    const scaleY = node.scaleY();
+
+    node.scaleX(1);
+    node.scaleY(1);
+
+    const newBooths = booths.map(b =>
+      b.id === booth.id
+        ? {
+            ...b,
+            x: node.x() / PIXELS_PER_METER,
+            y: node.y() / PIXELS_PER_METER,
+            width: Math.max(0.1, (node.width() * scaleX) / PIXELS_PER_METER),
+            height: Math.max(0.1, (node.height() * scaleY) / PIXELS_PER_METER),
+            rotation: node.rotation(),
+          }
+        : b
+    );
+    onBoothsChange(newBooths);
   };
 
   // Handle vertex drag (hall shape modification)
@@ -377,26 +428,60 @@ export default function TradeshowCanvas({
       activeRouteId &&
       routes.find(r => r.id === activeRouteId)?.boothOrder?.includes(booth.id);
 
+    const fillColor = isInRoute ? '#FFF9C4' : config.color;
+    const strokeColor = isSelected ? '#2196F3' : isDropTarget ? '#FF9800' : isInRoute ? '#FF9800' : config.stroke;
+    const strokeWidth = isSelected || isDropTarget ? 4 : isInRoute ? 3 : 2;
+
     return (
       <Group
         key={booth.id}
+        id={`booth-${booth.id}`}
         x={x}
         y={y}
+        width={width}
+        height={height}
         draggable={!readOnly}
         onDragStart={(e) => handleDragStart(e, booth)}
         onDragEnd={(e) => handleDragEnd(e, booth)}
+        onTransformEnd={(e) => handleTransformEnd(e, booth)}
         onClick={() => !readOnly && onSelectBooth(booth.id)}
         onTap={() => !readOnly && onSelectBooth(booth.id)}
       >
         {/* Main booth shape */}
-        <Rect
-          width={width}
-          height={height}
-          fill={isInRoute ? '#FFF9C4' : config.color}
-          stroke={isSelected ? '#2196F3' : isDropTarget ? '#FF9800' : isInRoute ? '#FF9800' : config.stroke}
-          strokeWidth={isSelected || isDropTarget ? 4 : isInRoute ? 3 : 2}
-          cornerRadius={4}
-        />
+        {config.image ? (
+          <>
+            <Rect
+              width={width}
+              height={height}
+              fill={fillColor}
+              cornerRadius={4}
+              listening={!readOnly}
+            />
+            <KonvaImage
+              src={config.image}
+              width={width}
+              height={height}
+              listening={!readOnly}
+            />
+            <Rect
+              width={width}
+              height={height}
+              cornerRadius={4}
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              listening={false}
+            />
+          </>
+        ) : (
+          <Rect
+            width={width}
+            height={height}
+            fill={fillColor}
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+            cornerRadius={4}
+          />
+        )}
 
         {/* Booth number */}
         {booth.label && (
@@ -508,6 +593,9 @@ export default function TradeshowCanvas({
 
           {/* Routes */}
           {renderRoutes()}
+
+          {/* Transformer for selected booth */}
+          {!readOnly && <Transformer ref={transformerRef} />}
         </Layer>
       </Stage>
 

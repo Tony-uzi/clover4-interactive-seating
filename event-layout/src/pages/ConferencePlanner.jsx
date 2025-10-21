@@ -36,6 +36,24 @@ export default function ConferencePlanner() {
   const saveEventTimerRef = useRef(null);
   const [designId, setDesignId] = useState(null);
   const [dirty, setDirty] = useState(false);
+  const [canvasVersion, setCanvasVersion] = useState(0);
+
+  const mapBackendGuest = (guest) => ({
+    id: guest.id,
+    name: guest.name,
+    email: guest.email,
+    company: guest.company,
+    phone: guest.phone,
+    dietaryPreference: guest.dietary_requirements,
+    notes: guest.notes,
+    group: guest.group_name || guest.group,
+    tableNumber: guest.seat_info?.table_number ?? guest.table_number ?? null,
+    seatNumber: guest.seat_info?.seat_number ?? guest.seat_number ?? null,
+    seatAssignmentId: guest.seat_info?.assignment_id ?? guest.assignment_id ?? null,
+    elementId: guest.seat_info?.element_id ?? guest.element_id ?? null,
+    attendance: guest.attendance !== undefined ? guest.attendance : true,
+    checkedIn: guest.checked_in || false,
+  });
 
   // Track if initial load is complete
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -44,7 +62,7 @@ export default function ConferencePlanner() {
   useEffect(() => {
     (async () => {
       const loadedEvent = loadConferenceEvent();
-      const loadedLayout = [];
+      const loadedLayout = loadConferenceLayout();
       const loadedGuests = loadConferenceGuests();
       const loadedGroups = loadConferenceGroups();
 
@@ -71,7 +89,42 @@ export default function ConferencePlanner() {
       setGuests(loadedGuests);
       setGroups(loadedGroups);
 
-      // If URL provides a designId, load from design system; otherwise try backend event layout
+      // Try to load guests and elements from backend if event ID exists
+      if (ensuredEvent?.id) {
+        try {
+          // Load guests from backend
+          const guestsResp = await ConferenceAPI.getGuests(ensuredEvent.id);
+          if (guestsResp.success && guestsResp.data.length > 0) {
+            const backendGuests = guestsResp.data.map(mapBackendGuest);
+            setGuests(backendGuests);
+            saveConferenceGuests(backendGuests);
+            console.log(`✓ Loaded ${backendGuests.length} guests from backend`);
+          }
+
+          // Load elements from backend
+          const elementsResp = await ConferenceAPI.getElements(ensuredEvent.id);
+          if (elementsResp.success && elementsResp.data.length > 0) {
+            const backendElements = elementsResp.data.map(el => ({
+              id: el.id,
+              type: el.element_type,
+              label: el.label,
+              seats: el.seats,
+              x: el.position_x,
+              y: el.position_y,
+              width: el.width,
+              height: el.height,
+              rotation: el.rotation || 0,
+            }));
+            setElements(backendElements);
+            saveConferenceLayout(backendElements);
+            console.log(`✓ Loaded ${backendElements.length} elements from backend`);
+          }
+        } catch (e) {
+          console.warn('Failed to load from backend, using localStorage:', e);
+        }
+      }
+
+      // If URL provides a designId, load from design system (this takes precedence)
       try {
         const params = new URLSearchParams(location.search);
         const providedDesignId = params.get('designId');
@@ -193,8 +246,33 @@ export default function ConferencePlanner() {
   };
 
   // Guest operations
-  const handleAddGuest = (guest) => {
-    setGuests(prevGuests => [...prevGuests, guest]);
+  const handleAddGuest = async (guest) => {
+    // Add to local state immediately with temporary ID
+    const tempGuest = {
+      ...guest,
+      id: guest.id || `temp_${Date.now()}`,
+    };
+    setGuests(prevGuests => [...prevGuests, tempGuest]);
+    
+    // Try to save to backend if event exists
+    if (event?.id) {
+      try {
+        const result = await ConferenceAPI.createGuest(event.id, guest);
+        if (result.success && result.data) {
+          // Replace temp guest with backend guest (which has real UUID)
+          const backendGuest = mapBackendGuest(result.data);
+          setGuests(prevGuests => 
+            prevGuests.map(g => g.id === tempGuest.id ? backendGuest : g)
+          );
+          console.log('✓ Guest created in backend with ID:', result.data.id);
+        } else {
+          console.warn('Failed to create guest in backend:', result.error);
+        }
+      } catch (error) {
+        console.warn('Failed to save guest to backend:', error);
+        // Keep the local guest even if backend fails
+      }
+    }
   };
 
   const handleUpdateGuest = (guestId, updates) => {
@@ -227,23 +305,161 @@ export default function ConferencePlanner() {
     // Note: Guests with this group will keep the group name, but it won't be in the managed list
   };
 
-  const handleAssignGuestToElement = (guestId, element) => {
+  const handleAssignGuestToElement = async (guestId, element) => {
     if (!element) return;
     const normalizedGuestId = String(guestId);
 
-    setGuests(prevGuests =>
-      prevGuests.map(guest =>
+    const existingGuest = guests.find(g => String(g.id) === normalizedGuestId);
+    const previousAssignmentId = existingGuest?.seatAssignmentId;
+
+    // Helper to check if a string is a valid UUID
+    const isValidUUID = (str) => {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      return uuidRegex.test(str);
+    };
+
+    setGuests(prevGuests => {
+      const updated = prevGuests.map(guest =>
         String(guest.id) === normalizedGuestId
           ? {
               ...guest,
+              seatAssignmentId: guest.seatAssignmentId || null,
               elementId: element.id,
               tableNumber: element.label || null,
               seatNumber: null,
             }
           : guest
-      )
-    );
+      );
+      saveConferenceGuests(updated);
+      return updated;
+    });
     setDraggingGuestId(null);
+
+    if (event?.id && existingGuest) {
+      try {
+        // Check if guest has a valid UUID (from backend)
+        let validGuestId = normalizedGuestId;
+        
+        if (!isValidUUID(normalizedGuestId)) {
+          // Guest has a temporary frontend ID, need to save guest first
+          console.log('Guest has temporary ID, saving to backend to get UUID...');
+          
+          const result = await ConferenceAPI.createGuest(event.id, existingGuest);
+          if (!result.success || !result.data) {
+            throw new Error('Failed to create guest in backend before assignment');
+          }
+          
+          const backendGuest = mapBackendGuest(result.data);
+          validGuestId = backendGuest.id;
+          
+          // Update guest state with backend UUID
+          setGuests(prevGuests => 
+            prevGuests.map(g => g.id === normalizedGuestId ? backendGuest : g)
+          );
+          saveConferenceGuests(guests.map(g => g.id === normalizedGuestId ? backendGuest : g));
+          console.log('✓ Guest saved to backend with UUID:', validGuestId);
+        }
+        
+        // Check if element has a valid UUID (from backend)
+        let validElementId = element.id;
+        
+        if (!isValidUUID(element.id)) {
+          // Element has a temporary frontend ID, need to save layout first
+          console.log('Element has temporary ID, saving layout to get backend UUID...');
+          
+          // Save the layout
+          const saveResult = await ConferenceAPI.saveLayout(event.id, elements);
+          if (!saveResult.success) {
+            throw new Error('Failed to save layout before assignment');
+          }
+          
+          // Reload elements from backend to get real UUIDs
+          const elementsResp = await ConferenceAPI.getElements(event.id);
+          if (!elementsResp.success || !elementsResp.data.length) {
+            throw new Error('Failed to reload elements after saving');
+          }
+          
+          const backendElements = elementsResp.data.map(el => ({
+            id: el.id,
+            type: el.element_type,
+            label: el.label,
+            seats: el.seats,
+            x: el.position_x,
+            y: el.position_y,
+            width: el.width,
+            height: el.height,
+            rotation: el.rotation || 0,
+          }));
+          
+          // Find the matching element by label and position
+          const matchingElement = backendElements.find(el => 
+            el.label === element.label && 
+            Math.abs(el.x - element.x) < 0.1 && 
+            Math.abs(el.y - element.y) < 0.1
+          );
+          
+          if (!matchingElement) {
+            throw new Error('Could not find matching element after saving layout');
+          }
+          
+          validElementId = matchingElement.id;
+          
+          // Update elements state with backend UUIDs
+          setElements(backendElements);
+          saveConferenceLayout(backendElements);
+          console.log('✓ Layout saved and reloaded with backend UUIDs');
+        }
+        
+        // Now proceed with seat assignment using valid UUIDs
+        if (previousAssignmentId) {
+          await ConferenceAPI.deleteSeatAssignment(event.id, previousAssignmentId);
+        }
+        
+        const assignmentResp = await ConferenceAPI.createSeatAssignment(event.id, {
+          guestId: validGuestId,
+          elementId: validElementId,
+          seatNumber: null,
+        });
+        
+        if (assignmentResp.success && assignmentResp.data?.id) {
+          setGuests(prevGuests => {
+            const updated = prevGuests.map(guest => {
+              const guestIdStr = String(guest.id);
+              // Match by either the original temp ID or the new valid ID
+              if (guestIdStr === normalizedGuestId || guestIdStr === validGuestId) {
+                return {
+                  ...guest,
+                  id: validGuestId,  // Ensure we use the valid UUID
+                  seatAssignmentId: assignmentResp.data.id,
+                  elementId: validElementId,
+                  tableNumber: element.label || null,
+                  seatNumber: assignmentResp.data.seat_number || null,
+                };
+              }
+              return guest;
+            });
+            saveConferenceGuests(updated);
+            return updated;
+          });
+          console.log(`✓ Saved guest assignment to backend`);
+        } else if (!assignmentResp.success) {
+          throw new Error(assignmentResp.error || 'Unknown assignment error');
+        }
+      } catch (backendError) {
+        console.warn('Failed to save guest assignment to backend:', backendError);
+        alert(`Failed to assign guest: ${backendError.message || 'Unknown error'}`);
+        try {
+          const refreshedGuestsResp = await ConferenceAPI.getGuests(event.id);
+          if (refreshedGuestsResp.success) {
+            const backendGuests = refreshedGuestsResp.data.map(mapBackendGuest);
+            setGuests(backendGuests);
+            saveConferenceGuests(backendGuests);
+          }
+        } catch (refreshError) {
+          console.warn('Failed to refresh guests after assignment error:', refreshError);
+        }
+      }
+    }
   };
 
   // CSV Import
@@ -260,8 +476,46 @@ export default function ConferencePlanner() {
       if (importedGuests.length === 0) {
         alert('No valid guest information found, please check CSV content');
       } else {
-        setGuests(prevGuests => [...prevGuests, ...importedGuests]);
-        alert(`Successfully imported ${importedGuests.length} guest(s)!`);
+        let importedCount = importedGuests.length;
+        let syncedWithBackend = false;
+
+        if (event?.id) {
+          try {
+            const result = await ConferenceAPI.bulkImportGuests(event.id, file);
+            if (result.success) {
+              importedCount = result.data?.imported || result.data?.count || importedCount;
+              syncedWithBackend = true;
+
+              try {
+                const refreshedGuestsResp = await ConferenceAPI.getGuests(event.id);
+                if (refreshedGuestsResp.success) {
+                  const backendGuests = refreshedGuestsResp.data.map(mapBackendGuest);
+                  setGuests(backendGuests);
+                  saveConferenceGuests(backendGuests);
+                  console.log(`✓ Synced ${backendGuests.length} guests from backend after import`);
+                } else {
+                  console.warn('Failed to refresh guests: backend response unsuccessful');
+                }
+              } catch (refreshError) {
+                console.warn('Failed to refresh guests from backend after import:', refreshError);
+              }
+            } else {
+              console.warn('Bulk import API reported failure, falling back to local storage:', result.error);
+            }
+          } catch (backendError) {
+            console.warn('Failed to save guests to backend, saved to localStorage only:', backendError);
+          }
+        }
+
+        if (!syncedWithBackend) {
+          setGuests(prevGuests => {
+            const updated = [...prevGuests, ...importedGuests];
+            saveConferenceGuests(updated);
+            return updated;
+          });
+        }
+
+        alert(`Successfully imported ${importedCount} guest(s)!${syncedWithBackend ? '' : '（仅保存在本地，尚未同步至后台）'}`);
       }
     } catch (error) {
       console.error('CSV import error:', error);
@@ -340,6 +594,14 @@ export default function ConferencePlanner() {
     if (confirm('Are you sure you want to clear the canvas? This action cannot be undone!')) {
       setElements([]);
       setSelectedElementId(null);
+      setDraggingGuestId(null);
+      saveConferenceLayout([]);
+      if (event?.id) {
+        ConferenceAPI.saveLayout(event.id, []).catch((e) => {
+          console.warn('Failed to persist cleared layout:', e);
+        });
+      }
+      setCanvasVersion((prev) => prev + 1);
     }
   };
 
@@ -448,6 +710,7 @@ export default function ConferencePlanner() {
         <div className="flex-1 min-w-0 flex flex-col">
           <ConferenceCanvas
             ref={canvasRef}
+            key={canvasVersion}
             elements={elements}
             onElementsChange={setElements}
             roomWidth={event.roomWidth}

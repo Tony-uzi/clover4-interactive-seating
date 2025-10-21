@@ -19,8 +19,17 @@ from .views_qr_checkin import (
     qr_checkin_conference, qr_checkin_tradeshow,
     qr_guest_info, qr_vendor_info
 )
+from .views_schedule import (
+    conference_event_sessions, conference_session_detail,
+    tradeshow_event_sessions, tradeshow_session_detail
+)
+from .views_health import health_check, readiness_check
 
 urlpatterns = [
+    # Health checks (for Kubernetes probes)
+    path('health/', health_check, name='health-check'),
+    path('ready/', readiness_check, name='readiness-check'),
+
     # Authentication
     path('auth/login/', login, name='login'),
     path('auth/register/', signup, name='signup'),
@@ -57,6 +66,10 @@ urlpatterns = [
     path('conference/events/<uuid:event_id>/seat-assignments/', conference_seat_assignments, name='conference-seat-assignments'),
     path('conference/events/<uuid:event_id>/seat-assignments/<uuid:assignment_id>/', conference_seat_assignment_detail, name='conference-seat-assignment-detail'),
 
+    # Conference Sessions (Schedule/Agenda)
+    path('conference/events/<uuid:event_id>/sessions/', conference_event_sessions, name='conference-event-sessions'),
+    path('conference/sessions/<uuid:session_id>/', conference_session_detail, name='conference-session-detail'),
+
     # Tradeshow Events
     path('tradeshow/events/', tradeshow_events, name='tradeshow-events'),
     path('tradeshow/events/<uuid:event_id>/', tradeshow_event_detail, name='tradeshow-event-detail'),
@@ -81,6 +94,10 @@ urlpatterns = [
     # Tradeshow Routes
     path('tradeshow/events/<uuid:event_id>/routes/', tradeshow_routes, name='tradeshow-routes'),
     path('tradeshow/events/<uuid:event_id>/routes/<uuid:route_id>/', tradeshow_route_detail, name='tradeshow-route-detail'),
+
+    # Tradeshow Sessions (Schedule/Agenda)
+    path('tradeshow/events/<uuid:event_id>/sessions/', tradeshow_event_sessions, name='tradeshow-event-sessions'),
+    path('tradeshow/sessions/<uuid:session_id>/', tradeshow_session_detail, name='tradeshow-session-detail'),
 
     # QR Code Check-in (Public, no authentication required)
     path('qr/conference/<uuid:event_id>/guest/<uuid:guest_id>/checkin/', qr_checkin_conference, name='qr-checkin-conference'),

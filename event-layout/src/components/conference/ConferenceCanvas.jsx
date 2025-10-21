@@ -11,10 +11,10 @@ const PIXELS_PER_METER = 40; // 40 pixels = 1 meter
 const GRID_SIZE = 0.5; // Grid every 0.5 meters
 
 // Image component for Konva
-function KonvaImage({ src, ...props }) {
+const KonvaImage = forwardRef(function KonvaImage({ src, ...props }, ref) {
   const [image] = useImage(src);
-  return <Image image={image} {...props} />;
-}
+  return <Image image={image} ref={ref} {...props} />;
+});
 
 const ConferenceCanvas = forwardRef(function ConferenceCanvas(
   {
@@ -345,6 +345,14 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
       g => g.tableNumber === element.label || g.elementId === element.id
     );
 
+    const strokeColor = isSelected ? '#FF5722' : isDropTarget ? '#FF9800' : config.stroke;
+    const strokeWidth = isSelected ? 4 : isDropTarget ? 3 : 2;
+
+    const handleSelect = () => {
+      if (readOnly) return;
+      onSelectElement(element.id);
+    };
+
     return (
       <Group
         key={element.id}
@@ -356,58 +364,105 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
         draggable={!readOnly}
         onDragEnd={(e) => handleDragEnd(e, element)}
         onTransformEnd={(e) => handleTransformEnd(e, element)}
-        onClick={() => !readOnly && onSelectElement(element.id)}
-        onTap={() => !readOnly && onSelectElement(element.id)}
+        onClick={handleSelect}
+        onTap={handleSelect}
       >
+        {/* Glow effect for selected element */}
+        {isSelected && (
+          element.type === 'table_round' ? (
+            <Circle
+              radius={width / 2 + 15}
+              x={width / 2}
+              y={height / 2}
+              fill="rgba(33, 150, 243, 0.2)"
+              shadowColor="#2196F3"
+              shadowBlur={30}
+              shadowOpacity={0.8}
+              listening={false}
+            />
+          ) : (
+            <Rect
+              x={-10}
+              y={-10}
+              width={width + 20}
+              height={height + 20}
+              fill="rgba(33, 150, 243, 0.2)"
+              cornerRadius={8}
+              shadowColor="#2196F3"
+              shadowBlur={30}
+              shadowOpacity={0.8}
+              listening={false}
+            />
+          )
+        )}
+
         {config.image ? (
-          <KonvaImage
-            src={config.image}
-            width={width}
-            height={height}
+          <>
+            <Rect
+              width={width}
+              height={height}
+              fill={config.color || '#ffffff'}
+              cornerRadius={4}
+              listening={!readOnly}
+            />
+            <KonvaImage
+              src={config.image}
+              width={width}
+              height={height}
+              listening={!readOnly}
+            />
+            <Rect
+              width={width}
+              height={height}
+              cornerRadius={4}
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              listening={false}
+            />
+          </>
+        ) : element.type === 'table_round' ? (
+          <Circle
+            radius={width / 2}
+            x={width / 2}
+            y={height / 2}
+            fill={config.color}
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+            shadowColor={isSelected ? '#FF5722' : undefined}
+            shadowBlur={isSelected ? 20 : 0}
+            shadowOpacity={isSelected ? 0.6 : 0}
           />
         ) : (
-          <>
-            {element.type === 'table_round' ? (
-              <Circle
-                radius={width / 2}
-                x={width / 2}
-                y={height / 2}
-                fill={config.color}
-                stroke={isSelected ? '#2196F3' : isDropTarget ? '#FF9800' : config.stroke}
-                strokeWidth={isSelected || isDropTarget ? 3 : 2}
-              />
-            ) : (
-              <Rect
-                width={width}
-                height={height}
-                fill={config.color}
-                stroke={isSelected ? '#2196F3' : isDropTarget ? '#FF9800' : config.stroke}
-                strokeWidth={isSelected || isDropTarget ? 3 : 2}
-                cornerRadius={4}
-              />
-            )}
-          </>
+          <Rect
+            width={width}
+            height={height}
+            fill={config.color}
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+            cornerRadius={4}
+            shadowColor={isSelected ? '#FF5722' : undefined}
+            shadowBlur={isSelected ? 20 : 0}
+            shadowOpacity={isSelected ? 0.6 : 0}
+          />
         )}
 
         {element.label && (
           <Text
             text={element.label}
             x={0}
-            y={element.type === 'table_round' ? height / 2 - 10 : height / 2 - 10}
+            y={height / 2 - 10}
             width={width}
             align="center"
             fontSize={14}
             fontStyle="bold"
             fill="#333"
+            listening={false}
           />
         )}
 
-        {/* Seat circles removed - use separate chair elements instead */}
-
         {assignedGuests.length > 0 && (
-          <Group>
+          <Group listening={false}>
             {element.type === 'chair' ? (
-              /* For chairs, only show guest name directly on the chair */
               <Text
                 text={assignedGuests[0]?.name || ''}
                 x={0}
@@ -417,12 +472,9 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
                 fontSize={10}
                 fill="#333"
                 fontStyle="bold"
-                listening={false}
               />
             ) : (
-              /* For tables, show count badge and guest list */
               <>
-                {/* Guest count badge */}
                 <Circle
                   x={width - 15}
                   y={15}
@@ -440,7 +492,6 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
                   fontStyle="bold"
                 />
 
-                {/* Guest names list */}
                 <Group x={5} y={height / 2 + 15}>
                   {assignedGuests.slice(0, 5).map((guest, index) => (
                     <Text
@@ -450,10 +501,8 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
                       y={index * 14}
                       fontSize={10}
                       fill="#333"
-                      fontStyle="normal"
                       width={width - 10}
                       ellipsis={true}
-                      listening={false}
                     />
                   ))}
                   {assignedGuests.length > 5 && (
@@ -464,7 +513,6 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
                       fontSize={9}
                       fill="#666"
                       fontStyle="italic"
-                      listening={false}
                     />
                   )}
                 </Group>

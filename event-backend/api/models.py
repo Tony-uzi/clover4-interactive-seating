@@ -319,3 +319,68 @@ class TradeshowRoute(TimeStamped):
     def __str__(self):
         return f"{self.name} - {self.event.name}"
 
+
+# ========================================== Schedule/Session Models ==========================================
+class EventSession(TimeStamped):
+    """Session/Agenda item for events (works for both Conference and Tradeshow)"""
+    CATEGORY_CHOICES = [
+        ('keynote', 'Keynote'),
+        ('workshop', 'Workshop'),
+        ('panel', 'Panel Discussion'),
+        ('demo', 'Demonstration'),
+        ('break', 'Break/Networking'),
+        ('ceremony', 'Ceremony'),
+        ('presentation', 'Presentation'),
+        ('meeting', 'Meeting'),
+        ('other', 'Other'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # Support both conference and tradeshow events via nullable foreign keys
+    conference_event = models.ForeignKey(
+        ConferenceEvent, 
+        on_delete=models.CASCADE, 
+        related_name="sessions",
+        null=True,
+        blank=True
+    )
+    tradeshow_event = models.ForeignKey(
+        TradeshowEvent,
+        on_delete=models.CASCADE,
+        related_name="sessions",
+        null=True,
+        blank=True
+    )
+    
+    title = models.CharField(max_length=255)
+    speaker = models.CharField(max_length=255, blank=True)
+    speaker_title = models.CharField(max_length=255, blank=True)
+    session_date = models.DateField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    location = models.CharField(max_length=255, blank=True)
+    description = models.TextField(blank=True)
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, default='other')
+    capacity = models.IntegerField(default=0)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=["conference_event"]),
+            models.Index(fields=["tradeshow_event"]),
+            models.Index(fields=["session_date", "start_time"]),
+        ]
+        constraints = [
+            # Ensure session belongs to exactly one event type
+            models.CheckConstraint(
+                check=(
+                    models.Q(conference_event__isnull=False, tradeshow_event__isnull=True) |
+                    models.Q(conference_event__isnull=True, tradeshow_event__isnull=False)
+                ),
+                name="session_belongs_to_one_event_type"
+            )
+        ]
+        ordering = ['session_date', 'start_time']
+
+    def __str__(self):
+        event_name = self.conference_event.name if self.conference_event else self.tradeshow_event.name
+        return f"{self.title} - {event_name} ({self.session_date})"
