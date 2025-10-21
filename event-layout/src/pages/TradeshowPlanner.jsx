@@ -1,23 +1,14 @@
 // Tradeshow Planner main page
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Toolbar from '../components/shared/Toolbar';
 import BoothToolbar from '../components/tradeshow/BoothToolbar';
 import TradeshowCanvas from '../components/tradeshow/TradeshowCanvas';
 import VendorPanel from '../components/tradeshow/VendorPanel';
 import RouteManager from '../components/tradeshow/RouteManager';
 import PropertiesPanel from '../components/conference/PropertiesPanel';
-import {
-  loadTradeshowEvent,
-  saveTradeshowEvent,
-  loadTradeshowLayout,
-  saveTradeshowLayout,
-  loadTradeshowVendors,
-  saveTradeshowVendors,
-  loadTradeshowRoutes,
-  saveTradeshowRoutes,
-} from '../lib/utils/storage';
+// Removed localStorage imports - all data now comes from backend only
 import { parseVendorCSV, vendorsToCSV, downloadCSV } from '../lib/utils/csvParser';
 import { jsPDF } from 'jspdf';
 import * as TradeshowAPI from '../server-actions/tradeshow-planner';
@@ -26,6 +17,7 @@ import { normalizeTradeshowVendor, normalizeTradeshowBooth } from '../lib/utils/
 
 export default function TradeshowPlanner() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [event, setEvent] = useState(null);
   const [booths, setBooths] = useState([]);
   const [vendors, setVendors] = useState([]);
@@ -45,37 +37,76 @@ export default function TradeshowPlanner() {
 
   const mapBackendVendor = normalizeTradeshowVendor;
 
-  // Load data on mount and ensure backend event exists
+  // Load data on mount - BACKEND ONLY, use URL parameter for event ID
   useEffect(() => {
     (async () => {
-      const loadedEvent = loadTradeshowEvent();
-      const loadedLayout = loadTradeshowLayout();
-      const loadedVendors = loadTradeshowVendors();
-      const loadedRoutes = loadTradeshowRoutes();
+      // Default event structure
+      const defaultEvent = {
+        name: 'New Tradeshow Event',
+        description: '',
+        date: new Date().toISOString().split('T')[0],
+        hallWidth: 40,
+        hallHeight: 30,
+      };
 
-      let ensuredEvent = loadedEvent;
+      let ensuredEvent = defaultEvent;
+      
+      // Get event ID from URL parameter
+      const params = new URLSearchParams(location.search);
+      const urlEventId = params.get('eventId');
+
       try {
-        if (!loadedEvent?.id) {
-          const resp = await TradeshowAPI.createEvent(loadedEvent);
+        if (urlEventId) {
+          // Try to load existing event from backend using URL event ID
+          const eventResp = await TradeshowAPI.getEvent(urlEventId);
+          if (eventResp.success && eventResp.data) {
+            ensuredEvent = {
+              id: eventResp.data.id,
+              name: eventResp.data.name || defaultEvent.name,
+              description: eventResp.data.description || defaultEvent.description,
+              date: eventResp.data.date || defaultEvent.date,
+              hallWidth: eventResp.data.hall_width ?? defaultEvent.hallWidth,
+              hallHeight: eventResp.data.hall_height ?? defaultEvent.hallHeight,
+            };
+            console.log('✓ Loaded existing event from URL:', ensuredEvent.id);
+          } else {
+            // Event doesn't exist, create new one and update URL
+            console.warn('Event ID in URL not found, creating new event');
+            const resp = await TradeshowAPI.createEvent(defaultEvent);
+            if (resp.success) {
+              ensuredEvent = {
+                ...defaultEvent,
+                id: resp.data.id,
+                hallWidth: resp.data.hall_width ?? defaultEvent.hallWidth,
+                hallHeight: resp.data.hall_height ?? defaultEvent.hallHeight,
+              };
+              // Update URL with new event ID
+              navigate(`/tradeshow?eventId=${resp.data.id}`, { replace: true });
+              console.log('✓ Created new event and updated URL:', resp.data.id);
+            }
+          }
+        } else {
+          // No event ID in URL, create new event and add to URL
+          const resp = await TradeshowAPI.createEvent(defaultEvent);
           if (resp.success) {
             ensuredEvent = {
-              ...loadedEvent,
+              ...defaultEvent,
               id: resp.data.id,
-              hallWidth: resp.data.hall_width ?? loadedEvent.hallWidth,
-              hallHeight: resp.data.hall_height ?? loadedEvent.hallHeight,
+              hallWidth: resp.data.hall_width ?? defaultEvent.hallWidth,
+              hallHeight: resp.data.hall_height ?? defaultEvent.hallHeight,
             };
-            saveTradeshowEvent(ensuredEvent);
+            // Add event ID to URL
+            navigate(`/tradeshow?eventId=${resp.data.id}`, { replace: true });
+            console.log('✓ Created new event and added to URL:', resp.data.id);
           }
         }
       } catch (e) {
         console.warn('Ensure tradeshow event failed:', e);
       }
 
-      // Set initial state from localStorage (will be overwritten by backend data if available)
       setEvent(ensuredEvent);
-      setBooths(loadedLayout);
-      setVendors(loadedVendors);
-      setRoutes(loadedRoutes);
+      setVendors([]);
+      setRoutes([]);
 
       try {
         const params = new URLSearchParams(location.search);
@@ -86,73 +117,70 @@ export default function TradeshowPlanner() {
           const items = Array.isArray(latest.data) ? latest.data : latest.data.items || [];
           if (Array.isArray(items) && items.length) {
             setBooths(items);
-            saveTradeshowLayout(items);
             setDesignId(parseInt(providedDesignId, 10));
-            try { localStorage.setItem('designId.tradeshow', String(providedDesignId)); } catch {}
           }
         } else if (ensuredEvent?.id) {
-          // ALWAYS load from backend - backend is source of truth
+          // ALWAYS load from backend
           const layoutResp = await TradeshowAPI.loadLayout(ensuredEvent.id);
           if (layoutResp.success) {
             const normalized = layoutResp.data
               .map(normalizeTradeshowBooth)
               .filter(Boolean);
             setBooths(normalized);
-            saveTradeshowLayout(normalized);
-            console.log(`✓ Loaded ${normalized.length} booths from backend (source of truth)`);
+            console.log(`✓ Loaded ${normalized.length} booths from backend`);
           } else {
             console.warn('Failed to load layout from backend:', layoutResp.error);
-            // If backend fails, use empty array to avoid confusion
             setBooths([]);
-            saveTradeshowLayout([]);
+          }
+
+          // Load vendors from backend
+          const vendorsResp = await TradeshowAPI.getVendors(ensuredEvent.id);
+          if (vendorsResp.success) {
+            const backendVendors = vendorsResp.data.map(mapBackendVendor);
+            setVendors(backendVendors);
+            console.log(`✓ Loaded ${backendVendors.length} vendors from backend`);
           }
         }
       } catch (e) {
         console.error('Load tradeshow backend layout failed:', e);
-        // On error, clear booths to avoid showing stale localStorage data
         setBooths([]);
-        saveTradeshowLayout([]);
       }
 
       setTimeout(() => setIsInitialLoad(false), 100);
     })();
   }, [location.search]);
 
-  // Auto-save (skip during initial load to prevent overwriting)
+  // Auto-save to BACKEND ONLY (no localStorage)
   useEffect(() => {
-    if (event && !isInitialLoad) {
-      saveTradeshowEvent(event);
+    if (event && !isInitialLoad && event.id) {
       if (saveEventTimerRef.current) clearTimeout(saveEventTimerRef.current);
-      if (event.id) {
-        saveEventTimerRef.current = setTimeout(async () => {
-          try {
-            await TradeshowAPI.updateEvent(event.id, {
-              name: event.name,
-              description: event.description,
-              hallWidth: event.hallWidth,
-              hallHeight: event.hallHeight,
-            });
-          } catch (e) {
-            console.warn('Auto-save tradeshow event failed:', e);
-          }
-        }, 600);
-      }
+      saveEventTimerRef.current = setTimeout(async () => {
+        try {
+          await TradeshowAPI.updateEvent(event.id, {
+            name: event.name,
+            description: event.description,
+            hallWidth: event.hallWidth,
+            hallHeight: event.hallHeight,
+          });
+          console.log('✓ Event auto-saved to backend');
+        } catch (e) {
+          console.warn('Auto-save tradeshow event failed:', e);
+        }
+      }, 600);
     }
   }, [event, isInitialLoad]);
 
   useEffect(() => {
-    if (!isInitialLoad) {
-      saveTradeshowLayout(booths);
+    if (!isInitialLoad && event?.id) {
       if (saveLayoutTimerRef.current) clearTimeout(saveLayoutTimerRef.current);
-      if (event?.id) {
-        saveLayoutTimerRef.current = setTimeout(async () => {
-          try {
-            await TradeshowAPI.saveLayout(event.id, booths);
-          } catch (e) {
-            console.warn('Auto-save tradeshow layout failed:', e);
-          }
-        }, 600);
-      }
+      saveLayoutTimerRef.current = setTimeout(async () => {
+        try {
+          await TradeshowAPI.saveLayout(event.id, booths);
+          console.log('✓ Layout auto-saved to backend');
+        } catch (e) {
+          console.warn('Auto-save tradeshow layout failed:', e);
+        }
+      }, 600);
     }
   }, [booths, isInitialLoad, event?.id]);
 
@@ -173,17 +201,8 @@ export default function TradeshowPlanner() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
 
-  useEffect(() => {
-    if (!isInitialLoad) {
-      saveTradeshowVendors(vendors);
-    }
-  }, [vendors, isInitialLoad]);
-
-  useEffect(() => {
-    if (!isInitialLoad) {
-      saveTradeshowRoutes(routes);
-    }
-  }, [routes, isInitialLoad]);
+  // Vendors and routes are auto-saved via their respective API calls
+  // No localStorage needed
 
   // Get selected booth
   const selectedBooth = booths.find(b => b.id === selectedBoothId);
@@ -223,7 +242,6 @@ export default function TradeshowPlanner() {
     });
     setVendors(prevVendors => {
       const updated = [...prevVendors, tempVendor];
-      saveTradeshowVendors(updated);
       return updated;
     });
     
@@ -238,7 +256,6 @@ export default function TradeshowPlanner() {
             const updated = prevVendors.map(v =>
               v.id === tempVendor.id ? backendVendor : v
             ).map(normalizeTradeshowVendor).filter(Boolean);
-            saveTradeshowVendors(updated);
             return updated;
           });
           console.log('✓ Vendor created in backend with ID:', result.data.id);
@@ -257,7 +274,6 @@ export default function TradeshowPlanner() {
       const updated = prevVendors.map(v =>
         v.id === vendorId ? normalizeTradeshowVendor({ ...v, ...updates }) : v
       );
-      saveTradeshowVendors(updated);
       return updated;
     });
   };
@@ -265,7 +281,6 @@ export default function TradeshowPlanner() {
   const handleDeleteVendor = (vendorId) => {
     setVendors(prevVendors => {
       const updated = prevVendors.filter(v => v.id !== vendorId);
-      saveTradeshowVendors(updated);
       return updated;
     });
   };
@@ -303,7 +318,6 @@ export default function TradeshowPlanner() {
         }
         return normalizeTradeshowVendor(vendor);
       }).filter(Boolean);
-      saveTradeshowVendors(updated);
       return updated;
     });
     setDraggingVendorId(null);
@@ -330,7 +344,6 @@ export default function TradeshowPlanner() {
             const updated = prevVendors.map(v =>
               v.id === normalizedVendorId ? backendVendor : normalizeTradeshowVendor(v)
             ).filter(Boolean);
-            saveTradeshowVendors(updated);
             return updated;
           });
           console.log('✓ Vendor saved to backend with UUID:', validVendorId);
@@ -392,7 +405,6 @@ export default function TradeshowPlanner() {
           
           // Update booths state with backend UUIDs
           setBooths(backendBooths);
-          saveTradeshowLayout(backendBooths);
           console.log('✓ Layout saved and reloaded with backend UUIDs');
         }
         
@@ -421,7 +433,6 @@ export default function TradeshowPlanner() {
               }
               return normalizeTradeshowVendor(vendor);
             }).filter(Boolean);
-            saveTradeshowVendors(updated);
             return updated;
           });
           console.log(`✓ Saved vendor booth assignment to backend`);
@@ -436,7 +447,6 @@ export default function TradeshowPlanner() {
           if (refreshedVendorsResp.success) {
             const backendVendors = refreshedVendorsResp.data.map(mapBackendVendor);
             setVendors(backendVendors);
-            saveTradeshowVendors(backendVendors);
           }
         } catch (refreshError) {
           console.warn('Failed to refresh vendors after assignment error:', refreshError);
@@ -496,7 +506,6 @@ export default function TradeshowPlanner() {
                     .map(mapBackendVendor)
                     .filter(Boolean);
                   setVendors(backendVendors);
-                  saveTradeshowVendors(backendVendors);
                   console.log(`✓ Synced ${backendVendors.length} vendors from backend after import`);
                 } else {
                   console.warn('Failed to refresh vendors: backend response unsuccessful');
@@ -515,7 +524,6 @@ export default function TradeshowPlanner() {
         if (!syncedWithBackend) {
           setVendors(prevVendors => {
             const updated = [...prevVendors, ...normalizedImported];
-            saveTradeshowVendors(updated);
             return updated;
           });
         }
@@ -582,9 +590,6 @@ export default function TradeshowPlanner() {
       setBooths([]);
       setSelectedBoothId(null);
       setDraggingVendorId(null);
-      
-      // Clear localStorage
-      saveTradeshowLayout([]);
       
       // Clear backend by saving empty layout
       if (event?.id) {

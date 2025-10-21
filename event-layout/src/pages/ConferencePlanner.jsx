@@ -1,22 +1,13 @@
 // Conference Planner main page
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Toolbar from '../components/shared/Toolbar';
 import ElementToolbar from '../components/conference/ElementToolbar';
 import ConferenceCanvas from '../components/conference/ConferenceCanvas';
 import GuestPanel from '../components/conference/GuestPanel';
 import PropertiesPanel from '../components/conference/PropertiesPanel';
-import {
-  loadConferenceEvent,
-  saveConferenceEvent,
-  loadConferenceLayout,
-  saveConferenceLayout,
-  loadConferenceGuests,
-  saveConferenceGuests,
-  loadConferenceGroups,
-  saveConferenceGroups,
-} from '../lib/utils/storage';
+// Removed localStorage imports - all data now comes from backend only
 import { parseGuestCSV, guestsToCSV, guestsToCSVFiltered, exportGuestsByGroup, downloadCSV } from '../lib/utils/csvParser';
 import { jsPDF } from 'jspdf';
 import * as ConferenceAPI from '../server-actions/conference-planner';
@@ -25,6 +16,7 @@ import { normalizeConferenceGuest, normalizeConferenceElement } from '../lib/uti
 
 export default function ConferencePlanner() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [event, setEvent] = useState(null);
   const [elements, setElements] = useState([]);
   const [guests, setGuests] = useState([]);
@@ -44,39 +36,85 @@ export default function ConferencePlanner() {
   // Track if initial load is complete
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  // Load data on mount and ensure backend event exists
+  // Load data on mount - BACKEND ONLY, use URL parameter for event ID
   useEffect(() => {
     (async () => {
-      const loadedEvent = loadConferenceEvent();
-      const loadedLayout = loadConferenceLayout();
-      const loadedGuests = loadConferenceGuests();
-      const loadedGroups = loadConferenceGroups();
+      // Default groups (hardcoded)
+      const defaultGroups = [
+        { id: 'vip', name: 'VIP', color: '#8B5CF6', isSystem: true },
+        { id: 'general', name: 'General', color: '#3B82F6', isSystem: true },
+        { id: 'staff', name: 'Staff', color: '#10B981', isSystem: true },
+        { id: 'speaker', name: 'Speaker', color: '#F59E0B', isSystem: true },
+      ];
+      setGroups(defaultGroups);
 
-      let ensuredEvent = loadedEvent;
+      // Default event structure
+      const defaultEvent = {
+        name: 'New Conference Event',
+        description: '',
+        date: new Date().toISOString().split('T')[0],
+        roomWidth: 24,
+        roomHeight: 16,
+      };
+
+      let ensuredEvent = defaultEvent;
+      
+      // Get event ID from URL parameter
+      const params = new URLSearchParams(location.search);
+      const urlEventId = params.get('eventId');
+
       try {
-        if (!loadedEvent?.id) {
-          const resp = await ConferenceAPI.createEvent(loadedEvent);
+        if (urlEventId) {
+          // Try to load existing event from backend using URL event ID
+          const eventResp = await ConferenceAPI.getEvent(urlEventId);
+          if (eventResp.success && eventResp.data) {
+            ensuredEvent = {
+              id: eventResp.data.id,
+              name: eventResp.data.name || defaultEvent.name,
+              description: eventResp.data.description || defaultEvent.description,
+              date: eventResp.data.date || defaultEvent.date,
+              roomWidth: eventResp.data.room_width ?? defaultEvent.roomWidth,
+              roomHeight: eventResp.data.room_height ?? defaultEvent.roomHeight,
+            };
+            console.log('✓ Loaded existing event from URL:', ensuredEvent.id);
+          } else {
+            // Event doesn't exist, create new one and update URL
+            console.warn('Event ID in URL not found, creating new event');
+            const resp = await ConferenceAPI.createEvent(defaultEvent);
+            if (resp.success) {
+              ensuredEvent = {
+                ...defaultEvent,
+                id: resp.data.id,
+                roomWidth: resp.data.room_width ?? defaultEvent.roomWidth,
+                roomHeight: resp.data.room_height ?? defaultEvent.roomHeight,
+              };
+              // Update URL with new event ID
+              navigate(`/conference?eventId=${resp.data.id}`, { replace: true });
+              console.log('✓ Created new event and updated URL:', resp.data.id);
+            }
+          }
+        } else {
+          // No event ID in URL, create new event and add to URL
+          const resp = await ConferenceAPI.createEvent(defaultEvent);
           if (resp.success) {
             ensuredEvent = {
-              ...loadedEvent,
+              ...defaultEvent,
               id: resp.data.id,
-              roomWidth: resp.data.room_width ?? loadedEvent.roomWidth,
-              roomHeight: resp.data.room_height ?? loadedEvent.roomHeight,
+              roomWidth: resp.data.room_width ?? defaultEvent.roomWidth,
+              roomHeight: resp.data.room_height ?? defaultEvent.roomHeight,
             };
-            saveConferenceEvent(ensuredEvent);
+            // Add event ID to URL
+            navigate(`/conference?eventId=${resp.data.id}`, { replace: true });
+            console.log('✓ Created new event and added to URL:', resp.data.id);
           }
         }
       } catch (e) {
         console.warn('Ensure event failed:', e);
       }
 
-      // Set initial state from localStorage (will be overwritten by backend data if available)
       setEvent(ensuredEvent);
-      setElements(loadedLayout);
-      setGuests(loadedGuests);
-      setGroups(loadedGroups);
 
-      // ALWAYS try to load from backend if event ID exists - backend is source of truth
+      // Load ALL data from backend ONLY
       if (ensuredEvent?.id) {
         try {
           // Load guests from backend
@@ -84,32 +122,28 @@ export default function ConferencePlanner() {
           if (guestsResp.success) {
             const backendGuests = guestsResp.data.map(mapBackendGuest);
             setGuests(backendGuests);
-            saveConferenceGuests(backendGuests);
-            console.log(`✓ Loaded ${backendGuests.length} guests from backend (source of truth)`);
+            console.log(`✓ Loaded ${backendGuests.length} guests from backend`);
           } else {
             console.warn('Failed to load guests from backend:', guestsResp.error);
+            setGuests([]);
           }
 
-          // Load elements from backend - ALWAYS use backend data, not localStorage
+          // Load elements from backend
           const elementsResp = await ConferenceAPI.getElements(ensuredEvent.id);
           if (elementsResp.success) {
             const backendElements = elementsResp.data
               .map(normalizeConferenceElement)
               .filter(Boolean);
             setElements(backendElements);
-            saveConferenceLayout(backendElements);
-            console.log(`✓ Loaded ${backendElements.length} elements from backend (source of truth)`);
+            console.log(`✓ Loaded ${backendElements.length} elements from backend`);
           } else {
             console.warn('Failed to load elements from backend:', elementsResp.error);
-            // If backend fails, use empty array to avoid confusion
             setElements([]);
-            saveConferenceLayout([]);
           }
         } catch (e) {
           console.error('Failed to load from backend:', e);
-          // On error, clear elements to avoid showing stale localStorage data
           setElements([]);
-          saveConferenceLayout([]);
+          setGuests([]);
         }
       }
 
@@ -124,9 +158,7 @@ export default function ConferencePlanner() {
           const items = Array.isArray(latest.data) ? latest.data : latest.data.items || [];
           if (Array.isArray(items) && items.length) {
             setElements(items);
-            saveConferenceLayout(items);
             setDesignId(parseInt(providedDesignId, 10));
-            try { localStorage.setItem('designId.conference', String(providedDesignId)); } catch {}
           }
         }
       } catch (e) {
@@ -137,41 +169,37 @@ export default function ConferencePlanner() {
     })();
   }, [location.search]);
 
-  // Auto-save (skip during initial load to prevent overwriting)
+  // Auto-save to BACKEND ONLY (no localStorage)
   useEffect(() => {
-    if (event && !isInitialLoad) {
-      saveConferenceEvent(event);
+    if (event && !isInitialLoad && event.id) {
       if (saveEventTimerRef.current) clearTimeout(saveEventTimerRef.current);
-      if (event.id) {
-        saveEventTimerRef.current = setTimeout(async () => {
-          try {
-            await ConferenceAPI.updateEvent(event.id, {
-              name: event.name,
-              description: event.description,
-              roomWidth: event.roomWidth,
-              roomHeight: event.roomHeight,
-            });
-          } catch (e) {
-            console.warn('Auto-save event failed:', e);
-          }
-        }, 600);
-      }
+      saveEventTimerRef.current = setTimeout(async () => {
+        try {
+          await ConferenceAPI.updateEvent(event.id, {
+            name: event.name,
+            description: event.description,
+            roomWidth: event.roomWidth,
+            roomHeight: event.roomHeight,
+          });
+          console.log('✓ Event auto-saved to backend');
+        } catch (e) {
+          console.warn('Auto-save event failed:', e);
+        }
+      }, 600);
     }
   }, [event, isInitialLoad]);
 
   useEffect(() => {
-    if (!isInitialLoad) {
-      saveConferenceLayout(elements);
+    if (!isInitialLoad && event?.id) {
       if (saveLayoutTimerRef.current) clearTimeout(saveLayoutTimerRef.current);
-      if (event?.id) {
-        saveLayoutTimerRef.current = setTimeout(async () => {
-          try {
-            await ConferenceAPI.saveLayout(event.id, elements);
-          } catch (e) {
-            console.warn('Auto-save layout failed:', e);
-          }
-        }, 600);
-      }
+      saveLayoutTimerRef.current = setTimeout(async () => {
+        try {
+          await ConferenceAPI.saveLayout(event.id, elements);
+          console.log('✓ Layout auto-saved to backend');
+        } catch (e) {
+          console.warn('Auto-save layout failed:', e);
+        }
+      }, 600);
     }
   }, [elements, isInitialLoad, event?.id]);
 
@@ -193,17 +221,8 @@ export default function ConferencePlanner() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
 
-  useEffect(() => {
-    if (!isInitialLoad) {
-      saveConferenceGuests(guests);
-    }
-  }, [guests, isInitialLoad]);
-
-  useEffect(() => {
-    if (!isInitialLoad) {
-      saveConferenceGroups(groups);
-    }
-  }, [groups, isInitialLoad]);
+  // Guests and groups are auto-saved via their respective API calls
+  // No localStorage needed
 
   // Get selected element
   const selectedElement = elements.find(el => el.id === selectedElementId);
@@ -244,7 +263,6 @@ export default function ConferencePlanner() {
     const normalizedTempGuest = normalizeConferenceGuest(tempGuest);
     setGuests(prevGuests => {
       const updated = [...prevGuests, normalizedTempGuest];
-      saveConferenceGuests(updated);
       return updated;
     });
     
@@ -257,7 +275,6 @@ export default function ConferencePlanner() {
           const backendGuest = mapBackendGuest(result.data);
           setGuests(prevGuests => {
             const updated = prevGuests.map(g => g.id === tempGuest.id ? backendGuest : g);
-            saveConferenceGuests(updated);
             return updated;
           });
           console.log('✓ Guest created in backend with ID:', result.data.id);
@@ -276,7 +293,6 @@ export default function ConferencePlanner() {
       const updated = prevGuests.map(g =>
         g.id === guestId ? normalizeConferenceGuest({ ...g, ...updates }) : g
       );
-      saveConferenceGuests(updated);
       return updated;
     });
   };
@@ -332,7 +348,6 @@ export default function ConferencePlanner() {
             }
           : guest
       );
-      saveConferenceGuests(updated);
       return updated;
     });
     setDraggingGuestId(null);
@@ -357,7 +372,6 @@ export default function ConferencePlanner() {
           // Update guest state with backend UUID
           setGuests(prevGuests => {
             const updated = prevGuests.map(g => g.id === normalizedGuestId ? backendGuest : g);
-            saveConferenceGuests(updated);
             return updated;
           });
           console.log('✓ Guest saved to backend with UUID:', validGuestId);
@@ -419,7 +433,6 @@ export default function ConferencePlanner() {
           
           // Update elements state with backend UUIDs
           setElements(backendElements);
-          saveConferenceLayout(backendElements);
           console.log('✓ Layout saved and reloaded with backend UUIDs');
         }
         
@@ -451,7 +464,6 @@ export default function ConferencePlanner() {
               }
               return guest;
             });
-            saveConferenceGuests(updated);
             return updated;
           });
           console.log(`✓ Saved guest assignment to backend`);
@@ -466,7 +478,6 @@ export default function ConferencePlanner() {
           if (refreshedGuestsResp.success) {
             const backendGuests = refreshedGuestsResp.data.map(mapBackendGuest);
             setGuests(backendGuests);
-            saveConferenceGuests(backendGuests);
           }
         } catch (refreshError) {
           console.warn('Failed to refresh guests after assignment error:', refreshError);
@@ -507,7 +518,6 @@ export default function ConferencePlanner() {
                 if (refreshedGuestsResp.success) {
                   const backendGuests = refreshedGuestsResp.data.map(mapBackendGuest);
                   setGuests(backendGuests);
-                  saveConferenceGuests(backendGuests);
                   console.log(`✓ Synced ${backendGuests.length} guests from backend after import`);
                 } else {
                   console.warn('Failed to refresh guests: backend response unsuccessful');
@@ -526,7 +536,6 @@ export default function ConferencePlanner() {
         if (!syncedWithBackend) {
           setGuests(prevGuests => {
             const updated = [...prevGuests, ...normalizedImported];
-            saveConferenceGuests(updated);
             return updated;
           });
         }
@@ -616,9 +625,6 @@ export default function ConferencePlanner() {
       setElements([]);
       setSelectedElementId(null);
       setDraggingGuestId(null);
-      
-      // Clear localStorage
-      saveConferenceLayout([]);
       
       // Clear backend by saving empty layout
       if (event?.id) {
