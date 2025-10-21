@@ -1,31 +1,11 @@
 // Conference canvas component with Konva - Enhanced version with irregular room shapes
 
-import React, {
-  useRef,
-  useState,
-  useEffect,
-  useImperativeHandle,
-  forwardRef,
-} from "react";
-import {
-  Stage,
-  Layer,
-  Rect,
-  Circle,
-  Text,
-  Group,
-  Line,
-  Image,
-  Transformer,
-} from "react-konva";
-import useImage from "use-image";
-import {
-  CONFERENCE_ELEMENTS,
-  getElementConfig,
-  snapToGrid,
-} from "../../lib/canvas/shapes";
-import ZoomControls from "../shared/ZoomControls";
-import ScaleRuler from "../shared/ScaleRuler";
+import React, { useRef, useState, useEffect, useImperativeHandle, forwardRef } from 'react';
+import { Stage, Layer, Rect, Circle, Text, Group, Line, Image, Transformer } from 'react-konva';
+import useImage from 'use-image';
+import { CONFERENCE_ELEMENTS, getElementConfig } from '../../lib/canvas/shapes';
+import ZoomControls from '../shared/ZoomControls';
+import ScaleRuler from '../shared/ScaleRuler';
 
 const PIXELS_PER_METER = 40; // 40 pixels = 1 meter
 const GRID_SIZE = 0.5; // Grid every 0.5 meters
@@ -38,7 +18,7 @@ function KonvaImage({ src, ...props }) {
 
 const ConferenceCanvas = forwardRef(function ConferenceCanvas(
   {
-    elements = [],
+    elements,
     onElementsChange,
     roomWidth = 24,
     roomHeight = 16,
@@ -76,9 +56,7 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
   // Update vertices when roomWidth/roomHeight changes (only if not manually modified)
   useEffect(() => {
     const prevDimensions = prevDimensionsRef.current;
-    const dimensionsChanged =
-      prevDimensions.width !== roomWidth ||
-      prevDimensions.height !== roomHeight;
+    const dimensionsChanged = prevDimensions.width !== roomWidth || prevDimensions.height !== roomHeight;
 
     if (dimensionsChanged && !verticesModified) {
       setRoomVertices([
@@ -92,12 +70,10 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
   }, [roomWidth, roomHeight, verticesModified]);
 
   // Calculate canvas bounds from vertices
-  const canvasWidth =
-    Math.max(...roomVertices.map((p) => p.x)) * PIXELS_PER_METER + 100;
-  const canvasHeight =
-    Math.max(...roomVertices.map((p) => p.y)) * PIXELS_PER_METER + 100;
-  const realWidth = Math.max(...roomVertices.map((p) => p.x));
-  const realHeight = Math.max(...roomVertices.map((p) => p.y));
+  const canvasWidth = Math.max(...roomVertices.map(p => p.x)) * PIXELS_PER_METER + 100;
+  const canvasHeight = Math.max(...roomVertices.map(p => p.y)) * PIXELS_PER_METER + 100;
+  const realWidth = Math.max(...roomVertices.map(p => p.x));
+  const realHeight = Math.max(...roomVertices.map(p => p.y));
 
   // Update transformer when selection changes
   useEffect(() => {
@@ -119,17 +95,12 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
   // Handle element drag
   const handleDragEnd = (e, element) => {
     if (readOnly) return;
-
-    const rawX = e.target.x() / PIXELS_PER_METER;
-    const rawY = e.target.y() / PIXELS_PER_METER;
-    const snappedX = snapToGrid(rawX, GRID_SIZE);
-    const snappedY = snapToGrid(rawY, GRID_SIZE);
-    const newElements = elements.map((el) =>
+    const newElements = elements.map(el =>
       el.id === element.id
         ? {
             ...el,
-            x: snappedX,
-            y: snappedY,
+            x: e.target.x() / PIXELS_PER_METER,
+            y: e.target.y() / PIXELS_PER_METER,
           }
         : el
     );
@@ -147,7 +118,7 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
     node.scaleX(1);
     node.scaleY(1);
 
-    const newElements = elements.map((el) =>
+    const newElements = elements.map(el =>
       el.id === element.id
         ? {
             ...el,
@@ -167,7 +138,7 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
     const newX = e.target.x() / PIXELS_PER_METER;
     const newY = e.target.y() / PIXELS_PER_METER;
 
-    const newVertices = roomVertices.map((v) =>
+    const newVertices = roomVertices.map(v =>
       v.id === vertexId ? { ...v, x: newX, y: newY } : v
     );
 
@@ -176,8 +147,8 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
 
     // Update room dimensions if callback exists
     if (onRoomResize) {
-      const maxX = Math.max(...newVertices.map((p) => p.x));
-      const maxY = Math.max(...newVertices.map((p) => p.y));
+      const maxX = Math.max(...newVertices.map(p => p.x));
+      const maxY = Math.max(...newVertices.map(p => p.y));
       onRoomResize(maxX, maxY);
     }
   };
@@ -226,19 +197,14 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
   const renderGrid = () => {
     const lines = [];
     const gridStep = GRID_SIZE * PIXELS_PER_METER;
-    const maxX = Math.max(...roomVertices.map((p) => p.x));
-    const maxY = Math.max(...roomVertices.map((p) => p.y));
+    const maxX = Math.max(...roomVertices.map(p => p.x));
+    const maxY = Math.max(...roomVertices.map(p => p.y));
 
     for (let i = 0; i <= maxX / GRID_SIZE + 2; i++) {
       lines.push(
         <Line
           key={`v-${i}`}
-          points={[
-            i * gridStep,
-            -gridStep,
-            i * gridStep,
-            (maxY + 2) * PIXELS_PER_METER,
-          ]}
+          points={[i * gridStep, -gridStep, i * gridStep, (maxY + 2) * PIXELS_PER_METER]}
           stroke="#e0e0e0"
           strokeWidth={1}
           listening={false}
@@ -250,12 +216,7 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
       lines.push(
         <Line
           key={`h-${i}`}
-          points={[
-            -gridStep,
-            i * gridStep,
-            (maxX + 2) * PIXELS_PER_METER,
-            i * gridStep,
-          ]}
+          points={[-gridStep, i * gridStep, (maxX + 2) * PIXELS_PER_METER, i * gridStep]}
           stroke="#e0e0e0"
           strokeWidth={1}
           listening={false}
@@ -286,7 +247,7 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
       if (!element) continue;
 
       // Only allow dropping on chairs and tables with seats
-      const isChair = element.type === "chair";
+      const isChair = element.type === 'chair';
       const hasSeats = element.seats && element.seats > 0;
       if (!isChair && !hasSeats) continue;
 
@@ -295,7 +256,7 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
       const elWidth = element.width * PIXELS_PER_METER;
       const elHeight = element.height * PIXELS_PER_METER;
 
-      if (element.type === "table_round") {
+      if (element.type === 'table_round') {
         const centerX = elX + elWidth / 2;
         const centerY = elY + elHeight / 2;
         const radius = elWidth / 2;
@@ -334,11 +295,9 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
     setDropTargetId(targetElement ? targetElement.id : null);
 
     if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = targetElement ? "move" : "none";
+      event.dataTransfer.dropEffect = targetElement ? 'move' : 'none';
     } else if (event.nativeEvent?.dataTransfer) {
-      event.nativeEvent.dataTransfer.dropEffect = targetElement
-        ? "move"
-        : "none";
+      event.nativeEvent.dataTransfer.dropEffect = targetElement ? 'move' : 'none';
     }
   };
 
@@ -359,12 +318,10 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
     const targetElement = findDroppableElementAt(coords);
 
     const dataTransfer = event.dataTransfer || event.nativeEvent?.dataTransfer;
-    const guestIdFromData =
-      dataTransfer?.getData("application/guest-id") ||
-      dataTransfer?.getData("text/plain");
+    const guestIdFromData = dataTransfer?.getData('application/guest-id') || dataTransfer?.getData('text/plain');
     const guestId = guestIdFromData || draggingGuestId;
 
-    if (targetElement && guestId && typeof onAssignGuest === "function") {
+    if (targetElement && guestId && typeof onAssignGuest === 'function') {
       onAssignGuest(guestId, targetElement);
     }
 
@@ -377,19 +334,15 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
     const config = getElementConfig(element.type);
     if (!config) return null;
 
+    const x = element.x * PIXELS_PER_METER;
+    const y = element.y * PIXELS_PER_METER;
     const width = element.width * PIXELS_PER_METER;
     const height = element.height * PIXELS_PER_METER;
-    // 把旋转中心放在元素几何中心的常见做法是：
-    // 拖拽位置需要动态计算
-    const x = element.x * PIXELS_PER_METER + width / 2;
-    const y = element.y * PIXELS_PER_METER + height / 2;
     const isSelected = selectedElementId === element.id;
     const isDropTarget = dropTargetId === element.id;
-    // 在 renderElement 里拿到旋转值 修改的
-    const rotation = element.rotation || 0;
 
     const assignedGuests = guests.filter(
-      (g) => g.tableNumber === element.label || g.elementId === element.id
+      g => g.tableNumber === element.label || g.elementId === element.id
     );
 
     return (
@@ -400,11 +353,6 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
         y={y}
         width={width}
         height={height}
-        //  把renderelement中的旋转值，把这个角度传给 <Group>
-        //  为了让旋转围绕元素中心，而不是左上角，再在同一个 <Group> 上加上
-        rotation={rotation}
-        offsetX={width / 2}
-        offsetY={height / 2}
         draggable={!readOnly}
         onDragEnd={(e) => handleDragEnd(e, element)}
         onTransformEnd={(e) => handleTransformEnd(e, element)}
@@ -412,22 +360,20 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
         onTap={() => !readOnly && onSelectElement(element.id)}
       >
         {config.image ? (
-          <KonvaImage src={config.image} width={width} height={height} />
+          <KonvaImage
+            src={config.image}
+            width={width}
+            height={height}
+          />
         ) : (
           <>
-            {element.type === "table_round" ? (
+            {element.type === 'table_round' ? (
               <Circle
                 radius={width / 2}
                 x={width / 2}
                 y={height / 2}
                 fill={config.color}
-                stroke={
-                  isSelected
-                    ? "#2196F3"
-                    : isDropTarget
-                    ? "#FF9800"
-                    : config.stroke
-                }
+                stroke={isSelected ? '#2196F3' : isDropTarget ? '#FF9800' : config.stroke}
                 strokeWidth={isSelected || isDropTarget ? 3 : 2}
               />
             ) : (
@@ -435,13 +381,7 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
                 width={width}
                 height={height}
                 fill={config.color}
-                stroke={
-                  isSelected
-                    ? "#2196F3"
-                    : isDropTarget
-                    ? "#FF9800"
-                    : config.stroke
-                }
+                stroke={isSelected ? '#2196F3' : isDropTarget ? '#FF9800' : config.stroke}
                 strokeWidth={isSelected || isDropTarget ? 3 : 2}
                 cornerRadius={4}
               />
@@ -453,9 +393,7 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
           <Text
             text={element.label}
             x={0}
-            y={
-              element.type === "table_round" ? height / 2 - 10 : height / 2 - 10
-            }
+            y={element.type === 'table_round' ? height / 2 - 10 : height / 2 - 10}
             width={width}
             align="center"
             fontSize={14}
@@ -468,10 +406,10 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
 
         {assignedGuests.length > 0 && (
           <Group>
-            {element.type === "chair" ? (
+            {element.type === 'chair' ? (
               /* For chairs, only show guest name directly on the chair */
               <Text
-                text={assignedGuests[0]?.name || ""}
+                text={assignedGuests[0]?.name || ''}
                 x={0}
                 y={height / 2 - 5}
                 width={width}
@@ -543,7 +481,7 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
     const seats = [];
     const seatRadius = 8;
 
-    if (element.type === "table_round") {
+    if (element.type === 'table_round') {
       const radius = width / 2 - seatRadius - 5;
       for (let i = 0; i < element.seats; i++) {
         const angle = (i / element.seats) * 2 * Math.PI - Math.PI / 2;
@@ -604,14 +542,19 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
   // Render room boundary as polygon with draggable vertices
   const renderRoomBoundary = () => {
     const points = [];
-    roomVertices.forEach((v) => {
+    roomVertices.forEach(v => {
       points.push(v.x * PIXELS_PER_METER, v.y * PIXELS_PER_METER);
     });
 
     return (
       <>
         {/* Room fill */}
-        <Line points={points} fill="#ffffff" closed={true} listening={false} />
+        <Line
+          points={points}
+          fill="#ffffff"
+          closed={true}
+          listening={false}
+        />
 
         {/* Room boundary lines */}
         <Line
@@ -629,8 +572,8 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
             Math.pow(nextV.x - v.x, 2) + Math.pow(nextV.y - v.y, 2)
           );
 
-          const midX = ((v.x + nextV.x) / 2) * PIXELS_PER_METER;
-          const midY = ((v.y + nextV.y) / 2) * PIXELS_PER_METER;
+          const midX = (v.x + nextV.x) / 2 * PIXELS_PER_METER;
+          const midY = (v.y + nextV.y) / 2 * PIXELS_PER_METER;
 
           return (
             <Text
@@ -646,29 +589,28 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
         })}
 
         {/* Draggable vertices */}
-        {!readOnly &&
-          roomVertices.map((vertex) => (
-            <Circle
-              key={`vertex-${vertex.id}`}
-              x={vertex.x * PIXELS_PER_METER}
-              y={vertex.y * PIXELS_PER_METER}
-              radius={10}
-              fill="#2196F3"
-              stroke="#fff"
-              strokeWidth={2}
-              draggable={true}
-              name="room-vertex"
-              onDragMove={(e) => handleVertexDrag(e, vertex.id)}
-              onMouseEnter={(e) => {
-                const container = e.target.getStage().container();
-                container.style.cursor = "move";
-              }}
-              onMouseLeave={(e) => {
-                const container = e.target.getStage().container();
-                container.style.cursor = "default";
-              }}
-            />
-          ))}
+        {!readOnly && roomVertices.map((vertex) => (
+          <Circle
+            key={`vertex-${vertex.id}`}
+            x={vertex.x * PIXELS_PER_METER}
+            y={vertex.y * PIXELS_PER_METER}
+            radius={10}
+            fill="#2196F3"
+            stroke="#fff"
+            strokeWidth={2}
+            draggable={true}
+            name="room-vertex"
+            onDragMove={(e) => handleVertexDrag(e, vertex.id)}
+            onMouseEnter={(e) => {
+              const container = e.target.getStage().container();
+              container.style.cursor = 'move';
+            }}
+            onMouseLeave={(e) => {
+              const container = e.target.getStage().container();
+              container.style.cursor = 'default';
+            }}
+          />
+        ))}
       </>
     );
   };
@@ -683,15 +625,15 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
 
         const exportWidth = Math.max(canvasWidth, 1);
         const exportHeight = Math.max(canvasHeight, 1);
-        const container = document.createElement("div");
+        const container = document.createElement('div');
         const clone = stageRef.current.clone({ container });
 
         clone.scale({ x: 1, y: 1 });
         clone.position({ x: 0, y: 0 });
         clone.size({ width: exportWidth, height: exportHeight });
 
-        clone.find("Transformer").forEach((node) => node.destroy());
-        clone.find(".room-vertex").forEach((node) => node.destroy());
+        clone.find('Transformer').forEach(node => node.destroy());
+        clone.find('.room-vertex').forEach(node => node.destroy());
 
         const dataURL = clone.toDataURL({ pixelRatio });
         clone.destroy();
@@ -706,8 +648,31 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
     [canvasWidth, canvasHeight]
   );
 
+  // Auto-resize canvas based on container
+  const [canvasDimensions, setCanvasDimensions] = React.useState({
+    width: 800,
+    height: 600,
+  });
+
+  useEffect(() => {
+    const updateDimensions = () => {
+      const container = document.getElementById('canvas-container');
+      if (container) {
+        setCanvasDimensions({
+          width: container.clientWidth,
+          height: container.clientHeight,
+        });
+      }
+    };
+
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+    return () => window.removeEventListener('resize', updateDimensions);
+  }, []);
+
   return (
     <div
+      id="canvas-container"
       className="relative w-full h-full bg-gray-50 rounded-lg overflow-hidden"
       onDragOver={handleContainerDragOver}
       onDrop={handleContainerDrop}
@@ -715,8 +680,8 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
     >
       <Stage
         ref={stageRef}
-        width={window.innerWidth - 500}
-        height={window.innerHeight - 200}
+        width={canvasDimensions.width}
+        height={canvasDimensions.height}
         scaleX={scale}
         scaleY={scale}
         x={stagePos.x}

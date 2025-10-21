@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Design, DesignVersion, DesignShare, DesignLink
+from .models import Design, DesignVersion
 
 
 @admin.register(Design)
@@ -14,15 +14,3 @@ class DesignVersionAdmin(admin.ModelAdmin):
     list_display = ("id", "design", "version", "created_at", "note")
     list_select_related = ("design",)
     search_fields = ("design__name",)
-
-
-@admin.register(DesignShare)
-class DesignShareAdmin(admin.ModelAdmin):
-    list_display = ("id", "design", "user", "role", "created_at")
-    list_select_related = ("design", "user")
-
-
-@admin.register(DesignLink)
-class DesignLinkAdmin(admin.ModelAdmin):
-    list_display = ("id", "design", "token", "role", "created_by", "created_at")
-    list_select_related = ("design", "created_by")

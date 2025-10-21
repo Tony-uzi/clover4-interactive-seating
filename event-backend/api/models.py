@@ -1,4 +1,5 @@
-import uuid, secrets
+import uuid
+import secrets
 from django.db import models
 from django.conf import settings
 
@@ -41,43 +42,21 @@ class DesignVersion(models.Model):
         return f"{self.design_id}@{self.version}"
 
 
-class DesignShare(models.Model):
-    ROLE_CHOICES = (
-        ("view", "View"),
-        ("edit", "Edit"),
-    )
-
-    design = models.ForeignKey(Design, on_delete=models.CASCADE, related_name="shares")
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="design_shares")
-    role = models.CharField(max_length=8, choices=ROLE_CHOICES, default="view")
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ("design", "user")
 
 
-class DesignLink(models.Model):
-    ROLE_CHOICES = (
-        ("view", "View"),
-        ("edit", "Edit"),
-    )
-
-    design = models.ForeignKey(Design, on_delete=models.CASCADE, related_name="links")
-    token = models.CharField(max_length=64, unique=True)
-    role = models.CharField(max_length=8, choices=ROLE_CHOICES, default="view")
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-#----------------------------------------------- 共有mixin  ----------------------------------------------------------
-# TimeStamped（抽象类）提供 created_at/updated_at 自动时间戳。所有实体继承它，方便排序与审计。
+# ========================================== Common Mixin ==========================================
 class TimeStamped(models.Model):
+    """Abstract base class with automatic timestamp fields"""
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
         abstract = True
 
-# ========= Conference =========
+
+# ========================================== Conference Models ==========================================
 class ConferenceEvent(TimeStamped):
+    """Conference event with room layout"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="conference_events")
     organization_id = models.UUIDField(null=True, blank=True)
@@ -93,6 +72,7 @@ class ConferenceEvent(TimeStamped):
     def ensure_share_token(self):
         if not self.share_token:
             self.share_token = secrets.token_urlsafe(24)[:64]
+            self.save(update_fields=['share_token'])
 
     class Meta:
         indexes = [
@@ -101,10 +81,24 @@ class ConferenceEvent(TimeStamped):
             models.Index(fields=["share_token"]),
         ]
 
+    def __str__(self):
+        return f"{self.name} - {self.user_id}"
+
+
 class ConferenceElement(TimeStamped):
+    """Elements in conference layout (tables, chairs, doors, outlets, etc.)"""
+    ELEMENT_TYPE_CHOICES = [
+        ('table_round', 'Round Table'),
+        ('table_rectangle', 'Rectangle Table'),
+        ('chair', 'Chair'),
+        ('podium', 'Podium'),
+        ('door', 'Door'),
+        ('outlet', 'Outlet'),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     event = models.ForeignKey(ConferenceEvent, on_delete=models.CASCADE, related_name="elements")
-    element_type = models.CharField(max_length=50)  # table_round / chair / podium ...
+    element_type = models.CharField(max_length=50, choices=ELEMENT_TYPE_CHOICES)
     label = models.CharField(max_length=255)
     seats = models.IntegerField(default=0)
     position_x = models.DecimalField(max_digits=10, decimal_places=2)
@@ -114,49 +108,62 @@ class ConferenceElement(TimeStamped):
     rotation = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     scale_x = models.DecimalField(max_digits=10, decimal_places=2, default=1.0)
     scale_y = models.DecimalField(max_digits=10, decimal_places=2, default=1.0)
+
+    # Door and Outlet specific properties
+    door_width = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    door_swing = models.CharField(max_length=20, null=True, blank=True)  # left/right/double
+    outlet_type = models.CharField(max_length=50, null=True, blank=True)  # power/network/both
+
     class Meta:
         indexes = [models.Index(fields=["event"])]
 
+    def __str__(self):
+        return f"{self.label} ({self.element_type})"
+
+
 class ConferenceGroup(TimeStamped):
+    """Guest grouping for better organization"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    event = models.ForeignKey(
-        ConferenceEvent, 
-        on_delete=models.CASCADE, 
-        related_name="groups"
-    )
+    event = models.ForeignKey(ConferenceEvent, on_delete=models.CASCADE, related_name="groups")
     name = models.CharField(max_length=100)
-    color = models.CharField(max_length=20, default="#3B82F6")  # 存储颜色代码
-    is_system = models.BooleanField(default=False)  # 是否为系统预设分组
-    
+    color = models.CharField(max_length=20, default="#3B82F6")
+    is_system = models.BooleanField(default=False)
+
     class Meta:
         unique_together = ("event", "name")
         indexes = [models.Index(fields=["event"])]
-# 嘉宾
+
+    def __str__(self):
+        return f"{self.name} - {self.event.name}"
+
+
 class ConferenceGuest(TimeStamped):
+    """Guest information for conference"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     event = models.ForeignKey(ConferenceEvent, on_delete=models.CASCADE, related_name="guests")
-    group = models.ForeignKey(
-        "api.ConferenceGroup",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="guests",
-    )
+    group = models.ForeignKey(ConferenceGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name="guests")
     name = models.CharField(max_length=255)
     email = models.EmailField()
     dietary_requirements = models.TextField(blank=True)
     company = models.CharField(max_length=255, blank=True)
     phone = models.CharField(max_length=50, blank=True)
+    checked_in = models.BooleanField(default=False)
+    check_in_time = models.DateTimeField(null=True, blank=True)
     metadata = models.JSONField(null=True, blank=True)
+
     class Meta:
         indexes = [
             models.Index(fields=["event"]),
             models.Index(fields=["email"]),
-            models.Index(fields=["group"]),  # 新索引，便于按分组查询
+            models.Index(fields=["group"]),
         ]
-        
-# 嘉宾座位分配
+
+    def __str__(self):
+        return f"{self.name} - {self.event.name}"
+
+
 class ConferenceSeatAssignment(TimeStamped):
+    """Seat assignment for conference guests"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     event = models.ForeignKey(ConferenceEvent, on_delete=models.CASCADE, related_name="seat_assignments")
     element = models.ForeignKey(ConferenceElement, on_delete=models.CASCADE, related_name="seat_assignments")
@@ -165,20 +172,22 @@ class ConferenceSeatAssignment(TimeStamped):
 
     class Meta:
         constraints = [
-            # 同一活动中，每个嘉宾只能有一个座位
             models.UniqueConstraint(fields=["event", "guest"], name="unique_guest_per_event"),
-            # 同一活动中，同一元素的同一座位只能分配给一个嘉宾
             models.UniqueConstraint(fields=["event", "element", "seat_number"], name="unique_seat_per_element_event"),
         ]
         indexes = [
-            # 便于按活动、元素、嘉宾查询
             models.Index(fields=["event"]),
             models.Index(fields=["element"]),
             models.Index(fields=["guest"]),
         ]
 
-# ========= Tradeshow =========
+    def __str__(self):
+        return f"{self.guest.name} at {self.element.label}"
+
+
+# ========================================== Tradeshow Models ==========================================
 class TradeshowEvent(TimeStamped):
+    """Tradeshow event with exhibition hall"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="tradeshow_events")
     organization_id = models.UUIDField(null=True, blank=True)
@@ -188,7 +197,7 @@ class TradeshowEvent(TimeStamped):
     event_date_end = models.DateTimeField(null=True, blank=True)
     hall_width = models.DecimalField(max_digits=10, decimal_places=2, default=40.0)
     hall_height = models.DecimalField(max_digits=10, decimal_places=2, default=30.0)
-    preset_layout = models.CharField(max_length=50, blank=True)  # standard/compact/premium/custom
+    preset_layout = models.CharField(max_length=50, blank=True)
     is_public = models.BooleanField(default=False)
     share_token = models.CharField(max_length=64, unique=True, null=True, blank=True)
     metadata = models.JSONField(null=True, blank=True)
@@ -196,6 +205,7 @@ class TradeshowEvent(TimeStamped):
     def ensure_share_token(self):
         if not self.share_token:
             self.share_token = secrets.token_urlsafe(24)[:64]
+            self.save(update_fields=['share_token'])
 
     class Meta:
         indexes = [
@@ -204,11 +214,28 @@ class TradeshowEvent(TimeStamped):
             models.Index(fields=["share_token"]),
         ]
 
+    def __str__(self):
+        return f"{self.name} - {self.user_id}"
+
+
 class TradeshowBooth(TimeStamped):
+    """Booth in tradeshow layout"""
+    BOOTH_TYPE_CHOICES = [
+        ('booth_standard', 'Standard Booth'),
+        ('booth_large', 'Large Booth'),
+        ('booth_premium', 'Premium Booth'),
+    ]
+
+    CATEGORY_CHOICES = [
+        ('booth', 'Booth'),
+        ('facility', 'Facility'),
+        ('structure', 'Structure'),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     event = models.ForeignKey(TradeshowEvent, on_delete=models.CASCADE, related_name="booths")
-    booth_type = models.CharField(max_length=50)  # booth_standard / booth_large / ...
-    category = models.CharField(max_length=50)    # booth / facility / structure
+    booth_type = models.CharField(max_length=50, choices=BOOTH_TYPE_CHOICES)
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
     label = models.CharField(max_length=255)
     position_x = models.DecimalField(max_digits=10, decimal_places=2)
     position_y = models.DecimalField(max_digits=10, decimal_places=2)
@@ -217,10 +244,19 @@ class TradeshowBooth(TimeStamped):
     rotation = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     scale_x = models.DecimalField(max_digits=10, decimal_places=2, default=1.0)
     scale_y = models.DecimalField(max_digits=10, decimal_places=2, default=1.0)
+
     class Meta:
-        indexes = [models.Index(fields=["event"]), models.Index(fields=["category"])]
+        indexes = [
+            models.Index(fields=["event"]),
+            models.Index(fields=["category"]),
+        ]
+
+    def __str__(self):
+        return f"{self.label} - {self.event.name}"
+
 
 class TradeshowVendor(TimeStamped):
+    """Vendor/Exhibitor information"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     event = models.ForeignKey(TradeshowEvent, on_delete=models.CASCADE, related_name="vendors")
     company_name = models.CharField(max_length=255)
@@ -232,18 +268,27 @@ class TradeshowVendor(TimeStamped):
     website = models.CharField(max_length=255, blank=True)
     logo_url = models.CharField(max_length=512, blank=True)
     description = models.TextField(blank=True)
+    checked_in = models.BooleanField(default=False)
+    check_in_time = models.DateTimeField(null=True, blank=True)
     metadata = models.JSONField(null=True, blank=True)
+
     class Meta:
         indexes = [
             models.Index(fields=["event"]),
             models.Index(fields=["company_name"]),
         ]
 
+    def __str__(self):
+        return f"{self.company_name} - {self.event.name}"
+
+
 class TradeshowBoothAssignment(TimeStamped):
+    """Booth assignment for vendors"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     event = models.ForeignKey(TradeshowEvent, on_delete=models.CASCADE, related_name="booth_assignments")
     booth = models.ForeignKey(TradeshowBooth, on_delete=models.CASCADE, related_name="assignments")
     vendor = models.ForeignKey(TradeshowVendor, on_delete=models.CASCADE, related_name="assignments")
+
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["event", "booth"], name="unique_vendor_per_booth_event"),
@@ -255,12 +300,22 @@ class TradeshowBoothAssignment(TimeStamped):
             models.Index(fields=["vendor"]),
         ]
 
+    def __str__(self):
+        return f"{self.vendor.company_name} at {self.booth.label}"
+
+
 class TradeshowRoute(TimeStamped):
+    """Route planning for tradeshow navigation"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     event = models.ForeignKey(TradeshowEvent, on_delete=models.CASCADE, related_name="routes")
     name = models.CharField(max_length=255, default="Default Route")
     route_type = models.CharField(max_length=50, default="auto")
     booth_order = models.JSONField()
     created_by = models.UUIDField(null=True, blank=True)
+
     class Meta:
         indexes = [models.Index(fields=["event"])]
+
+    def __str__(self):
+        return f"{self.name} - {self.event.name}"
+

@@ -103,8 +103,8 @@ export function loadConferenceGroups() {
 
   const savedGroups = loadFromStorage(STORAGE_KEYS.CONFERENCE_GROUPS, null);
 
-  // If no saved groups or not an array, return defaults
-  if (!savedGroups || !Array.isArray(savedGroups)) {
+  // If no saved groups, return defaults
+  if (!savedGroups) {
     return defaultGroups;
   }
 

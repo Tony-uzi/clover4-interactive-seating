@@ -1,752 +1,440 @@
-/**
- * Conference Planner API
- * 会议规划器后端API调用
- *
- * 包括：会议事件、布局元素、嘉宾、分组、座位分配
- */
+// Conference Planner API Actions - Connected to Real Backend
+// 会议规划器 - 已连接后端
 
-// 从浏览器里拿到你的登录凭证（JWT Token），然后把它放进每次请求需要的请求头里，以便后端识别“你是谁、有没有权限
 
-/**
- * 从LocalStorage获取JWT Token
- * @returns {string} Token字符串
- */
-// 去 localStorage 取出键名为 token 的值（通常是登录后保存的 JWT）。如果没有取到，就返回空字符串 ''。
+
 function getAuthToken() {
-  return localStorage.getItem("token") || "";
+  return localStorage.getItem('token') || '';
 }
 
-/**
- * 构建请求头（包含Token认证）
- * @returns {object} Headers对象
- * 先拿到 token。如果没有 token，就返回一个只包含 Content-Type 的 headers 对象
- * 如果有 token，就返回一个包含 Authorization 和 Content-Type 的 headers 对象
- */
 function authHeaders() {
   const token = getAuthToken();
   return {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
   };
 }
 
-// ==================== 会议事件 API ====================
+async function handleResponse(response) {
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `HTTP Error ${response.status}`);
+  }
+  return response.json();
+}
 
-// fetch逻辑：Django 项目在 clover/urls.py 中把 /api/ 前缀映射到 api.urls，
-// 而 api/urls.py 注册了 conference/events 等 ViewSet，因此请求最终落在 ConferenceEventViewSet 的列表接口上。
+// ========================================
+// 事件管理 API
+// ========================================
+
 /**
- * 获取当前用户的所有会议事件
- * @returns {Promise<{success: boolean, data?: array, error?: string}>}
+ * Get all conference events
  */
 export async function getAllEvents() {
   try {
-    // 发起 GET 请求到后端接口。 authHeaders() 会带上 Authorization: Bearer <token> 和 Content-Type，用于身份校验
-    const response = await fetch("/api/conference/events/", {
-      method: "GET",
-      headers: authHeaders(),
+    const response = await fetch('/api/conference/events/', {
+      headers: authHeaders()
     });
-    // 等待服务器返回的响应，然后用 response.json() 把响应体（比如 JSON 数据）解析出来
-    const data = await response.json();
-    // 如果响应状态码不是 200 OK，就返回错误信息 data.detail 是后端返回的错误信息，比如 "Failed to obtain the conference list"
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.detail || "Failed to obtain the conference list",
-      };
-    }
-    // 如果响应状态码是 200 OK，就返回成功信息 data 是后端返回的 JSON 数据，比如 [{id: 1, name: "会议1"}, {id: 2, name: "会议2"}]
+    const data = await handleResponse(response);
     return { success: true, data };
-    // 如果发生错误，就返回错误信息 error.message 是错误信息，比如 "Network error"
   } catch (error) {
+    console.error('Get events failed:', error);
     return { success: false, error: error.message };
   }
 }
 
 /**
- * 获取单个会议事件详情
- * 当getAllEvents()获取到所有会议后，需要获取单个会议的详情，就需要用到getEvent()。每个会议都有自己的ID，比如 1, 2, 3。且唯一。
- * @param {string} eventId - 会议ID
- * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ * Get a single event by ID
  */
 export async function getEvent(eventId) {
   try {
-    // 发起 GET 请求到后端接口。 authHeaders() 会带上 Authorization: Bearer <token> 和 Content-Type，用于身份校验
     const response = await fetch(`/api/conference/events/${eventId}/`, {
-      method: "GET",
-      headers: authHeaders(),
+      headers: authHeaders()
     });
-    // 等待服务器返回的响应，然后用 response.json() 把响应体（比如 JSON 数据）解析出来
-    const data = await response.json();
-    // 如果响应状态码不是 200 OK，就返回错误信息 data.detail 是后端返回的错误信息，比如 "Failed to obtain meeting details"
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.detail || "Failed to obtain meeting details",
-      };
-    }
-    // 如果响应状态码是 200 OK，就返回成功信息 data 是后端返回的 JSON 数据，比如 {id: 1, name: "会议1", description: "会议1的描述", event_date: "2025-01-01", room_width: 10, room_height: 10}
+    const data = await handleResponse(response);
     return { success: true, data };
-    // 如果发生错误，就返回错误信息 error.message 是错误信息，比如 "Network error"
   } catch (error) {
+    console.error('Get event failed:', error);
     return { success: false, error: error.message };
   }
 }
 
 /**
- * 创建新的会议事件
- * @param {object} eventData - 会议数据 { name, description, event_date, room_width, room_height }
- * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ * Create a new conference event
  */
 export async function createEvent(eventData) {
   try {
-    // 发起 POST 请求到后端接口。 authHeaders() 会带上 Authorization: Bearer <token> 和 Content-Type，用于身份校验
-    const response = await fetch("/api/conference/events/", {
-      method: "POST",
+    const response = await fetch('/api/conference/events/', {
+      method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify(eventData),
+      body: JSON.stringify({
+        name: eventData.name,
+        description: eventData.description || '',
+        room_width: eventData.roomWidth || eventData.room_width || 24.0,
+        room_height: eventData.roomHeight || eventData.room_height || 16.0,
+        event_date: eventData.eventDate || eventData.event_date || new Date().toISOString(),
+        canvas_shape: eventData.canvasShape || eventData.canvas_shape || 'rectangle',
+        is_public: eventData.isPublic || eventData.is_public || false
+      })
     });
-    // 等待服务器返回的响应，然后用 response.json() 把响应体（比如 JSON 数据）解析出来
-    const data = await response.json();
-    // 如果响应状态码不是 200 OK，就返回错误信息 data.detail 是后端返回的错误信息，比如 "Failed to create conference"
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.detail || "Failed to create conference",
-      };
-    }
-    // 如果响应状态码是 200 OK，就返回成功信息 data 是后端返回的 JSON 数据，比如 {id: 1, name: "会议1", description: "会议1的描述", event_date: "2025-01-01", room_width: 10, room_height: 10}
+    const data = await handleResponse(response);
     return { success: true, data };
-    // 如果发生错误，就返回错误信息 error.message 是错误信息，比如 "Network error"
   } catch (error) {
+    console.error('Create event failed:', error);
     return { success: false, error: error.message };
   }
 }
 
 /**
- * 更新会议事件
- * @param {string} eventId - 会议ID
- * @param {object} updates - 要更新的字段
- * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ * Update an existing event
  */
 export async function updateEvent(eventId, updates) {
   try {
-    // 发起 PUT 请求到后端接口。 authHeaders() 会带上 Authorization: Bearer <token> 和 Content-Type，用于身份校验
     const response = await fetch(`/api/conference/events/${eventId}/`, {
-      method: "PUT",
+      method: 'PATCH',
       headers: authHeaders(),
-      body: JSON.stringify(updates),
+      body: JSON.stringify({
+        name: updates.name,
+        description: updates.description,
+        room_width: updates.roomWidth || updates.room_width,
+        room_height: updates.roomHeight || updates.room_height,
+        event_date: updates.eventDate || updates.event_date,
+        canvas_shape: updates.canvasShape || updates.canvas_shape,
+        is_public: updates.isPublic || updates.is_public
+      })
     });
-    // 等待服务器返回的响应，然后用 response.json() 把响应体（比如 JSON 数据）解析出来
-    const data = await response.json();
-    // 如果响应状态码不是 200 OK，就返回错误信息 data.detail 是后端返回的错误信息，比如 "Update meeting failed"
-    if (!response.ok) {
-      return { success: false, error: data.detail || "Update meeting failed" };
-    }
-    // 如果响应状态码是 200 OK，就返回成功信息 data 是后端返回的 JSON 数据，比如 {id: 1, name: "会议1", description: "会议1的描述", event_date: "2025-01-01", room_width: 10, room_height: 10}
+    const data = await handleResponse(response);
     return { success: true, data };
-    // 如果发生错误，就返回错误信息 error.message 是错误信息，比如 "Network error"
   } catch (error) {
+    console.error('Update event failed:', error);
     return { success: false, error: error.message };
   }
 }
 
 /**
- * 删除会议事件
- * @param {string} eventId - 会议ID
- * @returns {Promise<{success: boolean, error?: string}>}
+ * Delete an event
  */
 export async function deleteEvent(eventId) {
   try {
-    // 发起 DELETE 请求到后端接口。 authHeaders() 会带上 Authorization: Bearer <token> 和 Content-Type，用于身份校验
     const response = await fetch(`/api/conference/events/${eventId}/`, {
-      method: "DELETE",
-      headers: authHeaders(),
+      method: 'DELETE',
+      headers: authHeaders()
     });
-    // 等待服务器返回的响应，然后用 response.json() 把响应体（比如 JSON 数据）解析出来
     if (!response.ok) {
-      const data = await response.json();
-      // 如果响应状态码不是 200 OK，就返回错误信息 data.detail 是后端返回的错误信息，比如 "Failed to delete the meeting"
-      return {
-        success: false,
-        error: data.detail || "Failed to delete the meeting",
-      };
+      throw new Error(`Delete failed: ${response.status}`);
     }
-    // 如果响应状态码是 200 OK，就返回成功信息 data 是后端返回的 JSON 数据，比如 {id: 1, name: "会议1", description: "会议1的描述", event_date: "2025-01-01", room_width: 10, room_height: 10}
     return { success: true };
-    // 如果发生错误，就返回错误信息 error.message 是错误信息，比如 "Network error"
   } catch (error) {
+    console.error('Delete event failed:', error);
     return { success: false, error: error.message };
   }
 }
 
-// ==================== 布局元素 API ====================
+// ========================================
+// 嘉宾管理 API
+// ========================================
 
 /**
- * 获取所有布局元素（可选按事件过滤）
- * @param {string} [eventId] - 可选：会议ID
- * @returns {Promise<{success: boolean, data?: array, error?: string}>}
- */
-export async function getAllElements(eventId) {
-  try {
-    let url = "/api/conference/elements/";
-    if (eventId) {
-      url += `?event=${eventId}`;
-    }
-    // 发起 GET 请求到后端接口。 authHeaders() 会带上 Authorization: Bearer <token> 和 Content-Type，用于身份校验
-    const response = await fetch(url, {
-      method: "GET",
-      headers: authHeaders(),
-    });
-    // 等待服务器返回的响应，然后用 response.json() 把响应体（比如 JSON 数据）解析出来
-    const data = await response.json();
-    // 如果响应状态码不是 200 OK，就返回错误信息 data.detail 是后端返回的错误信息，比如 "Failed to get element list"
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.detail || "Failed to get element list",
-      };
-    }
-    // 如果响应状态码是 200 OK，就返回成功信息 data 是后端返回的 JSON 数据，比如 [{id: 1, name: "会议1"}, {id: 2, name: "会议2"}]
-    return { success: true, data };
-    // 如果发生错误，就返回错误信息 error.message 是错误信息，比如 "Network error"
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * 创建新的布局元素
- * @param {object} elementData - 元素数据 { event, element_type, label, position_x, position_y, width, height, ... }
- * @returns {Promise<{success: boolean, data?: object, error?: string}>}
- */
-export async function createElement(elementData) {
-  try {
-    // 发起 POST 请求到后端接口。 authHeaders() 会带上 Authorization: Bearer <token> 和 Content-Type，用于身份校验
-    const response = await fetch("/api/conference/elements/", {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify(elementData),
-    });
-    // 等待服务器返回的响应，然后用 response.json() 把响应体（比如 JSON 数据）解析出来
-    const data = await response.json();
-    // 如果响应状态码不是 200 OK，就返回错误信息 data.detail 是后端返回的错误信息，比如 "Failed to create element"
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.detail || "Failed to create element",
-      };
-    }
-    // 如果响应状态码是 200 OK，就返回成功信息 data 是后端返回的 JSON 数据，比如 {id: 1, name: "会议1", description: "会议1的描述", event_date: "2025-01-01", room_width: 10, room_height: 10}
-    return { success: true, data };
-    // 如果发生错误，就返回错误信息 error.message 是错误信息，比如 "Network error"
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * 更新布局元素
- * @param {string} elementId - 元素ID
- * @param {object} updates - 要更新的字段
- * @returns {Promise<{success: boolean, data?: object, error?: string}>}
- */
-export async function updateElement(elementId, updates) {
-  try {
-    // 发起 PUT 请求到后端接口。 authHeaders() 会带上 Authorization: Bearer <token> 和 Content-Type，用于身份校验
-    const response = await fetch(`/api/conference/elements/${elementId}/`, {
-      method: "PUT",
-      headers: authHeaders(),
-      body: JSON.stringify(updates),
-    });
-    // 等待服务器返回的响应，然后用 response.json() 把响应体（比如 JSON 数据）解析出来
-    const data = await response.json();
-    // 如果响应状态码不是 200 OK，就返回错误信息 data.detail 是后端返回的错误信息，比如 "Failed to update element"
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.detail || "Failed to update element",
-      };
-    }
-    // 如果响应状态码是 200 OK，就返回成功信息 data 是后端返回的 JSON 数据，比如 {id: 1, name: "会议1", description: "会议1的描述", event_date: "2025-01-01", room_width: 10, room_height: 10}
-    return { success: true, data };
-    // 如果发生错误，就返回错误信息 error.message 是错误信息，比如 "Network error"
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * 删除布局元素
- * @param {string} elementId - 元素ID
- * @returns {Promise<{success: boolean, error?: string}>}
- */
-export async function deleteElement(elementId) {
-  try {
-    // 发起 DELETE 请求到后端接口。 authHeaders() 会带上 Authorization: Bearer <token> 和 Content-Type，用于身份校验
-    const response = await fetch(`/api/conference/elements/${elementId}/`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
-    // 等待服务器返回的响应，然后用 response.json() 把响应体（比如 JSON 数据）解析出来
-    if (!response.ok) {
-      const data = await response.json();
-      // 如果响应状态码不是 200 OK，就返回错误信息 data.detail 是后端返回的错误信息，比如 "Failed to delete element"
-      return {
-        success: false,
-        error: data.detail || "Failed to delete element",
-      };
-    }
-    // 如果响应状态码是 200 OK，就返回成功信息 data 是后端返回的 JSON 数据，比如 {id: 1, name: "会议1", description: "会议1的描述", event_date: "2025-01-01", room_width: 10, room_height: 10}
-    return { success: true };
-    // 如果发生错误，就返回错误信息 error.message 是错误信息，比如 "Network error"
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-// ==================== Guest API ====================
-
-/**
- * 获取所有嘉宾（可选按事件过滤）
- * @param {string} [eventId] - 可选：会议ID
- * @returns {Promise<{success: boolean, data?: array, error?: string}>}
+ * Get all guests for an event
  */
 export async function getAllGuests(eventId) {
   try {
-    let url = "/api/conference/guests/";
-    // 如果 eventId 存在，就添加 event 参数
-    if (eventId) {
-      url += `?event=${eventId}`;
-    }
-    // 发起 GET 请求到后端接口。 authHeaders() 会带上 Authorization: Bearer <token> 和 Content-Type，用于身份校验
-    const response = await fetch(url, {
-      method: "GET",
-      headers: authHeaders(),
+    const response = await fetch(`/api/conference/events/${eventId}/guests/`, {
+      headers: authHeaders()
     });
-    // 等待服务器返回的响应，然后用 response.json() 把响应体（比如 JSON 数据）解析出来
-    const data = await response.json();
-
-    if (!response.ok) {
-      // 如果响应状态码不是 200 OK，就返回错误信息 data.detail 是后端返回的错误信息，比如 "Failed to obtain guest list"
-      return {
-        success: false,
-        error: data.detail || "Failed to obtain guest list",
-      };
-    }
-
-    // 如果响应状态码是 200 OK，就返回成功信息 data 是后端返回的 JSON 数据，比如 [{id: 1, name: "会议1"}, {id: 2, name: "会议2"}]
+    const data = await handleResponse(response);
     return { success: true, data };
   } catch (error) {
+    console.error('Get guests failed:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+}
+
+// Backward-compatible alias
+export const getGuests = getAllGuests;
+
+/**
+ * Get a single guest by ID
+ */
+export async function getGuest(guestId) {
+  try {
+    const response = await fetch(`/api/conference/guests/${guestId}/`, {
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Get guest failed:', error);
     return { success: false, error: error.message };
   }
 }
 
 /**
- * 创建新嘉宾
- * @param {object} guestData - 嘉宾数据 { event, name, email, group, dietary_requirements, ... }
- * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ * Create a new guest
  */
 export async function createGuest(guestData) {
   try {
-    // 发起 POST 请求到后端接口。 authHeaders() 会带上 Authorization: Bearer <token> 和 Content-Type，用于身份校验
-    const response = await fetch("/api/conference/guests/", {
-      method: "POST",
+    const response = await fetch('/api/conference/guests/', {
+      method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify(guestData),
+      body: JSON.stringify({
+        event: guestData.eventId || guestData.event,
+        name: guestData.name,
+        email: guestData.email || '',
+        company: guestData.company || '',
+        phone: guestData.phone || '',
+        dietary_requirements: guestData.dietaryPreference || guestData.dietary_requirements || '',
+        notes: guestData.notes || '',
+        group: guestData.group || '',
+        attendance: guestData.attendance !== undefined ? guestData.attendance : true
+      })
     });
-    // 等待服务器返回的响应，然后用 response.json() 把响应体（比如 JSON 数据）解析出来
-    const data = await response.json();
-
-    if (!response.ok) {
-      // 如果响应状态码不是 200 OK，就返回错误信息 data.detail 是后端返回的错误信息，比如 "Failed to create guest"
-      return { success: false, error: data.detail || "Failed to create guest" };
-    }
-
-    // 如果响应状态码是 200 OK，就返回成功信息 data 是后端返回的 JSON 数据，比如 {id: 1, name: "会议1", description: "会议1的描述", event_date: "2025-01-01", room_width: 10, room_height: 10}
+    const data = await handleResponse(response);
     return { success: true, data };
   } catch (error) {
+    console.error('Create guest failed:', error);
     return { success: false, error: error.message };
   }
 }
 
 /**
- * 更新嘉宾信息
- * @param {string} guestId - 嘉宾ID
- * @param {object} updates - 要更新的字段
- * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ * Update an existing guest
  */
 export async function updateGuest(guestId, updates) {
   try {
-    // 发起 PUT 请求到后端接口。 authHeaders() 会带上 Authorization: Bearer <token> 和 Content-Type，用于身份校验
     const response = await fetch(`/api/conference/guests/${guestId}/`, {
-      method: "PUT",
+      method: 'PATCH',
       headers: authHeaders(),
-      body: JSON.stringify(updates),
+      body: JSON.stringify({
+        name: updates.name,
+        email: updates.email,
+        company: updates.company,
+        phone: updates.phone,
+        dietary_requirements: updates.dietaryPreference || updates.dietary_requirements,
+        notes: updates.notes,
+        group: updates.group,
+        attendance: updates.attendance
+      })
     });
-    // 等待服务器返回的响应，然后用 response.json() 把响应体（比如 JSON 数据）解析出来
-    const data = await response.json();
-    // 如果响应状态码不是 200 OK，就返回错误信息 data.detail 是后端返回的错误信息，比如 "Update guest failed"
-    if (!response.ok) {
-      return { success: false, error: data.detail || "Update guest failed" };
-    }
-    // 如果响应状态码是 200 OK，就返回成功信息 data 是后端返回的 JSON 数据，比如 {id: 1, name: "会议1", description: "会议1的描述", event_date: "2025-01-01", room_width: 10, room_height: 10}
+    const data = await handleResponse(response);
     return { success: true, data };
   } catch (error) {
+    console.error('Update guest failed:', error);
     return { success: false, error: error.message };
   }
 }
 
 /**
- * 删除嘉宾
- * @param {string} guestId - 嘉宾ID
- * @returns {Promise<{success: boolean, error?: string}>}
+ * Delete a guest
  */
 export async function deleteGuest(guestId) {
   try {
-    // 发起 DELETE 请求到后端接口。 authHeaders() 会带上 Authorization: Bearer <token> 和 Content-Type，用于身份校验
     const response = await fetch(`/api/conference/guests/${guestId}/`, {
-      method: "DELETE",
-      headers: authHeaders(),
+      method: 'DELETE',
+      headers: authHeaders()
     });
-    // 等待服务器返回的响应，然后用 response.json() 把响应体（比如 JSON 数据）解析出来
     if (!response.ok) {
-      const data = await response.json();
-      // 如果响应状态码不是 200 OK，就返回错误信息 data.detail 是后端返回的错误信息，比如 "Failed to delete guest"
-      return { success: false, error: data.detail || "Failed to delete guest" };
+      throw new Error(`Delete failed: ${response.status}`);
     }
-    // 如果响应状态码是 200 OK，就返回成功信息 data 是后端返回的 JSON 数据，比如 {id: 1, name: "会议1", description: "会议1的描述", event_date: "2025-01-01", room_width: 10, room_height: 10}
     return { success: true };
-    // 如果发生错误，就返回错误信息 error.message 是错误信息，比如 "Network error"
   } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-// ==================== 分组 API ====================
-
-/**
- * 获取所有分组（可选按事件过滤）
- * @param {string} [eventId] - 可选：会议ID
- * @returns {Promise<{success: boolean, data?: array, error?: string}>}
- */
-export async function getAllGroups(eventId) {
-  try {
-    let url = "/api/conference/groups/";
-    // 如果 eventId 存在，就添加 event 参数
-    if (eventId) {
-      url += `?event=${eventId}`;
-    }
-    // 发起 GET 请求到后端接口。 authHeaders() 会带上 Authorization: Bearer <token> 和 Content-Type，用于身份校验
-    const response = await fetch(url, {
-      method: "GET",
-      headers: authHeaders(),
-    });
-    // 等待服务器返回的响应，然后用 response.json() 把响应体（比如 JSON 数据）解析出来
-    const data = await response.json();
-
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.detail || "Failed to obtain the group list",
-      };
-    }
-    // 如果响应状态码是 200 OK，就返回成功信息 data 是后端返回的 JSON 数据，比如 [{id: 1, name: "会议1"}, {id: 2, name: "会议2"}]
-    return { success: true, data };
-    // 如果发生错误，就返回错误信息 error.message 是错误信息，比如 "Network error"
-  } catch (error) {
+    console.error('Delete guest failed:', error);
     return { success: false, error: error.message };
   }
 }
 
 /**
- * 创建新分组
- * @param {string} eventId - 会议ID
- * @param {object} groupData - 分组数据 { name, color, isSystem }
- * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ * Bulk import guests from CSV data
  */
-export async function createGroup(eventId, groupData) {
+export async function bulkImportGuests(eventId, guestsData) {
   try {
-    // 发起 POST 请求到后端接口。 authHeaders() 会带上 Authorization: Bearer <token> 和 Content-Type，用于身份校验
-    const response = await fetch("/api/conference/groups/", {
-      method: "POST",
+    const response = await fetch(`/api/conference/events/${eventId}/guests_import/`, {
+      method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
-        event: eventId,
-        name: groupData.name,
-        color: groupData.color,
-        is_system: groupData.isSystem || false,
-      }),
+        guests: guestsData.map(g => ({
+          name: g.name,
+          email: g.email || '',
+          company: g.company || '',
+          phone: g.phone || '',
+          dietary_requirements: g.dietaryPreference || g.dietary_requirements || '',
+          notes: g.notes || '',
+          group: g.group || '',
+          attendance: g.attendance !== undefined ? g.attendance : true
+        }))
+      })
     });
-    // 等待服务器返回的响应，然后用 response.json() 把响应体（比如 JSON 数据）解析出来
-    const data = await response.json();
-    // 如果响应状态码不是 200 OK，就返回错误信息 data.detail 是后端返回的错误信息，比如 "Failed to create group"
-    if (!response.ok) {
-      return { success: false, error: data.detail || "Failed to create group" };
-    }
-    // 如果响应状态码是 200 OK，就返回成功信息 data 是后端返回的 JSON 数据，比如 {id: 1, name: "会议1", description: "会议1的描述", event_date: "2025-01-01", room_width: 10, room_height: 10}
-    return { success: true, data };
-    // 如果发生错误，就返回错误信息 error.message 是错误信息，比如 "Network error"
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * 更新分组
- * @param {string} groupId - 分组ID
- * @param {object} updates - 要更新的字段 { name?, color? }
- * @returns {Promise<{success: boolean, data?: object, error?: string}>}
- */
-export async function updateGroup(groupId, updates) {
-  try {
-    const response = await fetch(`/api/conference/groups/${groupId}/`, {
-      method: "PUT",
-      headers: authHeaders(),
-      body: JSON.stringify(updates),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return { success: false, error: data.detail || "Update group failed" };
-    }
-
-    return { success: true, data };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * 删除分组
- * @param {string} groupId - 分组ID
- * @returns {Promise<{success: boolean, error?: string}>}
- */
-export async function deleteGroup(groupId) {
-  try {
-    const response = await fetch(`/api/conference/groups/${groupId}/`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      return { success: false, error: data.detail || "Delete group failed" };
-    }
-
-    return { success: true };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-// ==================== 座位分配 API ====================
-
-/**
- * 获取所有座位分配（可选按事件过滤）
- * @param {string} [eventId] - 可选：会议ID
- * @returns {Promise<{success: boolean, data?: array, error?: string}>}
- */
-export async function getAllAssignments(eventId) {
-  try {
-    let url = "/api/conference/assignments/";
-    if (eventId) {
-      url += `?event=${eventId}`;
-    }
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers: authHeaders(),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.detail || "Failed to retrieve seat assignment",
-      };
-    }
-
-    return { success: true, data };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * 创建座位分配
- * @param {object} assignmentData - 分配数据 { event, element, guest, seat_number }
- * @returns {Promise<{success: boolean, data?: object, error?: string}>}
- */
-export async function createAssignment(assignmentData) {
-  try {
-    const response = await fetch("/api/conference/assignments/", {
-      method: "POST",
-      headers: authHeaders(),
-      body: JSON.stringify(assignmentData),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.detail || "Failed to create seat assignment",
-      };
-    }
-
-    return { success: true, data };
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * 删除座位分配
- * @param {string} assignmentId - 分配ID
- * @returns {Promise<{success: boolean, error?: string}>}
- */
-export async function deleteAssignment(assignmentId) {
-  try {
-    const response = await fetch(
-      `/api/conference/assignments/${assignmentId}/`,
-      {
-        method: "DELETE",
-        headers: authHeaders(),
+    const data = await handleResponse(response);
+    return { 
+      success: true, 
+      data: {
+        imported: data.imported_count || data.guests?.length || 0,
+        guests: data.guests || []
       }
-    );
-
-    if (!response.ok) {
-      const data = await response.json();
-      return {
-        success: false,
-        error: data.detail || "Deleting seat assignments failed",
-      };
-    }
-
-    return { success: true };
+    };
   } catch (error) {
-    return { success: false, error: error.message };
+    console.error('Bulk import failed:', error);
+    return { success: false, error: error.message, data: { imported: 0, guests: [] } };
   }
 }
 
-// ==================== 批量操作 API ====================
+/**
+ * Export guests with filters
+ */
+export async function exportGuestsFiltered(eventId, filters = {}) {
+  try {
+    const result = await getAllGuests(eventId);
+    
+    if (!result.success) {
+      return result;
+    }
+    
+    let filtered = result.data;
+    
+    // Apply filters
+    if (filters.dietaryPreference) {
+      filtered = filtered.filter(g => 
+        g.dietary_requirements === filters.dietaryPreference
+      );
+    }
+    
+    if (filters.company) {
+      filtered = filtered.filter(g => g.company === filters.company);
+    }
+    
+    if (filters.group) {
+      filtered = filtered.filter(g => g.group === filters.group);
+    }
+    
+    if (filters.attendance !== undefined) {
+      filtered = filtered.filter(g => g.attendance === filters.attendance);
+    }
+    
+    return { success: true, data: filtered };
+  } catch (error) {
+    console.error('Export filtered guests failed:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+}
+
+// ========================================
+// 元素管理 API
+// ========================================
 
 /**
- * 批量创建布局元素
- * @param {string} eventId - 会议ID
- * @param {array} elements - 元素数组
- * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ * Get all elements (tables, chairs, etc.) for an event
  */
-export async function batchCreateElements(eventId, elements) {
+export async function getElements(eventId) {
   try {
-    const response = await fetch(
-      `/api/conference/events/${eventId}/elements/`,
-      {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({ elements }),
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.detail || "Failed to create elements in batches",
-      };
-    }
-
+    const response = await fetch(`/api/conference/events/${eventId}/elements/`, {
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
     return { success: true, data };
   } catch (error) {
+    console.error('Get elements failed:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+}
+
+/**
+ * Save layout (elements and their positions)
+ */
+export async function saveLayout(eventId, elements) {
+  try {
+    const response = await fetch(`/api/conference/events/${eventId}/elements/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        elements: elements.map(el => ({
+          element_type: el.type || el.element_type,
+          label: el.label || '',
+          seats: el.seats || 0,
+          position_x: el.x !== undefined ? el.x : el.position_x,
+          position_y: el.y !== undefined ? el.y : el.position_y,
+          width: el.width,
+          height: el.height,
+          rotation: el.rotation || 0,
+          scale_x: el.scaleX || el.scale_x || 1.0,
+          scale_y: el.scaleY || el.scale_y || 1.0
+        }))
+      })
+    });
+    const data = await handleResponse(response);
+    return { 
+      success: true, 
+      data: { saved: data.elements?.length || 0 }
+    };
+  } catch (error) {
+    console.error('Save layout failed:', error);
+    return { success: false, error: error.message, data: { saved: 0 } };
+  }
+}
+
+/**
+ * Load saved layout from storage
+ */
+export async function loadLayout(eventId) {
+  return getElements(eventId);
+}
+
+// ========================================
+// 座位分配 API
+// ========================================
+
+/**
+ * Assign guest to seat
+ */
+export async function assignGuestToSeat(guestId, tableNumber, seatNumber) {
+  try {
+    // Note: Backend might have different API structure
+    // Adjust according to actual backend implementation
+    return await updateGuest(guestId, { 
+      tableNumber, 
+      seatNumber 
+    });
+  } catch (error) {
+    console.error('Assign guest to seat failed:', error);
     return { success: false, error: error.message };
   }
 }
 
 /**
- * 批量导入嘉宾
- * @param {string} eventId - 会议ID
- * @param {array} guests - 嘉宾数组
- * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ * Get seat assignments for an event
  */
-export async function batchImportGuests(eventId, guests) {
+export async function getSeatAssignments(eventId) {
   try {
-    const response = await fetch(
-      `/api/conference/events/${eventId}/guests_import/`,
-      {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({ guests }),
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.detail || "Batch import of guests failed",
-      };
-    }
-
+    const response = await fetch(`/api/conference/events/${eventId}/assignments/`, {
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
     return { success: true, data };
   } catch (error) {
-    return { success: false, error: error.message };
+    console.error('Get seat assignments failed:', error);
+    return { success: false, error: error.message, data: [] };
   }
 }
 
+// ========================================
+// 分享功能 API
+// ========================================
+
 /**
- * 生成分享Token
- * @param {string} eventId - 会议ID
- * @returns {Promise<{success: boolean, data?: object, error?: string}>}
+ * Generate share token for event
  */
 export async function generateShareToken(eventId) {
   try {
     const response = await fetch(`/api/conference/events/${eventId}/share/`, {
-      method: "POST",
-      headers: authHeaders(),
+      method: 'POST',
+      headers: authHeaders()
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.detail || "Failed to generate sharing link",
-      };
-    }
-
-    return { success: true, data };
+    const data = await handleResponse(response);
+    return { 
+      success: true, 
+      data: { shareToken: data.share_token || data.token }
+    };
   } catch (error) {
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * 通过分享Token获取会议（只读）
- * @param {string} shareToken - 分享Token
- * @returns {Promise<{success: boolean, data?: object, error?: string}>}
- */
-export async function getEventByShareToken(shareToken) {
-  try {
-    const response = await fetch(`/api/conference/share/${shareToken}/`, {
-      method: "GET",
-      // 注意：这个API不需要认证
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.detail || "Failed to obtain shared conference",
-      };
-    }
-
-    return { success: true, data };
-  } catch (error) {
+    console.error('Generate share token failed:', error);
     return { success: false, error: error.message };
   }
 }

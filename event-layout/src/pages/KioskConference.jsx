@@ -1,19 +1,20 @@
 // Kiosk mode for Conference (read-only display with search)
 
 import React, { useState, useEffect } from 'react';
-import { FiSearch, FiX } from 'react-icons/fi';
+import { FiSearch, FiX, FiCamera } from 'react-icons/fi';
 import ConferenceCanvas from '../components/conference/ConferenceCanvas';
-import WelcomeScreen from '../components/shared/WelcomeScreen';
+import QRScanner from '../components/QRScanner';
 import {
   loadConferenceEvent,
   loadConferenceLayout,
   loadConferenceGuests,
+  saveConferenceEvent,
+  saveConferenceLayout,
   saveConferenceGuests,
 } from '../lib/utils/storage';
-import { useWebSocket } from '../lib/hooks/useWebSocket';
 import * as ConferenceAPI from '../server-actions/conference-planner';
 
-const REFRESH_INTERVAL = 60000; // 60 seconds (fallback)
+const REFRESH_INTERVAL = 60000; // 60 seconds
 
 export default function KioskConference() {
   const [event, setEvent] = useState(null);
@@ -22,75 +23,84 @@ export default function KioskConference() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGuest, setSelectedGuest] = useState(null);
   const [highlightedElementId, setHighlightedElementId] = useState(null);
-  const [showWelcome, setShowWelcome] = useState(false);
-  const [checkedInGuest, setCheckedInGuest] = useState(null);
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [scanError, setScanError] = useState(null);
+  const [isOnline, setIsOnline] = useState(true);
 
-  // Load data from API
+  // Load data from backend API with fallback to localStorage
   const loadData = async () => {
     try {
-      // Try to load from API first
-      const eventsResult = await ConferenceAPI.getAllEvents();
-      
-      if (eventsResult.success && eventsResult.data.length > 0) {
-        const apiEvent = eventsResult.data[0];
-        const eventData = {
-          id: apiEvent.id,
-          name: apiEvent.name,
-          description: apiEvent.description,
-          date: apiEvent.event_date,
-          roomWidth: apiEvent.room_width,
-          roomHeight: apiEvent.room_height,
-        };
-        setEvent(eventData);
+      // Try to load from localStorage first for immediate display
+      const cachedEvent = loadConferenceEvent();
+      const cachedLayout = loadConferenceLayout();
+      const cachedGuests = loadConferenceGuests();
 
-        // Load elements
-        const elementsResult = await ConferenceAPI.getAllElements(apiEvent.id);
-        if (elementsResult.success) {
-          const mappedElements = elementsResult.data.map(el => ({
-            id: el.id,
-            type: el.element_type,
-            label: el.label,
-            x: el.position_x,
-            y: el.position_y,
-            width: el.width,
-            height: el.height,
-            rotation: el.rotation || 0,
-            capacity: el.capacity || 8,
-            color: el.color || '#3B82F6',
-          }));
-          setElements(mappedElements);
-        }
+      // Use cached data immediately if available
+      if (cachedEvent) {
+        setEvent(cachedEvent);
+        setElements(cachedLayout);
+        setGuests(cachedGuests);
+      }
 
-        // Load guests
-        const guestsResult = await ConferenceAPI.getAllGuests(apiEvent.id);
-        if (guestsResult.success) {
-          const mappedGuests = guestsResult.data.map(g => ({
+      // Then fetch from backend API for latest data
+      if (cachedEvent?.id) {
+        const eventResponse = await ConferenceAPI.getEvent(cachedEvent.id);
+        const guestsResponse = await ConferenceAPI.getGuests(cachedEvent.id);
+        const elementsResponse = await ConferenceAPI.getElements(cachedEvent.id);
+
+        if (eventResponse.success && guestsResponse.success && elementsResponse.success) {
+          const updatedEvent = {
+            id: eventResponse.data.id,
+            name: eventResponse.data.name,
+            description: eventResponse.data.description,
+            date: eventResponse.data.date,
+            roomWidth: eventResponse.data.room_width,
+            roomHeight: eventResponse.data.room_height,
+          };
+
+          const updatedGuests = guestsResponse.data.map(g => ({
             id: g.id,
             name: g.name,
             email: g.email,
-            group: g.group_name || 'General',
-            dietaryPreference: g.dietary_requirements || 'None',
+            group: g.group,
             tableNumber: g.table_number,
             seatNumber: g.seat_number,
-            elementId: g.element,
+            dietaryPreference: g.dietary_preference,
+            attendance: g.attendance,
+            notes: g.notes,
             checkedIn: g.checked_in || false,
-            attendance: g.attendance !== false,
-            notes: g.notes || '',
+            elementId: g.element_id,
           }));
-          setGuests(mappedGuests);
-        }
-      } else {
-        // Fallback to localStorage
-        const loadedEvent = loadConferenceEvent();
-        const loadedLayout = loadConferenceLayout();
-        const loadedGuests = loadConferenceGuests();
 
-        setEvent(loadedEvent);
-        setElements(loadedLayout);
-        setGuests(loadedGuests);
+          const updatedElements = elementsResponse.data.map(el => ({
+            id: el.id,
+            type: el.element_type,
+            x: el.x,
+            y: el.y,
+            width: el.width,
+            height: el.height,
+            rotation: el.rotation || 0,
+            label: el.label,
+            seats: el.seats,
+          }));
+
+          setEvent(updatedEvent);
+          setElements(updatedElements);
+          setGuests(updatedGuests);
+
+          // Cache the updated data
+          saveConferenceEvent(updatedEvent);
+          saveConferenceLayout(updatedElements);
+          saveConferenceGuests(updatedGuests);
+
+          setIsOnline(true);
+          console.log('✓ Data refreshed from backend API');
+        }
       }
     } catch (error) {
-      console.error('Error loading from API, using localStorage:', error);
+      console.warn('Failed to load from backend, using cached data:', error);
+      setIsOnline(false);
+
       // Fallback to localStorage
       const loadedEvent = loadConferenceEvent();
       const loadedLayout = loadConferenceLayout();
@@ -102,7 +112,7 @@ export default function KioskConference() {
     }
   };
 
-  // Initial load and auto-refresh (fallback)
+  // Initial load and auto-refresh
   useEffect(() => {
     loadData();
 
@@ -113,22 +123,6 @@ export default function KioskConference() {
 
     return () => clearInterval(interval);
   }, []);
-
-  // WebSocket for real-time updates
-  const { isConnected, send } = useWebSocket('conference', event?.id || 'default', {
-    element_update: (data) => {
-      console.log('Layout changed via WebSocket, reloading...');
-      loadData();
-    },
-    guest_update: (data) => {
-      console.log('Guest data changed via WebSocket, reloading...');
-      loadData();
-    },
-    event_update: (data) => {
-      console.log('Event changed via WebSocket, reloading...');
-      loadData();
-    },
-  });
 
   // Filter guests based on search
   const filteredGuests = guests.filter(guest =>
@@ -173,56 +167,97 @@ export default function KioskConference() {
 
   // Handle check-in
   const handleCheckIn = async () => {
-    if (!selectedGuest) return;
+    if (!selectedGuest || !event?.id) return;
+
+    const newCheckedInStatus = !selectedGuest.checkedIn;
 
     try {
-      // Update guest check-in status in API
-      const result = await ConferenceAPI.updateGuest(selectedGuest.id, {
-        checked_in: true,
+      // Update backend first
+      const response = await ConferenceAPI.updateGuest(event.id, selectedGuest.id, {
+        checked_in: newCheckedInStatus,
       });
 
-      if (result.success) {
-        const updatedGuest = { ...selectedGuest, checkedIn: true };
-        
+      if (response.success) {
         // Update local state
-        const updatedGuests = guests.map(g => 
-          g.id === selectedGuest.id ? updatedGuest : g
-        );
+        const updatedGuests = guests.map(g => {
+          if (g.id === selectedGuest.id) {
+            const updatedGuest = { ...g, checkedIn: newCheckedInStatus };
+            setSelectedGuest(updatedGuest); // Update selected guest in state
+            return updatedGuest;
+          }
+          return g;
+        });
+
         setGuests(updatedGuests);
-        setSelectedGuest(updatedGuest);
-        
-        // Show welcome screen only for check-in (not cancel)
-        if (!selectedGuest.checkedIn) {
-          setCheckedInGuest(updatedGuest);
-          setShowWelcome(true);
-        }
-
-        // Also save to localStorage as backup
         saveConferenceGuests(updatedGuests);
-
-        // Broadcast the check-in update via WebSocket
-        if (isConnected) {
-          send({
-            type: 'guest_update',
-            action: 'checkin',
-            guestId: selectedGuest.id,
-          });
-        }
-      } else {
-        console.error('Failed to check in guest:', result.error);
-        alert('Failed to check in: ' + result.error);
+        console.log(`✓ ${selectedGuest.name} check-in status updated`);
       }
     } catch (error) {
-      console.error('Error checking in guest:', error);
-      alert('Error: ' + error.message);
+      console.error('Failed to update check-in status:', error);
+      // Fallback to local update if API fails
+      const updatedGuests = guests.map(g => {
+        if (g.id === selectedGuest.id) {
+          const updatedGuest = { ...g, checkedIn: newCheckedInStatus };
+          setSelectedGuest(updatedGuest);
+          return updatedGuest;
+        }
+        return g;
+      });
+
+      setGuests(updatedGuests);
+      saveConferenceGuests(updatedGuests);
     }
   };
 
-  // Handle welcome screen close
-  const handleWelcomeClose = () => {
-    setShowWelcome(false);
-    setCheckedInGuest(null);
-    handleClearSelection();
+  // Handle QR code scan
+  const handleQRCodeScan = (qrData) => {
+    setShowQRScanner(false);
+    setScanError(null);
+
+    try {
+      // Parse QR code data
+      // Expected format: checkin://conference/{eventId}/{guestId}
+      const qrPattern = /^checkin:\/\/conference\/([^/]+)\/([^/]+)$/;
+      const match = qrData.match(qrPattern);
+
+      if (!match) {
+        setScanError('Invalid QR code format. Please use a valid check-in QR code.');
+        return;
+      }
+
+      const [, eventId, guestId] = match;
+
+      // Find the guest
+      const guest = guests.find(g => g.id === guestId || String(g.id) === guestId);
+
+      if (!guest) {
+        setScanError(`Guest not found. QR code may be for a different event.`);
+        return;
+      }
+
+      // Auto-select the guest
+      handleSelectGuest(guest);
+
+      // Auto check-in if not already checked in
+      if (!guest.checkedIn) {
+        setTimeout(() => {
+          const updatedGuests = guests.map(g => {
+            if (g.id === guest.id) {
+              return { ...g, checkedIn: true };
+            }
+            return g;
+          });
+          setGuests(updatedGuests);
+          saveConferenceGuests(updatedGuests);
+          
+          // Show success message
+          console.log(`✓ ${guest.name} checked in successfully via QR code`);
+        }, 300);
+      }
+    } catch (error) {
+      console.error('Error processing QR code:', error);
+      setScanError('Failed to process QR code. Please try again.');
+    }
   };
 
   if (!event) {
@@ -237,21 +272,11 @@ export default function KioskConference() {
   }
 
   return (
-    <>
-      {/* Welcome Screen Overlay */}
-      {showWelcome && checkedInGuest && (
-        <WelcomeScreen 
-          guest={checkedInGuest} 
-          onClose={handleWelcomeClose}
-          autoReturnSeconds={3}
-        />
-      )}
-
-      <div className="flex flex-col bg-gray-100" style={{ 
-        minHeight: 'calc(100vh - 64px)',
-        margin: '0 calc(-50vw + 50%)',
-        width: '100vw'
-      }}>
+    <div className="flex flex-col bg-gray-100" style={{ 
+      minHeight: 'calc(100vh - 64px)',
+      margin: '0 calc(-50vw + 50%)',
+      width: '100vw'
+    }}>
       {/* Header */}
       <div className="bg-blue-600 text-white px-6 py-4">
         <h1 className="text-2xl font-bold">{event.name}</h1>
@@ -263,10 +288,12 @@ export default function KioskConference() {
         )}
       </div>
 
-      {/* Search bar */}
+      {/* Search and QR Scanner bar */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 relative">
         <div className="max-w-2xl mx-auto relative">
-          <div className="relative">
+          <div className="flex gap-2">
+            {/* Search input */}
+            <div className="flex-1 relative">
             <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
@@ -283,6 +310,17 @@ export default function KioskConference() {
                 <FiX className="w-5 h-5" />
               </button>
             )}
+            </div>
+
+            {/* QR Scan button */}
+            <button
+              onClick={() => setShowQRScanner(true)}
+              className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              title="Scan QR Code"
+            >
+              <FiCamera className="w-5 h-5" />
+              <span className="hidden sm:inline">Scan QR</span>
+            </button>
           </div>
 
           {/* Search results dropdown */}
@@ -449,19 +487,57 @@ export default function KioskConference() {
                 </div>
 
                 {/* Check-in button */}
-                {!selectedGuest.checkedIn && (
-                  <button
-                    onClick={handleCheckIn}
-                    className="w-full py-4 rounded-lg font-semibold text-lg transition-colors bg-green-600 hover:bg-green-700 text-white transform hover:scale-105 active:scale-95"
-                  >
-                    Check In Now
-                  </button>
-                )}
+                <button
+                  onClick={handleCheckIn}
+                  className={`w-full py-4 rounded-lg font-semibold text-lg transition-colors ${
+                    selectedGuest.checkedIn
+                      ? 'bg-gray-600 hover:bg-gray-700 text-white'
+                      : 'bg-green-600 hover:bg-green-700 text-white'
+                  }`}
+                >
+                  {selectedGuest.checkedIn ? 'Cancel Check-in' : 'Check In'}
+                </button>
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* QR Scanner Modal */}
+      <QRScanner
+        isOpen={showQRScanner}
+        onClose={() => {
+          setShowQRScanner(false);
+          setScanError(null);
+        }}
+        onScan={(data) => {
+          console.log('QR Code scanned:', data);
+          handleQRCodeScan(data);
+        }}
+        onError={(error) => {
+          console.error('QR Scanner error:', error);
+          setScanError(error);
+        }}
+      />
+
+      {/* Scan Error Alert */}
+      {scanError && (
+        <div className="fixed bottom-4 right-4 z-40 max-w-md bg-red-50 border-2 border-red-300 rounded-lg shadow-lg p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 text-red-600 text-2xl">⚠️</div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-red-800 mb-1">Scan Error</h4>
+              <p className="text-sm text-red-700">{scanError}</p>
+            </div>
+            <button
+              onClick={() => setScanError(null)}
+              className="flex-shrink-0 text-red-400 hover:text-red-600"
+            >
+              <FiX className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="bg-gray-800 text-gray-300 px-6 py-3 text-center text-sm">
@@ -470,12 +546,15 @@ export default function KioskConference() {
           <span>•</span>
           <span>Auto-refresh: Every 60 seconds</span>
           <span>•</span>
+          <span className={isOnline ? 'text-green-400' : 'text-yellow-400'}>
+            {isOnline ? '🟢 Online' : '🟡 Offline (Cached)'}
+          </span>
+          <span>•</span>
           <span>Total Guests: {guests.length}</span>
           <span>•</span>
           <span className="text-green-400">✓ Checked In: {guests.filter(g => g.checkedIn).length}</span>
         </div>
       </div>
     </div>
-    </>
   );
 }

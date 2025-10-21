@@ -1,162 +1,178 @@
-import { useMemo, useState } from "react";
-import { FiDownload, FiExternalLink } from "react-icons/fi";
+import { useState, useEffect } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
+import { FiDownload, FiPrinter } from 'react-icons/fi';
+import { loadConferenceEvent, loadConferenceGuests } from '../lib/utils/storage';
 
-/**
- * QR Code Generator for Event Check-in
- * Generates QR codes that link to Kiosk mode for guest check-in
- */
 export default function QRCodePage() {
-  const [eventType, setEventType] = useState("conference");
-  const [customUrl, setCustomUrl] = useState("");
+  const [event, setEvent] = useState(null);
+  const [guests, setGuests] = useState([]);
+  const [eventType, setEventType] = useState('conference'); // 'conference' or 'tradeshow'
 
-  // Generate the appropriate URL based on selection
-  const targetUrl = useMemo(() => {
-    if (customUrl) return customUrl;
+  useEffect(() => {
+    // Load conference data by default
+    const loadedEvent = loadConferenceEvent();
+    const loadedGuests = loadConferenceGuests();
+    
+    if (loadedEvent) {
+      setEvent(loadedEvent);
+      setGuests(loadedGuests || []);
+    }
+  }, []);
 
-    const baseUrl = window.location.origin;
-    return eventType === "conference"
-      ? `${baseUrl}/conference-kiosk`
-      : `${baseUrl}/tradeshow-kiosk`;
-  }, [eventType, customUrl]);
-
-  // Generate QR code image URL
-  const qrSrc = useMemo(() => {
-    const encoded = encodeURIComponent(targetUrl);
-    return `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encoded}&margin=20`;
-  }, [targetUrl]);
-
-  // Download QR code
-  const handleDownload = () => {
-    const link = document.createElement('a');
-    link.href = qrSrc;
-    link.download = `qrcode-${eventType}-${Date.now()}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const generateQRData = (guestId) => {
+    if (!event) return '';
+    
+    // Generate QR code data with guest ID and event ID
+    // Format: checkin://{eventType}/{eventId}/{guestId}
+    return `checkin://${eventType}/${event.id || 'demo'}/${guestId}`;
   };
 
-  return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="bg-white rounded-lg shadow-lg p-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            Event QR Code Generator
-          </h1>
-          <p className="text-gray-600">
-            Generate QR codes for event check-in and guest navigation.
-            Display these codes at the entrance or print them for easy access.
-          </p>
-        </div>
+  const handlePrintAll = () => {
+    window.print();
+  };
 
-        {/* Event Type Selection */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Event Type
-          </label>
-          <div className="flex gap-4">
-            <button
-              onClick={() => setEventType("conference")}
-              className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-colors ${
-                eventType === "conference"
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              📊 Conference
-            </button>
-            <button
-              onClick={() => setEventType("tradeshow")}
-              className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-colors ${
-                eventType === "tradeshow"
-                  ? "bg-green-600 text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-              }`}
-            >
-              🏢 Tradeshow
-            </button>
-          </div>
-        </div>
+  const handleDownloadQR = (guestId, guestName) => {
+    const svg = document.getElementById(`qr-${guestId}`);
+    if (!svg) return;
 
-        {/* Custom URL (Optional) */}
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Custom URL (Optional)
-          </label>
-          <input
-            type="text"
-            value={customUrl}
-            onChange={(e) => setCustomUrl(e.target.value)}
-            placeholder="Leave empty to use default kiosk URL"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Override the default URL with a custom link (e.g., share link with token)
-          </p>
-        </div>
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    
+    img.onload = () => {
+      canvas.width = 300;
+      canvas.height = 300;
+      ctx.drawImage(img, 0, 0, 300, 300);
+      
+      const pngFile = canvas.toDataURL('image/png');
+      const downloadLink = document.createElement('a');
+      downloadLink.download = `QR-${guestName.replace(/\s+/g, '-')}.png`;
+      downloadLink.href = pngFile;
+      downloadLink.click();
+    };
+    
+    img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
+  };
 
-        {/* Generated URL Display */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Target URL
-          </label>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 text-sm text-gray-800 break-all">
-              {targetUrl}
-            </code>
-            <button
-              onClick={() => window.open(targetUrl, "_blank")}
-              className="p-2 text-blue-600 hover:bg-blue-50 rounded"
-              title="Open in new tab"
-            >
-              <FiExternalLink className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* QR Code Display */}
-        <div className="flex flex-col items-center mb-6">
-          <div className="bg-white p-6 rounded-lg border-2 border-gray-200 shadow-sm">
-            <img
-              src={qrSrc}
-              alt="QR code"
-              className="w-80 h-80"
-            />
-          </div>
-          <p className="text-sm text-gray-600 mt-4 text-center">
-            Scan this QR code to access the {eventType === "conference" ? "conference" : "tradeshow"} kiosk
-          </p>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-4">
-          <button
-            onClick={handleDownload}
-            className="flex-1 flex items-center justify-center gap-2 py-3 px-6 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-          >
-            <FiDownload className="w-5 h-5" />
-            Download QR Code
-          </button>
-          <button
-            onClick={() => navigator.clipboard.writeText(targetUrl)}
-            className="flex-1 py-3 px-6 bg-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700 transition-colors"
-          >
-            Copy URL
-          </button>
-        </div>
-
-        {/* Instructions */}
-        <div className="mt-8 p-6 bg-blue-50 rounded-lg border border-blue-200">
-          <h3 className="font-semibold text-blue-900 mb-3">Usage Instructions:</h3>
-          <ul className="space-y-2 text-sm text-blue-800">
-            <li>• <strong>Conference Mode:</strong> Guests can search their name and find their assigned seats</li>
-            <li>• <strong>Tradeshow Mode:</strong> Visitors can search for vendors and locate booth positions</li>
-            <li>• <strong>Check-in:</strong> Staff can use the kiosk to mark guests as checked in</li>
-            <li>• <strong>Display:</strong> Show QR code on entrance screens or print for physical display</li>
-            <li>• <strong>Auto-refresh:</strong> Kiosk mode automatically refreshes data every 60 seconds</li>
-          </ul>
+  if (!event) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="text-center py-12">
+          <p className="text-gray-600">No event loaded. Please create or load an event first.</p>
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto p-6">
+      {/* Header */}
+      <div className="mb-6 no-print">
+        <h1 className="text-3xl font-bold text-gray-800 mb-2">QR Code Generator</h1>
+        <p className="text-gray-600">
+          Generate QR codes for {eventType === 'conference' ? 'guest' : 'vendor'} check-in
+        </p>
+      </div>
+
+      {/* Event Info */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6 no-print">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-800">{event.name}</h2>
+            {event.description && (
+              <p className="text-gray-600 mt-1">{event.description}</p>
+            )}
+            <p className="text-sm text-gray-500 mt-2">
+              Total {eventType === 'conference' ? 'Guests' : 'Vendors'}: {guests.length}
+            </p>
+          </div>
+          <button
+            onClick={handlePrintAll}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+          >
+            <FiPrinter className="w-5 h-5" />
+            Print All QR Codes
+          </button>
+        </div>
+      </div>
+
+      {/* QR Codes Grid */}
+      {guests.length === 0 ? (
+        <div className="text-center py-12 bg-gray-50 rounded-lg">
+          <p className="text-gray-600">
+            No {eventType === 'conference' ? 'guests' : 'vendors'} found for this event.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {guests.map((guest) => (
+            <div
+              key={guest.id}
+              className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 qr-card"
+            >
+              <div className="text-center">
+                {/* Guest Info */}
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold text-gray-800">{guest.name}</h3>
+                  {guest.email && (
+                    <p className="text-sm text-gray-600 mt-1">{guest.email}</p>
+                  )}
+                  {guest.tableNumber && (
+                    <p className="text-sm text-blue-600 mt-1">
+                      Table: {guest.tableNumber}
+                    </p>
+                  )}
+                </div>
+
+                {/* QR Code */}
+                <div className="flex justify-center mb-4">
+                  <div className="p-4 bg-white border-2 border-gray-200 rounded-lg">
+                    <QRCodeSVG
+                      id={`qr-${guest.id}`}
+                      value={generateQRData(guest.id)}
+                      size={180}
+                      level="H"
+                      includeMargin={true}
+                    />
+                  </div>
+                </div>
+
+                {/* QR Code Label */}
+                <p className="text-xs text-gray-500 mb-3">
+                  Scan to check in
+                </p>
+
+                {/* Download Button */}
+                <button
+                  onClick={() => handleDownloadQR(guest.id, guest.name)}
+                  className="no-print w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
+                >
+                  <FiDownload className="w-4 h-4" />
+                  Download PNG
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Print Styles */}
+      <style>{`
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+          .qr-card {
+            page-break-inside: avoid;
+            border: 1px solid #ddd;
+            margin-bottom: 20px;
+          }
+          @page {
+            margin: 1cm;
+          }
+        }
+      `}</style>
     </div>
   );
 }

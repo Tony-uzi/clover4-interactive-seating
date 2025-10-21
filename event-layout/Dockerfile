@@ -1,32 +1,31 @@
-# 构建阶段
-FROM node:20-alpine as builder
+FROM node:20-alpine AS builder
 
-# 设置工作目录
+# Set work directory
 WORKDIR /app
 
-# 复制 package.json 和 package-lock.json
+# Copy package files
 COPY package*.json ./
 
-# 安装依赖
+# Install dependencies
 RUN npm ci
 
-# 复制项目文件
+# Copy project files
 COPY . .
 
-# 构建应用
+# Build the application
 RUN npm run build
 
-# 生产阶段
+# Production stage
 FROM nginx:alpine
 
-# 复制构建产物到 nginx
+# Copy built files from builder
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# 复制 nginx 配置
+# Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# 暴露端口
+# Expose port
 EXPOSE 80
 
-# 启动 nginx
+# Start nginx
 CMD ["nginx", "-g", "daemon off;"]

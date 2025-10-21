@@ -1,49 +1,9 @@
 // Authentication API Actions - Connected to Real Backend
-// 认证API 负责用户登录、注册、token管理
-
-/*在前端集中管理“登录/注册/登出/Token 存取/鉴权头拼装/本地用户态读取”这些通用动作。
-
-给其它业务 API 提供稳定、统一的接口形态：{ success, data | error }，以便页面直接消费。
-
-让页面刷新后仍能保持登录态（通过 localStorage 持久化）
- */
-
-/*C. 登录流程详解
-
-```
-用户输入 → login(email, password) → fetch('/api/auth/login/')
-    ↓
-发送请求：
-{
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ email, password })
-}
-    ↓
-后端 Django 处理：
-- views_auth.py 的 login() 函数
-- 验证邮箱和密码
-- 生成 JWT token（authentication.py）
-    ↓
-返回响应：
-{
-  "token": "eyJhbGc...",
-  "user": {
-    "id": 11,
-    "name": "Tony"
-  }
-}
-    ↓
-前端处理：
-- localStorage.setItem('token', data.token)
-- localStorage.setItem('user', JSON.stringify(data.user))
-- 返回 { success: true, data: {...} }
-``` */
+// 认证API - 已连接真实后端
 
 /**
  * Get stored auth token
- * returns {string 或 null} Auth token
- * 从 localStorage 取出登录后保存的 token（可能返回 string 或 null）
+ * @returns {string|null} Auth token
  */
 export function getAuthToken() {
   return localStorage.getItem('token');
@@ -52,7 +12,6 @@ export function getAuthToken() {
 /**
  * Check if user is authenticated
  * @returns {boolean} Authentication status
- * 只要能取到非空字符串，就认为“已登录”
  */
 export function isAuthenticated() {
   const token = getAuthToken();
@@ -62,10 +21,8 @@ export function isAuthenticated() {
 /**
  * Login with email and password
  * @param {string} email - User email
- * @param {string} password - Password  
+ * @param {string} password - Password
  * @returns {Promise<Object>} Login result with token
- * 发送 POST /api/auth/login/，传入邮箱和密码
- * 解析响应为 JSON。成功则保存 token 到 localStorage，失败返回错误信息。
  */
 export async function login(email, password) {
   try {

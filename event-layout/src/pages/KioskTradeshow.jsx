@@ -1,14 +1,20 @@
 // Kiosk mode for Tradeshow (read-only display with search)
 
 import React, { useState, useEffect } from 'react';
-import { FiSearch, FiX, FiMapPin } from 'react-icons/fi';
+import { FiSearch, FiX, FiMapPin, FiCamera } from 'react-icons/fi';
 import TradeshowCanvas from '../components/tradeshow/TradeshowCanvas';
+import QRScanner from '../components/QRScanner';
 import {
   loadTradeshowEvent,
   loadTradeshowLayout,
   loadTradeshowVendors,
   loadTradeshowRoutes,
+  saveTradeshowEvent,
+  saveTradeshowLayout,
+  saveTradeshowVendors,
+  saveTradeshowRoutes,
 } from '../lib/utils/storage';
+import * as TradeshowAPI from '../server-actions/tradeshow-planner';
 
 const REFRESH_INTERVAL = 60000; // 60 seconds
 
@@ -21,18 +27,104 @@ export default function KioskTradeshow() {
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [highlightedBoothId, setHighlightedBoothId] = useState(null);
   const [activeRouteId, setActiveRouteId] = useState(null);
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [scanError, setScanError] = useState(null);
+  const [isOnline, setIsOnline] = useState(true);
 
-  // Load data
-  const loadData = () => {
-    const loadedEvent = loadTradeshowEvent();
-    const loadedLayout = loadTradeshowLayout();
-    const loadedVendors = loadTradeshowVendors();
-    const loadedRoutes = loadTradeshowRoutes();
+  // Load data from backend API with fallback to localStorage
+  const loadData = async () => {
+    try {
+      // Try to load from localStorage first for immediate display
+      const cachedEvent = loadTradeshowEvent();
+      const cachedLayout = loadTradeshowLayout();
+      const cachedVendors = loadTradeshowVendors();
+      const cachedRoutes = loadTradeshowRoutes();
 
-    setEvent(loadedEvent);
-    setBooths(loadedLayout);
-    setVendors(loadedVendors);
-    setRoutes(loadedRoutes);
+      // Use cached data immediately if available
+      if (cachedEvent) {
+        setEvent(cachedEvent);
+        setBooths(cachedLayout);
+        setVendors(cachedVendors);
+        setRoutes(cachedRoutes);
+      }
+
+      // Then fetch from backend API for latest data
+      if (cachedEvent?.id) {
+        const eventResponse = await TradeshowAPI.getEvent(cachedEvent.id);
+        const vendorsResponse = await TradeshowAPI.getVendors(cachedEvent.id);
+        const boothsResponse = await TradeshowAPI.getBooths(cachedEvent.id);
+        const routesResponse = await TradeshowAPI.getRoutes(cachedEvent.id);
+
+        if (eventResponse.success && vendorsResponse.success && boothsResponse.success) {
+          const updatedEvent = {
+            id: eventResponse.data.id,
+            name: eventResponse.data.name,
+            description: eventResponse.data.description,
+            date: eventResponse.data.date,
+            hallWidth: eventResponse.data.hall_width,
+            hallHeight: eventResponse.data.hall_height,
+          };
+
+          const updatedVendors = vendorsResponse.data.map(v => ({
+            id: v.id,
+            name: v.name,
+            contactName: v.contact_name,
+            email: v.email,
+            phone: v.phone,
+            category: v.category,
+            boothNumber: v.booth_number,
+            notes: v.notes,
+            boothId: v.booth_id,
+          }));
+
+          const updatedBooths = boothsResponse.data.map(booth => ({
+            id: booth.id,
+            type: booth.booth_type,
+            x: booth.x,
+            y: booth.y,
+            width: booth.width,
+            height: booth.height,
+            rotation: booth.rotation || 0,
+            label: booth.label,
+          }));
+
+          const updatedRoutes = routesResponse.success ? routesResponse.data.map(route => ({
+            id: route.id,
+            name: route.name,
+            color: route.color,
+            boothIds: route.booth_ids || [],
+          })) : [];
+
+          setEvent(updatedEvent);
+          setBooths(updatedBooths);
+          setVendors(updatedVendors);
+          setRoutes(updatedRoutes);
+
+          // Cache the updated data
+          saveTradeshowEvent(updatedEvent);
+          saveTradeshowLayout(updatedBooths);
+          saveTradeshowVendors(updatedVendors);
+          saveTradeshowRoutes(updatedRoutes);
+
+          setIsOnline(true);
+          console.log('✓ Data refreshed from backend API');
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load from backend, using cached data:', error);
+      setIsOnline(false);
+
+      // Fallback to localStorage
+      const loadedEvent = loadTradeshowEvent();
+      const loadedLayout = loadTradeshowLayout();
+      const loadedVendors = loadTradeshowVendors();
+      const loadedRoutes = loadTradeshowRoutes();
+
+      setEvent(loadedEvent);
+      setBooths(loadedLayout);
+      setVendors(loadedVendors);
+      setRoutes(loadedRoutes);
+    }
   };
 
   // Initial load and auto-refresh
@@ -88,6 +180,44 @@ export default function KioskTradeshow() {
     setSearchTerm('');
   };
 
+  // Handle QR code scan
+  const handleQRCodeScan = (qrData) => {
+    setShowQRScanner(false);
+    setScanError(null);
+
+    try {
+      // Parse QR code data
+      // Expected format: checkin://tradeshow/{eventId}/{vendorId}
+      const qrPattern = /^checkin:\/\/tradeshow\/([^/]+)\/([^/]+)$/;
+      const match = qrData.match(qrPattern);
+
+      if (!match) {
+        setScanError('Invalid QR code format. Please use a valid check-in QR code.');
+        return;
+      }
+
+      const [, eventId, vendorId] = match;
+
+      // Find the vendor
+      const vendor = vendors.find(v => v.id === vendorId || String(v.id) === vendorId);
+
+      if (!vendor) {
+        setScanError(`Vendor not found. QR code may be for a different event.`);
+        return;
+      }
+
+      // Auto-select the vendor
+      handleSelectVendor(vendor);
+
+      // Note: For tradeshow, we just show the vendor info
+      // You can add check-in logic here if needed
+      console.log(`✓ ${vendor.name} identified via QR code`);
+    } catch (error) {
+      console.error('Error processing QR code:', error);
+      setScanError('Failed to process QR code. Please try again.');
+    }
+  };
+
   if (!event) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-100">
@@ -116,10 +246,10 @@ export default function KioskTradeshow() {
         )}
       </div>
 
-      {/* Search and Route bar */}
+      {/* Search, QR Scanner and Route bar */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 relative">
         <div className="max-w-4xl mx-auto relative">
-          <div className="flex gap-4">
+          <div className="flex gap-2">
             {/* Search */}
             <div className="flex-1 relative">
               <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -139,6 +269,16 @@ export default function KioskTradeshow() {
                 </button>
               )}
             </div>
+
+            {/* QR Scan button */}
+            <button
+              onClick={() => setShowQRScanner(true)}
+              className="px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2 flex-shrink-0"
+              title="Scan QR Code"
+            >
+              <FiCamera className="w-5 h-5" />
+              <span className="hidden sm:inline">Scan</span>
+            </button>
 
             {/* Route selector */}
             {routes.length > 0 && (
@@ -308,12 +448,52 @@ export default function KioskTradeshow() {
         )}
       </div>
 
+      {/* QR Scanner Modal */}
+      <QRScanner
+        isOpen={showQRScanner}
+        onClose={() => {
+          setShowQRScanner(false);
+          setScanError(null);
+        }}
+        onScan={(data) => {
+          console.log('QR Code scanned:', data);
+          handleQRCodeScan(data);
+        }}
+        onError={(error) => {
+          console.error('QR Scanner error:', error);
+          setScanError(error);
+        }}
+      />
+
+      {/* Scan Error Alert */}
+      {scanError && (
+        <div className="fixed bottom-4 right-4 z-40 max-w-md bg-red-50 border-2 border-red-300 rounded-lg shadow-lg p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 text-red-600 text-2xl">⚠️</div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-red-800 mb-1">Scan Error</h4>
+              <p className="text-sm text-red-700">{scanError}</p>
+            </div>
+            <button
+              onClick={() => setScanError(null)}
+              className="flex-shrink-0 text-red-400 hover:text-red-600"
+            >
+              <FiX className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
       <div className="bg-gray-800 text-gray-300 px-6 py-3 text-center text-sm">
         <div className="flex items-center justify-center gap-4">
           <span>🏢 Tradeshow Information System</span>
           <span>•</span>
           <span>Auto-refresh: Every 60 seconds</span>
+          <span>•</span>
+          <span className={isOnline ? 'text-green-400' : 'text-yellow-400'}>
+            {isOnline ? '🟢 Online' : '🟡 Offline (Cached)'}
+          </span>
           <span>•</span>
           <span>Total Vendors: {vendors.length}</span>
           <span>•</span>

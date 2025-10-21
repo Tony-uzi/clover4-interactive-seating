@@ -90,9 +90,7 @@ export default function GroupManager({ groups, onAddGroup, onUpdateGroup, onDele
     );
   };
 
-  // 确保 groups 是数组
-  const safeGroups = Array.isArray(groups) ? groups : [];
-  const customGroups = safeGroups.filter(g => !g.isSystem);
+  const customGroups = groups.filter(g => !g.isSystem);
 
   return (
     <div className="p-4 bg-white border-b border-gray-200">

@@ -1,40 +1,90 @@
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+from django.urls import path
 from .views_auth import login, signup
-from .views import designs, design_versions, design_latest, design_version_detail, create_share_link, invite_user, shared_designs
-from .views import (
-    ConferenceEventViewSet, ConferenceElementViewSet, ConferenceGuestViewSet,
-    ConferenceSeatAssignmentViewSet, ConferenceShareViewSet,
-    TradeshowEventViewSet, TradeshowShareViewSet,ConferenceGroupViewSet
+from .views import designs, designs_detail, design_versions, design_latest, design_version_detail
+from .views_conference import (
+    conference_events, conference_event_detail, conference_event_share,
+    conference_elements, conference_element_detail, conference_elements_bulk,
+    conference_groups, conference_group_detail,
+    conference_guests, conference_guest_detail, conference_guests_import, conference_guest_checkin, conference_guest_search,
+    conference_seat_assignments, conference_seat_assignment_detail
+)
+from .views_tradeshow import (
+    tradeshow_events, tradeshow_event_detail, tradeshow_event_share,
+    tradeshow_booths, tradeshow_booth_detail, tradeshow_booths_bulk,
+    tradeshow_vendors, tradeshow_vendor_detail, tradeshow_vendors_import, tradeshow_vendor_checkin, tradeshow_vendor_search,
+    tradeshow_booth_assignments, tradeshow_booth_assignment_detail,
+    tradeshow_routes, tradeshow_route_detail
+)
+from .views_qr_checkin import (
+    qr_checkin_conference, qr_checkin_tradeshow,
+    qr_guest_info, qr_vendor_info
 )
 
-app_name = "api"
-
-router = DefaultRouter()
-# Conference viewset
-router.register(r"conference/events", ConferenceEventViewSet, basename="conf-events")
-router.register(r"conference/elements", ConferenceElementViewSet, basename="conf-elements")
-router.register(r"conference/guests", ConferenceGuestViewSet, basename="conf-guests")
-router.register(r"conference/assignments", ConferenceSeatAssignmentViewSet, basename="conf-assignments")
-router.register(r"conference/share", ConferenceShareViewSet, basename="conf-share")
-router.register(r"conference/groups", ConferenceGroupViewSet, basename="conf-groups")
-
-# Tradeshow
-router.register(r"tradeshow/events", TradeshowEventViewSet, basename="ts-events")
-router.register(r"tradeshow/share", TradeshowShareViewSet, basename="ts-share")
-
 urlpatterns = [
+    # Authentication
     path('auth/login/', login, name='login'),
     path('auth/register/', signup, name='signup'),
 
     # Designs and versions
     path('designs/', designs, name='designs'),
-    path('designs/shared/', shared_designs, name='shared-designs'),
+    path('designs/<int:design_id>/', designs_detail, name='designs-detail'),
     path('designs/<int:design_id>/versions/', design_versions, name='design-versions'),
     path('designs/<int:design_id>/latest/', design_latest, name='design-latest'),
     path('designs/<int:design_id>/versions/<int:version>/', design_version_detail, name='design-version-detail'),
-    path('designs/<int:design_id>/share-link/', create_share_link, name='design-create-share-link'),
-    path('designs/<int:design_id>/invite/', invite_user, name='design-invite-user'),
 
-    path("", include(router.urls)),
+    # Conference Events
+    path('conference/events/', conference_events, name='conference-events'),
+    path('conference/events/<uuid:event_id>/', conference_event_detail, name='conference-event-detail'),
+    path('conference/events/<uuid:event_id>/share/', conference_event_share, name='conference-event-share'),
+
+    # Conference Elements
+    path('conference/events/<uuid:event_id>/elements/', conference_elements, name='conference-elements'),
+    path('conference/events/<uuid:event_id>/elements/bulk/', conference_elements_bulk, name='conference-elements-bulk'),
+    path('conference/events/<uuid:event_id>/elements/<uuid:element_id>/', conference_element_detail, name='conference-element-detail'),
+
+    # Conference Groups
+    path('conference/events/<uuid:event_id>/groups/', conference_groups, name='conference-groups'),
+    path('conference/events/<uuid:event_id>/groups/<uuid:group_id>/', conference_group_detail, name='conference-group-detail'),
+
+    # Conference Guests
+    path('conference/events/<uuid:event_id>/guests/', conference_guests, name='conference-guests'),
+    path('conference/events/<uuid:event_id>/guests/import/', conference_guests_import, name='conference-guests-import'),
+    path('conference/events/<uuid:event_id>/guests/search/', conference_guest_search, name='conference-guest-search'),
+    path('conference/events/<uuid:event_id>/guests/<uuid:guest_id>/', conference_guest_detail, name='conference-guest-detail'),
+    path('conference/events/<uuid:event_id>/guests/<uuid:guest_id>/checkin/', conference_guest_checkin, name='conference-guest-checkin'),
+
+    # Conference Seat Assignments
+    path('conference/events/<uuid:event_id>/seat-assignments/', conference_seat_assignments, name='conference-seat-assignments'),
+    path('conference/events/<uuid:event_id>/seat-assignments/<uuid:assignment_id>/', conference_seat_assignment_detail, name='conference-seat-assignment-detail'),
+
+    # Tradeshow Events
+    path('tradeshow/events/', tradeshow_events, name='tradeshow-events'),
+    path('tradeshow/events/<uuid:event_id>/', tradeshow_event_detail, name='tradeshow-event-detail'),
+    path('tradeshow/events/<uuid:event_id>/share/', tradeshow_event_share, name='tradeshow-event-share'),
+
+    # Tradeshow Booths
+    path('tradeshow/events/<uuid:event_id>/booths/', tradeshow_booths, name='tradeshow-booths'),
+    path('tradeshow/events/<uuid:event_id>/booths/bulk/', tradeshow_booths_bulk, name='tradeshow-booths-bulk'),
+    path('tradeshow/events/<uuid:event_id>/booths/<uuid:booth_id>/', tradeshow_booth_detail, name='tradeshow-booth-detail'),
+
+    # Tradeshow Vendors
+    path('tradeshow/events/<uuid:event_id>/vendors/', tradeshow_vendors, name='tradeshow-vendors'),
+    path('tradeshow/events/<uuid:event_id>/vendors/import/', tradeshow_vendors_import, name='tradeshow-vendors-import'),
+    path('tradeshow/events/<uuid:event_id>/vendors/search/', tradeshow_vendor_search, name='tradeshow-vendor-search'),
+    path('tradeshow/events/<uuid:event_id>/vendors/<uuid:vendor_id>/', tradeshow_vendor_detail, name='tradeshow-vendor-detail'),
+    path('tradeshow/events/<uuid:event_id>/vendors/<uuid:vendor_id>/checkin/', tradeshow_vendor_checkin, name='tradeshow-vendor-checkin'),
+
+    # Tradeshow Booth Assignments
+    path('tradeshow/events/<uuid:event_id>/booth-assignments/', tradeshow_booth_assignments, name='tradeshow-booth-assignments'),
+    path('tradeshow/events/<uuid:event_id>/booth-assignments/<uuid:assignment_id>/', tradeshow_booth_assignment_detail, name='tradeshow-booth-assignment-detail'),
+
+    # Tradeshow Routes
+    path('tradeshow/events/<uuid:event_id>/routes/', tradeshow_routes, name='tradeshow-routes'),
+    path('tradeshow/events/<uuid:event_id>/routes/<uuid:route_id>/', tradeshow_route_detail, name='tradeshow-route-detail'),
+
+    # QR Code Check-in (Public, no authentication required)
+    path('qr/conference/<uuid:event_id>/guest/<uuid:guest_id>/checkin/', qr_checkin_conference, name='qr-checkin-conference'),
+    path('qr/tradeshow/<uuid:event_id>/vendor/<uuid:vendor_id>/checkin/', qr_checkin_tradeshow, name='qr-checkin-tradeshow'),
+    path('qr/conference/<uuid:event_id>/guest/<uuid:guest_id>/info/', qr_guest_info, name='qr-guest-info'),
+    path('qr/tradeshow/<uuid:event_id>/vendor/<uuid:vendor_id>/info/', qr_vendor_info, name='qr-vendor-info'),
 ]

@@ -1,172 +1,363 @@
 import { NavLink } from "react-router-dom";
+import {
+  FiLayout, FiUsers, FiTag, FiRefreshCw,
+  FiCamera, FiUserCheck, FiCalendar, FiGrid,
+  FiArrowRight, FiCheckCircle, FiZap, FiTrendingUp,
+  FiBook, FiClock
+} from 'react-icons/fi';
 
 export default function Home() {
-  return (
-    <div className="container">
-      {/* Hero Section */}
-      <section className="section hero">
-        <div>
-          <h1>Visualize Your Event Layouts</h1>
-          <p>
-            Create dynamic seating plans, organize participants, and keep
-            everything updated effortlessly with our powerful event planning tools.
-          </p>
-          <div className="hero-buttons">
-            <NavLink to="/conference" className="btn btn-primary">
-              Conference Planner
-            </NavLink>
-            <NavLink to="/tradeshow" className="btn btn-secondary">
-              Trade Show Planner
-            </NavLink>
-          </div>
-        </div>
+  const features = [
+    {
+      icon: <FiLayout className="w-8 h-8" />,
+      title: "Venue Layout Design",
+      description: "Design and customize event spaces with interactive drag-and-drop tools to arrange tables, stages, and booths.",
+      color: "blue"
+    },
+    {
+      icon: <FiUsers className="w-8 h-8" />,
+      title: "Guest Management",
+      description: "Easily add, import, and organize guest information with smart seat assignments and batch operations.",
+      color: "green"
+    },
+    {
+      icon: <FiTag className="w-8 h-8" />,
+      title: "Grouping & Tagging",
+      description: "Label and categorize guests or exhibitors (VIP, Media, Sponsors) for quick filtering and search.",
+      color: "purple"
+    },
+    {
+      icon: <FiRefreshCw className="w-8 h-8" />,
+      title: "Live Updates",
+      description: "Track seating changes, check-ins, and event updates in real time to keep everything on schedule.",
+      color: "orange"
+    },
+    {
+      icon: <FiCamera className="w-8 h-8" />,
+      title: "QR Code Check-In",
+      description: "Generate and scan QR codes for instant guest check-in and seat finding at your event.",
+      color: "red"
+    },
+    {
+      icon: <FiUserCheck className="w-8 h-8" />,
+      title: "Kiosk Mode",
+      description: "Self-service kiosks with QR scanning for attendees to check-in and find their seats independently.",
+      color: "indigo"
+    }
+  ];
 
-        <div>
-          <div className="hero-img">
-            <div style={{ textAlign: 'center' }}>
-              <svg width="80" height="80" viewBox="0 0 24 24" fill="white" opacity="0.9">
-                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
-              </svg>
-              <p style={{ marginTop: '16px', fontSize: '16px' }}>
-                Event Layout Preview
-              </p>
+  const eventTypes = [
+    {
+      icon: <FiCalendar className="w-16 h-16" />,
+      title: "Conference Planner",
+      subtitle: "Create the perfect conference layout",
+      description: "Design your dream conference layout with our easy-to-use planner. Manage seating, groups, and check-ins effortlessly.",
+      features: ["Table Arrangements", "Guest Seating", "Dietary Preferences", "Real-time Check-in"],
+      color: "blue",
+      bgGradient: "from-blue-500 to-blue-600",
+      link: "/conference"
+    },
+    {
+      icon: <FiGrid className="w-16 h-16" />,
+      title: "Tradeshow Planner",
+      subtitle: "Optimize your trade show space",
+      description: "Arrange booths, manage traffic flow, and enhance exhibitor visibility to create an engaging event experience.",
+      features: ["Booth Management", "Vendor Tracking", "Route Planning", "Space Optimization"],
+      color: "green",
+      bgGradient: "from-green-500 to-green-600",
+      link: "/tradeshow"
+    }
+  ];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden">
+        {/* Background decoration */}
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 opacity-70"></div>
+        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-200 rounded-full filter blur-3xl opacity-20 animate-pulse"></div>
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-200 rounded-full filter blur-3xl opacity-20 animate-pulse delay-1000"></div>
+        
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 sm:py-32">
+          <div className="text-center">
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-medium mb-6 animate-fade-in">
+              <FiZap className="w-4 h-4" />
+              <span>Powerful Event Planning Platform</span>
+            </div>
+
+            {/* Main heading */}
+            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-gray-900 mb-6 leading-tight">
+              Visualize Your
+              <span className="block bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                Event Layouts
+              </span>
+            </h1>
+            
+            <p className="text-xl sm:text-2xl text-gray-600 mb-10 max-w-3xl mx-auto leading-relaxed">
+              Clover 4 helps you create dynamic seating plans, organize participants, 
+              and keep everything updated effortlessly with our intuitive drag-and-drop interface.
+            </p>
+
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+              <NavLink 
+                to="/conference" 
+                className="group w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2"
+              >
+                <FiCalendar className="w-5 h-5" />
+                Conference Planner
+                <FiArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </NavLink>
+              
+              <NavLink 
+                to="/tradeshow" 
+                className="group w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2"
+              >
+                <FiGrid className="w-5 h-5" />
+                Trade Show Planner
+                <FiArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </NavLink>
+            </div>
+
+            {/* Stats */}
+            <div className="mt-16 grid grid-cols-3 gap-8 max-w-2xl mx-auto">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-gray-900 mb-1">500+</div>
+                <div className="text-sm text-gray-600">Events Planned</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-gray-900 mb-1">10K+</div>
+                <div className="text-sm text-gray-600">Guests Managed</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-gray-900 mb-1">99%</div>
+                <div className="text-sm text-gray-600">Satisfaction</div>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
       {/* Features Section */}
-      <section className="section">
-        <div className="features">
-          <div className="feature">
-            <div className="icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z"/>
-              </svg>
-            </div>
-            <h3>Venue Layout Design</h3>
-            <p>
-              Design and customize event spaces with interactive tools to
-              arrange tables, stages, and booths.
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Section header */}
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              Powerful Features for Every Event
+            </h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Everything you need to plan, manage, and execute successful events
             </p>
           </div>
 
-          <div className="feature">
-            <div className="icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-              </svg>
-            </div>
-            <h3>Guest Management</h3>
-            <p>
-              Easily add, import, and organize guest information with smart
-              seat assignments.
-            </p>
-          </div>
-
-          <div className="feature">
-            <div className="icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/>
-              </svg>
-            </div>
-            <h3>Grouping & Tagging</h3>
-            <p>
-              Label and categorize guests or exhibitors (e.g., VIP, Media,
-              Sponsors) for quick filtering and search.
-            </p>
-          </div>
-
-          <div className="feature">
-            <div className="icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
-              </svg>
-            </div>
-            <h3>Live Updates</h3>
-            <p>
-              Track seating changes, check-ins, and event updates in real time
-              to keep everything on schedule.
-            </p>
-          </div>
-
-          <div className="feature">
-            <div className="icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M3 11h8V3H3v8zm2-6h4v4H5V5zM13 3v8h8V3h-8zm6 6h-4V5h4v4zM3 21h8v-8H3v8zm2-6h4v4H5v-4zM18 13h-2v3h-3v2h3v3h2v-3h3v-2h-3z"/>
-              </svg>
-            </div>
-            <h3>QR Code Check-In</h3>
-            <p>
-              Generate and scan QR codes so guests can instantly find their
-              seats or event details.
-            </p>
-          </div>
-
-          <div className="feature">
-            <div className="icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-              </svg>
-            </div>
-            <h3>User Accounts & Roles</h3>
-            <p>
-              Manage admin and guest logins with secure access controls and
-              role-based tools.
-            </p>
+          {/* Features grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {features.map((feature, index) => (
+              <div 
+                key={index}
+                className="group p-6 bg-white border-2 border-gray-100 rounded-2xl hover:border-blue-200 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+              >
+                <div className={`inline-flex p-3 bg-${feature.color}-100 text-${feature.color}-600 rounded-xl mb-4 group-hover:scale-110 transition-transform duration-300`}>
+                  {feature.icon}
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                  {feature.title}
+                </h3>
+                <p className="text-gray-600 leading-relaxed">
+                  {feature.description}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
       {/* Event Types Section */}
-      <section className="section event-type">
-        <div className="event-card">
-          <div style={{
-            width: '100%',
-            height: '200px',
-            borderRadius: '16px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '24px'
-          }}>
-            <svg width="80" height="80" viewBox="0 0 24 24" fill="white" opacity="0.8">
-              <path d="M20 7h-4V5l-2-2h-4L8 5v2H4c-1.1 0-2 .9-2 2v5c0 .75.4 1.38 1 1.73V19c0 1.11.89 2 2 2h14c1.11 0 2-.89 2-2v-3.28c.59-.35 1-.99 1-1.72V9c0-1.1-.9-2-2-2zM10 5h4v2h-4V5zM4 9h16v5h-5v-2H9v2H4V9z"/>
-            </svg>
+      <section className="py-20 bg-gradient-to-b from-gray-50 to-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Section header */}
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              Choose Your Event Type
+            </h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Select the planner that best fits your needs
+            </p>
           </div>
-          <h3>Create the perfect conference layout</h3>
-          <p>
-            Design your dream conference layout with our easy-to-use planner.
-          </p>
-          <NavLink to="/conference" className="btn btn-primary">
-            Start Planning
-          </NavLink>
-        </div>
 
-        <div className="event-card">
-          <div style={{
-            width: '100%',
-            height: '200px',
-            borderRadius: '16px',
-            background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '24px'
-          }}>
-            <svg width="80" height="80" viewBox="0 0 24 24" fill="white" opacity="0.8">
-              <path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM9 4h2v5l-1-.75L9 9V4zm9 16H6V4h1v9l3-2.25L13 13V4h5v16z"/>
-            </svg>
+          {/* Event type cards */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {eventTypes.map((event, index) => (
+              <div 
+                key={index}
+                className="group relative bg-white rounded-3xl shadow-lg hover:shadow-2xl transition-all duration-500 overflow-hidden"
+              >
+                {/* Gradient header */}
+                <div className={`relative bg-gradient-to-r ${event.bgGradient} p-8 text-white`}>
+                  <div className="absolute top-0 right-0 opacity-10">
+                    <div className="text-white transform scale-150">
+                      {event.icon}
+                    </div>
+                  </div>
+                  <div className="relative z-10">
+                    <div className="mb-4">
+                      {event.icon}
+                    </div>
+                    <h3 className="text-3xl font-bold mb-2">{event.title}</h3>
+                    <p className="text-white/90 text-lg">{event.subtitle}</p>
+                  </div>
+                </div>
+
+                {/* Card content */}
+                <div className="p-8">
+                  <p className="text-gray-600 text-lg mb-6 leading-relaxed">
+                    {event.description}
+                  </p>
+
+                  {/* Features list */}
+                  <div className="space-y-3 mb-8">
+                    {event.features.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-3">
+                        <FiCheckCircle className={`w-5 h-5 text-${event.color}-600 flex-shrink-0`} />
+                        <span className="text-gray-700">{item}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* CTA button */}
+                  <NavLink 
+                    to={event.link}
+                    className={`group/btn w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r ${event.bgGradient} hover:shadow-lg text-white rounded-xl font-semibold text-lg transition-all duration-300`}
+                  >
+                    Start Planning
+                    <FiArrowRight className="w-5 h-5 group-hover/btn:translate-x-1 transition-transform" />
+                  </NavLink>
+                </div>
+              </div>
+            ))}
           </div>
-          <h3>Optimize your trade show space</h3>
-          <p>
-            Arrange booths, manage traffic flow, and enhance exhibitor
-            visibility to create an engaging event.
-          </p>
-          <NavLink to="/tradeshow" className="btn btn-primary">
-            Start Planning
-          </NavLink>
+        </div>
+      </section>
+
+      {/* Kiosk Features Section */}
+      <section className="py-20 bg-gradient-to-b from-white to-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              Kiosk Features
+            </h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Self-service kiosks for seamless event experience
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <NavLink
+              to="/kiosk-conference"
+              className="group p-6 bg-white border-2 border-gray-200 rounded-2xl hover:border-blue-400 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+            >
+              <div className="text-center">
+                <div className="inline-flex p-4 bg-blue-100 text-blue-600 rounded-xl mb-4 group-hover:scale-110 transition-transform">
+                  <FiCalendar className="w-8 h-8" />
+                </div>
+                <h3 className="font-bold text-gray-900 mb-2">Conference Seating</h3>
+                <p className="text-sm text-gray-600">Find your seat and check-in</p>
+              </div>
+            </NavLink>
+
+            <NavLink
+              to="/kiosk-tradeshow"
+              className="group p-6 bg-white border-2 border-gray-200 rounded-2xl hover:border-green-400 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+            >
+              <div className="text-center">
+                <div className="inline-flex p-4 bg-green-100 text-green-600 rounded-xl mb-4 group-hover:scale-110 transition-transform">
+                  <FiGrid className="w-8 h-8" />
+                </div>
+                <h3 className="font-bold text-gray-900 mb-2">Tradeshow Map</h3>
+                <p className="text-sm text-gray-600">Navigate booth locations</p>
+              </div>
+            </NavLink>
+
+            <NavLink
+              to="/kiosk-directory"
+              className="group p-6 bg-white border-2 border-gray-200 rounded-2xl hover:border-purple-400 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+            >
+              <div className="text-center">
+                <div className="inline-flex p-4 bg-purple-100 text-purple-600 rounded-xl mb-4 group-hover:scale-110 transition-transform">
+                  <FiBook className="w-8 h-8" />
+                </div>
+                <h3 className="font-bold text-gray-900 mb-2">Directory</h3>
+                <p className="text-sm text-gray-600">Search attendees & vendors</p>
+              </div>
+            </NavLink>
+
+            <NavLink
+              to="/kiosk-schedule"
+              className="group p-6 bg-white border-2 border-gray-200 rounded-2xl hover:border-orange-400 hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+            >
+              <div className="text-center">
+                <div className="inline-flex p-4 bg-orange-100 text-orange-600 rounded-xl mb-4 group-hover:scale-110 transition-transform">
+                  <FiClock className="w-8 h-8" />
+                </div>
+                <h3 className="font-bold text-gray-900 mb-2">Event Schedule</h3>
+                <p className="text-sm text-gray-600">View sessions & agenda</p>
+              </div>
+            </NavLink>
+          </div>
+        </div>
+      </section>
+
+      {/* Quick Links Section */}
+      <section className="py-16 bg-white border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <NavLink
+              to="/qrcode"
+              className="group p-6 border-2 border-gray-200 rounded-2xl hover:border-blue-400 hover:bg-blue-50 transition-all duration-300"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-blue-100 text-blue-600 rounded-xl group-hover:scale-110 transition-transform">
+                  <FiCamera className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 mb-1">QR Codes</h3>
+                  <p className="text-sm text-gray-600">Generate check-in codes</p>
+                </div>
+              </div>
+            </NavLink>
+
+            <NavLink
+              to="/kiosk-conference"
+              className="group p-6 border-2 border-gray-200 rounded-2xl hover:border-purple-400 hover:bg-purple-50 transition-all duration-300"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-purple-100 text-purple-600 rounded-xl group-hover:scale-110 transition-transform">
+                  <FiUserCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 mb-1">Kiosk Mode</h3>
+                  <p className="text-sm text-gray-600">Self-service check-in</p>
+                </div>
+              </div>
+            </NavLink>
+
+            <NavLink
+              to="/about"
+              className="group p-6 border-2 border-gray-200 rounded-2xl hover:border-green-400 hover:bg-green-50 transition-all duration-300"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-green-100 text-green-600 rounded-xl group-hover:scale-110 transition-transform">
+                  <FiTrendingUp className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 mb-1">Learn More</h3>
+                  <p className="text-sm text-gray-600">About Clover 4</p>
+                </div>
+              </div>
+            </NavLink>
+          </div>
         </div>
       </section>
     </div>

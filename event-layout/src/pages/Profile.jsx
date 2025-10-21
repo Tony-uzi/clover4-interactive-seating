@@ -1,21 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { listDesigns, getLatestDesign, listSharedDesigns } from "../lib/api.js";
-import { Link as RouterLink, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { listDesigns, deleteDesign } from "../lib/api.js";
+import { useNavigate } from "react-router-dom";
+import { 
+  FiUser, FiCalendar, FiGrid, FiEdit3, FiTrash2, 
+  FiFolder, FiLayers, FiAlertCircle, FiLoader 
+} from 'react-icons/fi';
 
 export default function Profile() {
   const navigate = useNavigate();
-  const [shares, setShares] = useState([]);
   const [cloud, setCloud] = useState({ loading: false, designs: [], error: "" });
-  const [shared, setShared] = useState({ loading: false, designs: [], error: "" });
-  useEffect(() => {
-    try {
-      const arr = JSON.parse(localStorage.getItem("shares") || "[]");
-      setShares(Array.isArray(arr) ? arr : []);
-    } catch {
-      setShares([]);
-    }
-  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -31,175 +24,202 @@ export default function Profile() {
     return () => (mounted = false);
   }, []);
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        setShared((s) => ({ ...s, loading: true }));
-        const list = await listSharedDesigns();
-        if (mounted) setShared({ loading: false, designs: list, error: "" });
-      } catch (e) {
-        if (mounted) setShared({ loading: false, designs: [], error: e.message || "" });
-      }
-    })();
-    return () => (mounted = false);
-  }, []);
-
-  const total = shares.length;
-
   return (
-    <section className="page">
-      <div className="container">
-        <h1 className="editor-head">My Profile</h1>
-        <p className="editor-subtitle">Saved share links and layouts</p>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-3 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl text-white">
+              <FiUser className="w-6 h-6" />
+            </div>
+            <h1 className="text-4xl font-bold text-gray-900">My Profile</h1>
+          </div>
+          <p className="text-lg text-gray-600 ml-16">
+            Manage your saved designs and event layouts
+          </p>
+        </div>
 
-        <div
-          style={{
-            border: "1px solid #e5e7eb",
-            borderRadius: 8,
-            background: "#fff",
-            padding: 12,
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <b>My Shares</b>
-            <span style={{ color: "#475569" }}>{total} total</span>
-      </div>
-
-        {/* Shared with me */}
-        <div
-          style={{
-            border: "1px solid #e5e7eb",
-            borderRadius: 8,
-            background: "#fff",
-            padding: 12,
-            marginTop: 12,
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <b>Shared With Me</b>
-            <span style={{ color: "#475569" }}>
-              {shared.loading ? "Loading..." : `${shared.designs.length} total`}
-            </span>
+        {/* Stats cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white rounded-2xl shadow-sm border-2 border-gray-100 p-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <FiFolder className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-900">
+                  {cloud.loading ? "..." : cloud.designs.length}
+                </div>
+                <div className="text-sm text-gray-600">Total Designs</div>
+              </div>
+            </div>
           </div>
 
-          {shared.error && (
-            <div style={{ color: "#b91c1c", marginTop: 8 }}>{shared.error}</div>
-          )}
-
-          {!shared.loading && shared.designs.length === 0 ? (
-            <div style={{ color: "#64748b", marginTop: 8 }}>No shared designs</div>
-          ) : (
-            <ul style={{ margin: 8, paddingLeft: 18 }}>
-              {shared.designs.map((d) => (
-                <li key={d.id} style={{ lineHeight: 1.9 }}>
-                  <span style={{ fontWeight: 600 }}>{d.name}</span>
-                  <span style={{ color: "#64748b", marginLeft: 8 }}>({d.kind})</span>
-                  <span style={{ color: "#64748b", marginLeft: 8 }}>v{d.latest_version || 0}</span>
-                  <span style={{ color: "#64748b", marginLeft: 8 }}>role: {d.role}</span>
-                  <button
-                    style={{ marginLeft: 12 }}
-                    onClick={async () => {
-                      try {
-                        const latest = await getLatestDesign(d.id);
-                        const items = Array.isArray(latest.data) ? latest.data : latest.data.items || [];
-                        navigate(`/editor/${d.id}`, { state: { items, name: d.name, kind: d.kind } });
-                      } catch (e) {
-                        alert(e.message || "Open failed");
-                      }
-                    }}
-                  >
-                    Open
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-          {total === 0 ? (
-            <div style={{ color: "#64748b", marginTop: 8 }}>No shares yet</div>
-          ) : (
-            <ul style={{ margin: 8, paddingLeft: 18 }}>
-              {shares.map((s) => {
-                const url = `/share/${encodeURIComponent(s.id)}`;
-                return (
-                  <li key={s.id} style={{ lineHeight: 1.9 }}>
-                    <Link to={url}>{s.name}</Link>
-                    <span style={{ color: "#64748b", marginLeft: 8 }}>
-                      {new Date(s.createdAt).toLocaleString()}
-                    </span>
-                    <a
-                      href={url}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ marginLeft: 12 }}
-                    >
-                      Open
-                    </a>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-
-        {/* Cloud files */}
-        <div
-          style={{
-            border: "1px solid #e5e7eb",
-            borderRadius: 8,
-            background: "#fff",
-            padding: 12,
-            marginTop: 12,
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <b>My Cloud Designs</b>
-            <span style={{ color: "#475569" }}>
-              {cloud.loading ? "Loading..." : `${cloud.designs.length} total`}
-            </span>
+          <div className="bg-white rounded-2xl shadow-sm border-2 border-gray-100 p-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <FiCalendar className="w-6 h-6 text-green-600" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-900">
+                  {cloud.loading ? "..." : cloud.designs.filter(d => d.kind === 'conference').length}
+                </div>
+                <div className="text-sm text-gray-600">Conferences</div>
+              </div>
+            </div>
           </div>
 
-          {cloud.error && (
-            <div style={{ color: "#b91c1c", marginTop: 8 }}>{cloud.error}</div>
-          )}
+          <div className="bg-white rounded-2xl shadow-sm border-2 border-gray-100 p-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <FiGrid className="w-6 h-6 text-purple-600" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-900">
+                  {cloud.loading ? "..." : cloud.designs.filter(d => d.kind === 'tradeshow').length}
+                </div>
+                <div className="text-sm text-gray-600">Tradeshows</div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-          {!cloud.loading && cloud.designs.length === 0 ? (
-            <div style={{ color: "#64748b", marginTop: 8 }}>No cloud files yet</div>
-          ) : (
-            <ul style={{ margin: 8, paddingLeft: 18 }}>
-              {cloud.designs.map((d) => (
-                <li key={d.id} style={{ lineHeight: 1.9 }}>
-                  <span style={{ fontWeight: 600 }}>{d.name}</span>
-                  <span style={{ color: "#64748b", marginLeft: 8 }}>({d.kind})</span>
-                  <span style={{ color: "#64748b", marginLeft: 8 }}>
-                    v{d.latest_version || 0}
-                  </span>
+        {/* Designs list */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <FiLayers className="w-5 h-5 text-gray-600" />
+                <h2 className="text-xl font-bold text-gray-900">My Designs</h2>
+              </div>
+              {!cloud.loading && (
+                <span className="text-sm text-gray-600">
+                  {cloud.designs.length} {cloud.designs.length === 1 ? 'design' : 'designs'}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="p-6">
+            {/* Loading state */}
+            {cloud.loading && (
+              <div className="flex flex-col items-center justify-center py-12">
+                <FiLoader className="w-8 h-8 text-blue-600 animate-spin mb-4" />
+                <p className="text-gray-600">Loading your designs...</p>
+              </div>
+            )}
+
+            {/* Error state */}
+            {cloud.error && (
+              <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+                <FiAlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-800">{cloud.error}</p>
+              </div>
+            )}
+
+            {/* Empty state */}
+            {!cloud.loading && !cloud.error && cloud.designs.length === 0 && (
+              <div className="text-center py-12">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-2xl mb-4">
+                  <FiFolder className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  No designs yet
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Start creating your first event layout
+                </p>
+                <div className="flex gap-3 justify-center">
                   <button
-                    style={{ marginLeft: 12 }}
-                    onClick={async () => {
-                      try {
-                        const latest = await getLatestDesign(d.id);
-                        const items = Array.isArray(latest.data)
-                          ? latest.data
-                          : latest.data.items || [];
-                        // 跳转到可编辑路由
-                        navigate(`/editor/${d.id}`, { state: { items, name: d.name, kind: d.kind } });
-                      } catch (e) {
-                        alert(e.message || "Open failed");
-                      }
-                    }}
+                    onClick={() => navigate('/conference')}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
                   >
-                    Edit Latest
+                    Create Conference
                   </button>
-                </li>
-              ))}
-            </ul>
-          )}
+                  <button
+                    onClick={() => navigate('/tradeshow')}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    Create Tradeshow
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Designs grid */}
+            {!cloud.loading && cloud.designs.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {cloud.designs.map((d) => (
+                  <div
+                    key={d.id}
+                    className="group bg-gray-50 rounded-xl p-4 border-2 border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all duration-300"
+                  >
+                    {/* Design header */}
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className={`p-2 rounded-lg ${
+                        d.kind === 'conference' 
+                          ? 'bg-blue-100 text-blue-600' 
+                          : 'bg-green-100 text-green-600'
+                      }`}>
+                        {d.kind === 'conference' ? (
+                          <FiCalendar className="w-5 h-5" />
+                        ) : (
+                          <FiGrid className="w-5 h-5" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-lg font-bold text-gray-900 truncate">
+                          {d.name}
+                        </h3>
+                        <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
+                          <span className="capitalize">{d.kind}</span>
+                          <span>•</span>
+                          <span>v{d.latest_version || 0}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const route = d.kind === 'tradeshow' ? '/tradeshow' : '/conference';
+                            navigate(`${route}?designId=${d.id}`);
+                          } catch (e) {
+                            alert(e.message || "Open failed");
+                          }
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                      >
+                        <FiEdit3 className="w-4 h-4" />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!window.confirm(`Delete design "${d.name}"? This cannot be undone.`)) return;
+                          try {
+                            await deleteDesign(d.id);
+                            setCloud((s) => ({ ...s, designs: s.designs.filter(x => x.id !== d.id) }));
+                          } catch (e) {
+                            alert(e.message || 'Delete failed');
+                          }
+                        }}
+                        className="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors"
+                        title="Delete design"
+                      >
+                        <FiTrash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 

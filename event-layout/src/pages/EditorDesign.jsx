@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
+import { FiEdit3, FiLoader } from 'react-icons/fi';
 import CanvasEditor from "../components/CanvasEditor.jsx";
-import { getLatestDesign, createShareLink, inviteUser } from "../lib/api.js";
+import { getLatestDesign } from "../lib/api.js";
 
 export default function EditorDesign() {
   const { designId } = useParams();
@@ -10,7 +11,6 @@ export default function EditorDesign() {
   const [loading, setLoading] = useState(!initialFromState);
   const [items, setItems] = useState(Array.isArray(initialFromState) ? initialFromState : null);
   const [meta, setMeta] = useState({ name: location.state?.name || "", kind: location.state?.kind || "custom" });
-  const [shareBusy, setShareBusy] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -32,57 +32,32 @@ export default function EditorDesign() {
   }, [designId, initialFromState]);
 
   return (
-    <section className="page">
-      <div className="container">
-        <h1 className="editor-head">Edit: {meta.name || `Design #${designId}`}</h1>
-        <p className="editor-subtitle">You can continue editing and save new versions.</p>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-          <button
-            disabled={shareBusy}
-            onClick={async () => {
-              const role = prompt('Share link role: view or edit', 'view');
-              if (!role) return;
-              try {
-                setShareBusy(true);
-                const { token } = await createShareLink(designId, role.toLowerCase() === 'edit' ? 'edit' : 'view');
-                const url = `${window.location.origin}/share/${encodeURIComponent(`link-${designId}-${token}`)}`;
-                await navigator.clipboard.writeText(url);
-                alert('Share link copied to clipboard');
-              } catch (e) {
-                alert(e.message || 'Create link failed');
-              } finally {
-                setShareBusy(false);
-              }
-            }}
-          >
-            Create Share Link
-          </button>
-          <button
-            disabled={shareBusy}
-            onClick={async () => {
-              const email = prompt('Invite user email');
-              if (!email) return;
-              const role = prompt('Invite role: view or edit', 'view');
-              if (!role) return;
-              try {
-                setShareBusy(true);
-                await inviteUser(designId, email, role.toLowerCase() === 'edit' ? 'edit' : 'view');
-                alert('Invitation created');
-              } catch (e) {
-                alert(e.message || 'Invite failed');
-              } finally {
-                setShareBusy(false);
-              }
-            }}
-          >
-            Invite by Email
-          </button>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Header */}
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-2 bg-blue-600 rounded-lg text-white">
+              <FiEdit3 className="w-5 h-5" />
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              {meta.name || `Design #${designId}`}
+            </h1>
+          </div>
+          <p className="text-gray-600 ml-12">
+            Continue editing and save new versions of your design
+          </p>
         </div>
+
+        {/* Editor canvas */}
         {loading ? (
-          <div>Loading...</div>
+          <div className="flex flex-col items-center justify-center py-24 bg-white rounded-2xl border-2 border-gray-200">
+            <FiLoader className="w-10 h-10 text-blue-600 animate-spin mb-4" />
+            <p className="text-gray-600">Loading your design...</p>
+          </div>
         ) : (
-          <div className="editor-canvas">
-            <div className="grid-bg">
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4">
+            <div className="grid-bg rounded-xl overflow-hidden">
               <CanvasEditor
                 storageKey={`layout.design.${designId}`}
                 remoteName={meta.kind || "custom"}
@@ -92,7 +67,7 @@ export default function EditorDesign() {
           </div>
         )}
       </div>
-    </section>
+    </div>
   );
 }
 
