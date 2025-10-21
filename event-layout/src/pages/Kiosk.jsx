@@ -1,6 +1,7 @@
 // Unified Kiosk Mode - Combines Conference and Tradeshow kiosks with mode toggle
 
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   FiCalendar,
   FiGrid,
@@ -11,22 +12,7 @@ import {
 } from 'react-icons/fi';
 import ConferenceCanvas from '../components/conference/ConferenceCanvas';
 import TradeshowCanvas from '../components/tradeshow/TradeshowCanvas';
-import {
-  loadConferenceEvent,
-  loadConferenceLayout,
-  loadConferenceGuests,
-  saveConferenceEvent,
-  saveConferenceLayout,
-  saveConferenceGuests,
-  loadTradeshowEvent,
-  loadTradeshowLayout,
-  loadTradeshowVendors,
-  loadTradeshowRoutes,
-  saveTradeshowEvent,
-  saveTradeshowLayout,
-  saveTradeshowVendors,
-  saveTradeshowRoutes,
-} from '../lib/utils/storage';
+// Removed localStorage imports - all data now comes from backend via URL
 import * as ConferenceAPI from '../server-actions/conference-planner';
 import * as TradeshowAPI from '../server-actions/tradeshow-planner';
 import { normalizeConferenceGuest, normalizeTradeshowVendor } from '../lib/utils/normalizers';
@@ -78,6 +64,7 @@ export default function Kiosk() {
 }
 
 export function ConferenceKiosk() {
+  const location = useLocation();
   const [event, setEvent] = useState(null);
   const [elements, setElements] = useState([]);
   const [guests, setGuests] = useState([]);
@@ -98,80 +85,59 @@ export function ConferenceKiosk() {
 
   const loadData = async () => {
     try {
-      const cachedEvent = loadConferenceEvent();
-      const cachedLayout = loadConferenceLayout();
-      const cachedGuests = loadConferenceGuests();
+      // Get event ID from URL parameter
+      const params = new URLSearchParams(location.search);
+      const urlEventId = params.get('eventId');
 
-      if (cachedEvent) {
-        setEvent(cachedEvent);
-        setElements(cachedLayout);
-        setGuests(cachedGuests);
+      if (!urlEventId) {
+        console.warn('No eventId in URL. Please provide ?eventId=xxx in the URL.');
+        setIsOnline(false);
+        return;
       }
 
-      if (cachedEvent?.id) {
-        const eventResponse = await ConferenceAPI.getEvent(cachedEvent.id);
-        const guestsResponse = await ConferenceAPI.getGuests(cachedEvent.id);
-        const elementsResponse = await ConferenceAPI.getElements(cachedEvent.id);
+      // Load data from backend using URL event ID
+      const eventResponse = await ConferenceAPI.getEvent(urlEventId);
+      const guestsResponse = await ConferenceAPI.getGuests(urlEventId);
+      const elementsResponse = await ConferenceAPI.getElements(urlEventId);
 
-        if (eventResponse.success && guestsResponse.success && elementsResponse.success) {
-          const updatedEvent = {
-            id: eventResponse.data.id,
-            name: eventResponse.data.name,
-            description: eventResponse.data.description,
-            date: eventResponse.data.date,
-            roomWidth: eventResponse.data.room_width,
-            roomHeight: eventResponse.data.room_height,
-          };
+      if (eventResponse.success && guestsResponse.success && elementsResponse.success) {
+        const updatedEvent = {
+          id: eventResponse.data.id,
+          name: eventResponse.data.name,
+          description: eventResponse.data.description,
+          date: eventResponse.data.date,
+          roomWidth: eventResponse.data.room_width,
+          roomHeight: eventResponse.data.room_height,
+        };
 
-          const updatedGuests = guestsResponse.data
-            .map(normalizeConferenceGuest)
-            .filter(Boolean);
+        const updatedGuests = guestsResponse.data
+          .map(normalizeConferenceGuest)
+          .filter(Boolean);
 
-          const updatedElements = elementsResponse.data.map(el => ({
-            id: el.id,
-            type: el.element_type,
-            x: el.position_x,
-            y: el.position_y,
-            width: el.width,
-            height: el.height,
-            rotation: el.rotation || 0,
-            label: el.label,
-            seats: el.seats,
-          }));
+        const updatedElements = elementsResponse.data.map(el => ({
+          id: el.id,
+          type: el.element_type,
+          x: el.position_x,
+          y: el.position_y,
+          width: el.width,
+          height: el.height,
+          rotation: el.rotation || 0,
+          label: el.label,
+          seats: el.seats,
+        }));
 
-          setEvent(updatedEvent);
-
-          if (updatedGuests.length > 0) {
-            setGuests(updatedGuests);
-            saveConferenceGuests(updatedGuests);
-          } else {
-            setGuests(cachedGuests);
-          }
-
-          if (updatedElements.length > 0) {
-            setElements(updatedElements);
-            saveConferenceLayout(updatedElements);
-          } else {
-            setElements(cachedLayout);
-          }
-
-          saveConferenceEvent(updatedEvent);
-
-          setIsOnline(true);
-          console.log('✓ Data refreshed from backend API');
-        }
+        setEvent(updatedEvent);
+        setGuests(updatedGuests);
+        setElements(updatedElements);
+        setIsOnline(true);
+        console.log('✓ Data loaded from backend API');
+      } else {
+        console.warn('Failed to load event data from backend');
+        setIsOnline(false);
       }
     } catch (error) {
-      console.warn('Failed to load from backend, using cached data:', error);
+      console.error('Failed to load from backend:', error);
       setIsOnline(false);
-
-      const loadedEvent = loadConferenceEvent();
-      const loadedLayout = loadConferenceLayout();
-      const loadedGuests = loadConferenceGuests();
-
-      setEvent(loadedEvent);
-      setElements(loadedLayout);
-      setGuests(loadedGuests);
     }
   };
 
@@ -209,7 +175,7 @@ export function ConferenceKiosk() {
         }
         return g;
       });
-      saveConferenceGuests(nextGuests);
+      // No localStorage - data is only in state and backend
       return nextGuests;
     });
 
@@ -640,6 +606,7 @@ export function ConferenceKiosk() {
 }
 
 export function TradeshowKiosk() {
+  const location = useLocation();
   const [event, setEvent] = useState(null);
   const [booths, setBooths] = useState([]);
   const [vendors, setVendors] = useState([]);
@@ -653,98 +620,67 @@ export function TradeshowKiosk() {
 
   const loadData = async () => {
     try {
-      const cachedEvent = loadTradeshowEvent();
-      const cachedLayout = loadTradeshowLayout();
-      const cachedVendors = loadTradeshowVendors();
-      const cachedRoutes = loadTradeshowRoutes();
+      // Get event ID from URL parameter
+      const params = new URLSearchParams(location.search);
+      const urlEventId = params.get('eventId');
 
-      if (cachedEvent) {
-        setEvent(cachedEvent);
-        setBooths(cachedLayout);
-        setVendors(cachedVendors);
-        setRoutes(cachedRoutes);
+      if (!urlEventId) {
+        console.warn('No eventId in URL. Please provide ?eventId=xxx in the URL.');
+        setIsOnline(false);
+        return;
       }
 
-      if (cachedEvent?.id) {
-        const eventResponse = await TradeshowAPI.getEvent(cachedEvent.id);
-        const vendorsResponse = await TradeshowAPI.getVendors(cachedEvent.id);
-        const boothsResponse = await TradeshowAPI.getBooths(cachedEvent.id);
-        const routesResponse = await TradeshowAPI.getRoutes(cachedEvent.id);
+      // Load data from backend using URL event ID
+      const eventResponse = await TradeshowAPI.getEvent(urlEventId);
+      const vendorsResponse = await TradeshowAPI.getVendors(urlEventId);
+      const boothsResponse = await TradeshowAPI.getBooths(urlEventId);
+      const routesResponse = await TradeshowAPI.getRoutes(urlEventId);
 
-        if (eventResponse.success && vendorsResponse.success && boothsResponse.success) {
-          const updatedEvent = {
-            id: eventResponse.data.id,
-            name: eventResponse.data.name,
-            description: eventResponse.data.description,
-            date: eventResponse.data.date,
-            hallWidth: eventResponse.data.hall_width,
-            hallHeight: eventResponse.data.hall_height,
-          };
+      if (eventResponse.success && vendorsResponse.success && boothsResponse.success) {
+        const updatedEvent = {
+          id: eventResponse.data.id,
+          name: eventResponse.data.name,
+          description: eventResponse.data.description,
+          date: eventResponse.data.date,
+          hallWidth: eventResponse.data.hall_width,
+          hallHeight: eventResponse.data.hall_height,
+        };
 
-          const updatedVendors = vendorsResponse.data
-            .map(normalizeTradeshowVendor)
-            .filter(Boolean);
+        const updatedVendors = vendorsResponse.data
+          .map(normalizeTradeshowVendor)
+          .filter(Boolean);
 
-          const updatedBooths = boothsResponse.data.map(booth => ({
-            id: booth.id,
-            type: booth.booth_type,
-            x: booth.x,
-            y: booth.y,
-            width: booth.width,
-            height: booth.height,
-            rotation: booth.rotation || 0,
-            label: booth.label,
-          }));
+        const updatedBooths = boothsResponse.data.map(booth => ({
+          id: booth.id,
+          type: booth.booth_type,
+          x: booth.position_x,
+          y: booth.position_y,
+          width: booth.width,
+          height: booth.height,
+          rotation: booth.rotation || 0,
+          label: booth.label,
+        }));
 
-          const updatedRoutes = routesResponse.success ? routesResponse.data.map(route => ({
-            id: route.id,
-            name: route.name,
-            color: route.color,
-            boothIds: route.booth_ids || [],
-          })) : [];
+        const updatedRoutes = routesResponse.success ? routesResponse.data.map(route => ({
+          id: route.id,
+          name: route.name,
+          color: route.color,
+          boothIds: route.booth_ids || [],
+        })) : [];
 
-          setEvent(updatedEvent);
-
-          if (updatedVendors.length > 0) {
-            setVendors(updatedVendors);
-            saveTradeshowVendors(updatedVendors);
-          } else {
-            setVendors(cachedVendors);
-          }
-
-          if (updatedBooths.length > 0) {
-            setBooths(updatedBooths);
-            saveTradeshowLayout(updatedBooths);
-          } else {
-            setBooths(cachedLayout);
-          }
-
-          if (updatedRoutes.length > 0) {
-            setRoutes(updatedRoutes);
-            saveTradeshowRoutes(updatedRoutes);
-          } else {
-            setRoutes(cachedRoutes);
-          }
-
-          saveTradeshowEvent(updatedEvent);
-
-          setIsOnline(true);
-          console.log('✓ Data refreshed from backend API');
-        }
+        setEvent(updatedEvent);
+        setVendors(updatedVendors);
+        setBooths(updatedBooths);
+        setRoutes(updatedRoutes);
+        setIsOnline(true);
+        console.log('✓ Data loaded from backend API');
+      } else {
+        console.warn('Failed to load event data from backend');
+        setIsOnline(false);
       }
     } catch (error) {
-      console.warn('Failed to load from backend, using cached data:', error);
+      console.error('Failed to load from backend:', error);
       setIsOnline(false);
-
-      const loadedEvent = loadTradeshowEvent();
-      const loadedLayout = loadTradeshowLayout();
-      const loadedVendors = loadTradeshowVendors();
-      const loadedRoutes = loadTradeshowRoutes();
-
-      setEvent(loadedEvent);
-      setBooths(loadedLayout);
-      setVendors(loadedVendors);
-      setRoutes(loadedRoutes);
     }
   };
 
@@ -783,7 +719,7 @@ export function TradeshowKiosk() {
         }
         return v;
       });
-      saveTradeshowVendors(nextVendors);
+      // No localStorage - data is only in state and backend
       return nextVendors;
     });
 
