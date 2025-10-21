@@ -86,6 +86,38 @@ def designs_detail(request, design_id):
     design.delete()
     return Response(status=204)
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def designs_detail(request, design_id):
+    """Update metadata (rename/kind) or delete a design (owner only)."""
+    design = get_object_or_404(Design, id=design_id, user=request.user)
+    if request.method == "PATCH":
+        name = (request.data.get("name") or "").strip()
+        kind = (request.data.get("kind") or "").strip()
+        changed = False
+        if name and name != design.name:
+            # ensure unique per user
+            if Design.objects.filter(user=request.user, name=name).exclude(id=design.id).exists():
+                return Response({"detail": "name already exists"}, status=400)
+            design.name = name
+            changed = True
+        if kind and kind != design.kind:
+            design.kind = kind
+            changed = True
+        if changed:
+            design.save(update_fields=["name", "kind", "updated_at"])
+        return Response({
+            "id": design.id,
+            "name": design.name,
+            "kind": design.kind,
+            "updated_at": design.updated_at,
+            "latest_version": design.versions.aggregate(Max("version")).get("version__max") or 0,
+        })
+
+    # DELETE
+    design.delete()
+    return Response(status=204)
+
 
 
 @api_view(["GET", "POST"])
@@ -143,4 +175,34 @@ def design_version_detail(request, design_id, version):
     return Response({"version": v.version, "data": v.data, "note": v.note, "created_at": v.created_at})
 
 
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def create_share_link(request, design_id):
+    """Owner creates a share link with role=view|edit, returns token."""
+    design = get_object_or_404(Design, id=design_id, user=request.user)
+    role = (request.data.get("role") or "view").lower()
+    if role not in ("view", "edit"):
+        return Response({"detail": "Invalid role"}, status=400)
+    token = secrets.token_urlsafe(16)
+    link = DesignLink.objects.create(design=design, token=token, role=role, created_by=request.user)
+    return Response({"token": link.token, "role": link.role})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def invite_user(request, design_id):
+    """Owner invites a user by email with role=view|edit. Creates user if needed (optional behavior: for now require existing)."""
+    design = get_object_or_404(Design, id=design_id, user=request.user)
+    email = (request.data.get("email") or "").strip().lower()
+    role = (request.data.get("role") or "view").lower()
+    if not email or role not in ("view", "edit"):
+        return Response({"detail": "email and valid role required"}, status=400)
+    User = get_user_model()
+    user = User.objects.filter(email=email).first()
+    if not user:
+        return Response({"detail": "User not found"}, status=404)
+    share, created = DesignShare.objects.update_or_create(
+        design=design, user=user, defaults={"role": role}
+    )
+    return Response({"user_id": user.id, "email": user.email, "role": share.role})
 
