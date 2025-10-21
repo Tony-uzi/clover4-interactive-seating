@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.db.models import Max
-from .models import Design, DesignVersion, DesignShare, DesignLink
+from .models import Design, DesignVersion
 from django.contrib.auth import get_user_model
 import secrets
 
@@ -88,35 +88,36 @@ def designs_detail(request, design_id):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def shared_designs(request):
-    """List designs shared with current user, including role and latest_version."""
-    user = request.user
-    shares = (
-        DesignShare.objects.select_related("design", "design__user")
-        .filter(user=user)
-        .order_by("-design__updated_at", "-design__id")
-    )
-    # prefetch latest versions in one pass
-    design_ids = [s.design_id for s in shares]
-    latest_map = {
-        row["design_id"]: row["max_v"]
-        for row in DesignVersion.objects.filter(design_id__in=design_ids)
-        .values("design_id")
-        .annotate(max_v=Max("version"))
-    }
-    data = []
-    for s in shares:
-        d = s.design
-        data.append({
-            "id": d.id,
-            "name": d.name,
-            "kind": d.kind,
-            "updated_at": d.updated_at,
-            "latest_version": latest_map.get(d.id, 0),
-            "role": s.role,
-            "owner": {"id": d.user_id, "name": getattr(d.user, "first_name", ""), "email": getattr(d.user, "email", "")},
+def designs_detail(request, design_id):
+    """Update metadata (rename/kind) or delete a design (owner only)."""
+    design = get_object_or_404(Design, id=design_id, user=request.user)
+    if request.method == "PATCH":
+        name = (request.data.get("name") or "").strip()
+        kind = (request.data.get("kind") or "").strip()
+        changed = False
+        if name and name != design.name:
+            # ensure unique per user
+            if Design.objects.filter(user=request.user, name=name).exclude(id=design.id).exists():
+                return Response({"detail": "name already exists"}, status=400)
+            design.name = name
+            changed = True
+        if kind and kind != design.kind:
+            design.kind = kind
+            changed = True
+        if changed:
+            design.save(update_fields=["name", "kind", "updated_at"])
+        return Response({
+            "id": design.id,
+            "name": design.name,
+            "kind": design.kind,
+            "updated_at": design.updated_at,
+            "latest_version": design.versions.aggregate(Max("version")).get("version__max") or 0,
         })
-    return Response(data)
+
+    # DELETE
+    design.delete()
+    return Response(status=204)
+
 
 
 @api_view(["GET", "POST"])
@@ -127,19 +128,7 @@ def design_versions(request, design_id):
     GET: returns versions meta
     POST: body {data, note?} -> creates next version
     """
-    design = get_object_or_404(Design, id=design_id)
-    # view access for GET, edit access for POST
-    if request.method == "GET":
-        if design.user_id != request.user.id:
-            has_share = DesignShare.objects.filter(design=design, user=request.user).exists()
-            if not has_share:
-                return Response({"detail": "Forbidden"}, status=403)
-    else:
-        # POST requires owner or editor share
-        if design.user_id != request.user.id:
-            share = DesignShare.objects.filter(design=design, user=request.user).first()
-            if not share or share.role != "edit":
-                return Response({"detail": "Forbidden"}, status=403)
+    design = get_object_or_404(Design, id=design_id, user=request.user)
 
     if request.method == "GET":
         versions = design.versions.order_by("-version").all()
@@ -169,17 +158,8 @@ def design_versions(request, design_id):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def design_latest(request, design_id):
-    """Fetch latest version data for a design.
-
-    Access control: owner, shared user (view/edit), or via link token in query (?token=...).
-    """
-    design = get_object_or_404(Design, id=design_id)
-    if design.user_id != request.user.id:
-        token = request.query_params.get("token")
-        has_share = DesignShare.objects.filter(design=design, user=request.user).exists()
-        has_link = token and DesignLink.objects.filter(design=design, token=token).exists()
-        if not has_share and not has_link:
-            return Response({"detail": "Forbidden"}, status=403)
+    """Fetch latest version data for a design (owner only)."""
+    design = get_object_or_404(Design, id=design_id, user=request.user)
     latest = design.versions.order_by("-version").first()
     if not latest:
         return Response({"version": 0, "data": {"items": []}})
@@ -189,14 +169,8 @@ def design_latest(request, design_id):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def design_version_detail(request, design_id, version):
-    """Fetch specific version data with same access control as latest."""
-    design = get_object_or_404(Design, id=design_id)
-    if design.user_id != request.user.id:
-        token = request.query_params.get("token")
-        has_share = DesignShare.objects.filter(design=design, user=request.user).exists()
-        has_link = token and DesignLink.objects.filter(design=design, token=token).exists()
-        if not has_share and not has_link:
-            return Response({"detail": "Forbidden"}, status=403)
+    """Fetch specific version data (owner only)."""
+    design = get_object_or_404(Design, id=design_id, user=request.user)
     v = get_object_or_404(DesignVersion, design=design, version=version)
     return Response({"version": v.version, "data": v.data, "note": v.note, "created_at": v.created_at})
 

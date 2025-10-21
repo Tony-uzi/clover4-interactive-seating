@@ -207,98 +207,101 @@ export default function VendorPanel({
         </div>
       </div>
 
-      {/* Add form */}
-      {showAddForm && (
-        <div className="p-4 border-b border-gray-200">
-          <VendorForm
-            onSave={(vendorData) => {
-              onAddVendor({
-                ...vendorData,
-                id: Date.now(),
-                boothNumber: null,
-              });
-              setShowAddForm(false);
-            }}
-            onCancel={() => setShowAddForm(false)}
-          />
-        </div>
-      )}
-
-      {/* Vendor list */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        {filteredVendors.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">
-            {searchTerm ? 'No matching vendors found' : 'No vendors yet, click "Add" to start'}
+      {/* Content area with scroll */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        {/* Add form */}
+        {showAddForm && (
+          <div className="flex-shrink-0 p-4 border-b border-gray-200 bg-white shadow-sm">
+            <VendorForm
+              onSave={(vendorData) => {
+                onAddVendor({
+                  ...vendorData,
+                  id: Date.now(),
+                  boothNumber: null,
+                });
+                setShowAddForm(false);
+              }}
+              onCancel={() => setShowAddForm(false)}
+            />
           </div>
-        ) : (
-          filteredVendors.map((vendor) => (
-            <div
-              key={vendor.id}
-              className="p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-green-400 transition-colors cursor-move"
-              draggable={!!onVendorDragStart}
-              onDragStart={(event) => handleDragStart(event, vendor)}
-              onDragEnd={handleDragEnd}
-            >
-              {editingVendor?.id === vendor.id ? (
-                <VendorForm
-                  vendor={editingVendor}
-                  onSave={(updatedVendor) => {
-                    onUpdateVendor(vendor.id, updatedVendor);
-                    setEditingVendor(null);
-                  }}
-                  onCancel={() => setEditingVendor(null)}
-                />
-              ) : (
-                <>
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-800">{vendor.name}</h3>
-                      {vendor.contactName && (
-                        <p className="text-xs text-gray-500">Contact: {vendor.contactName}</p>
+        )}
+
+        {/* Vendor list */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {filteredVendors.length === 0 ? (
+            <div className="text-center text-gray-500 py-8">
+              {searchTerm ? 'No matching vendors found' : 'No vendors yet, click "Add" to start'}
+            </div>
+          ) : (
+            filteredVendors.map(vendor => (
+              <div
+                key={vendor.id}
+                className="mx-4 mb-2 p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-green-400 transition-colors cursor-move"
+                draggable={!!onVendorDragStart}
+                onDragStart={(event) => handleDragStart(event, vendor)}
+                onDragEnd={handleDragEnd}
+              >
+                {editingVendor?.id === vendor.id ? (
+                  <VendorForm
+                    vendor={editingVendor}
+                    onSave={(updatedVendor) => {
+                      onUpdateVendor(vendor.id, updatedVendor);
+                      setEditingVendor(null);
+                    }}
+                    onCancel={() => setEditingVendor(null)}
+                  />
+                ) : (
+                  <>
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-800">{vendor.name}</h3>
+                        {vendor.contactName && (
+                          <p className="text-xs text-gray-500">Contact: {vendor.contactName}</p>
+                        )}
+                      </div>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => setEditingVendor(vendor)}
+                          className="p-1 hover:bg-gray-200 rounded"
+                        >
+                          <FiEdit2 className="w-4 h-4 text-gray-600" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm('Are you sure you want to delete this vendor?')) {
+                              onDeleteVendor(vendor.id);
+                            }
+                          }}
+                          className="p-1 hover:bg-red-100 rounded"
+                        >
+                          <FiTrash2 className="w-4 h-4 text-red-600" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1 text-xs">
+                      <span className="px-2 py-1 bg-green-100 text-green-700 rounded">
+                        {vendor.category}
+                      </span>
+                      {vendor.boothNumber && (
+                        <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
+                          Booth: {vendor.boothNumber}
+                        </span>
                       )}
                     </div>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => setEditingVendor(vendor)}
-                        className="p-1 hover:bg-gray-200 rounded"
-                      >
-                        <FiEdit2 className="w-4 h-4 text-gray-600" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (confirm('Are you sure you want to delete this vendor?')) {
-                            onDeleteVendor(vendor.id);
-                          }
-                        }}
-                        className="p-1 hover:bg-red-100 rounded"
-                      >
-                        <FiTrash2 className="w-4 h-4 text-red-600" />
-                      </button>
-                    </div>
-                  </div>
 
-                  <div className="flex flex-wrap gap-1 text-xs">
-                    <span className="px-2 py-1 bg-green-100 text-green-700 rounded">
-                      {vendor.category}
-                    </span>
-                    {vendor.boothNumber && (
-                      <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
-                        Booth: {vendor.boothNumber}
-                      </span>
+                    {vendor.phone && (
+                      <p className="text-xs text-gray-600 mt-2">📞 {vendor.phone}</p>
                     )}
-                  </div>
-
-                  {vendor.phone && (
-                    <p className="text-xs text-gray-600 mt-2">📞 {vendor.phone}</p>
-                  )}
-                  {vendor.notes && (
-                    <p className="text-xs text-gray-600 mt-1">{vendor.notes}</p>
-                  )}
-                </>
-              )}
-            </div>
-          ))
-        )}
+                    {vendor.notes && (
+                      <p className="text-xs text-gray-600 mt-1">{vendor.notes}</p>
+                    )}
+                  </>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

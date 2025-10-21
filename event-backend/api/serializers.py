@@ -1,111 +1,215 @@
-# 这个文件Serializer 负责把「Python/Django对象 ↔ JSON」互相转换，并在输入时做校验。这是数据边界层。
-# 覆盖了conference和tradeshow
-# 继承 serializers.ModelSerializer：自动根据模型字段生成序列化/反序列化规则。
-# fields = "__all__"：暴露所有模型字段到 API。
-# read_only_fields = (...)：只读字段，前端传多余字段不会生效，防止越权。
-# 个别 Event 序列化器里有统计只读字段（如 guest_count/element_count/vendor_count/booth_count）：
-# 由 views 里 annotate() 提供，序列化时一并输出，方便前端展示列表统计。
-
 from rest_framework import serializers
-from .models import *
+from django.contrib.auth import get_user_model
+from .models import (
+    Design, DesignVersion,
+    ConferenceEvent, ConferenceElement, ConferenceGroup,
+    ConferenceGuest, ConferenceSeatAssignment,
+    TradeshowEvent, TradeshowBooth, TradeshowVendor,
+    TradeshowBoothAssignment, TradeshowRoute
+)
 
-# Conference
+User = get_user_model()
+
+
+# ========================================== Design Serializers ==========================================
+class DesignSerializer(serializers.ModelSerializer):
+    latest_version = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Design
+        fields = ['id', 'name', 'kind', 'created_at', 'updated_at', 'latest_version']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class DesignVersionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DesignVersion
+        fields = ['version', 'data', 'note', 'created_at']
+        read_only_fields = ['version', 'created_at']
+
+
+# ========================================== Conference Serializers ==========================================
+class ConferenceEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConferenceEvent
+        fields = [
+            'id', 'name', 'description', 'event_date',
+            'room_width', 'room_height', 'is_public',
+            'share_token', 'metadata', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'share_token', 'created_at', 'updated_at']
+
+
+class ConferenceEventListSerializer(serializers.ModelSerializer):
+    guest_count = serializers.IntegerField(read_only=True)
+    element_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = ConferenceEvent
+        fields = [
+            'id', 'name', 'description', 'event_date',
+            'guest_count', 'element_count', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
 class ConferenceElementSerializer(serializers.ModelSerializer):
     class Meta:
         model = ConferenceElement
-        fields = "__all__"
-        read_only_fields = ("id", "created_at", "updated_at", "event")
+        fields = [
+            'id', 'event', 'element_type', 'label', 'seats',
+            'position_x', 'position_y', 'width', 'height',
+            'rotation', 'scale_x', 'scale_y',
+            'door_width', 'door_swing', 'outlet_type',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class ConferenceGroupSerializer(serializers.ModelSerializer):
+    guest_count = serializers.IntegerField(read_only=True, required=False)
+
+    class Meta:
+        model = ConferenceGroup
+        fields = ['id', 'event', 'name', 'color', 'is_system', 'guest_count', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
 
 class ConferenceGuestSerializer(serializers.ModelSerializer):
+    group_name = serializers.CharField(source='group.name', read_only=True, required=False)
+    seat_info = serializers.SerializerMethodField()
+
     class Meta:
         model = ConferenceGuest
-        fields = "__all__"
-        read_only_fields = ("id", "created_at", "updated_at", "event")
+        fields = [
+            'id', 'event', 'group', 'group_name', 'name', 'email',
+            'dietary_requirements', 'company', 'phone',
+            'checked_in', 'check_in_time', 'metadata',
+            'seat_info', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'check_in_time']
+
+    def get_seat_info(self, obj):
+        assignment = obj.seat_assignments.first()
+        if assignment:
+            return {
+                'element_id': str(assignment.element_id),
+                'element_label': assignment.element.label,
+                'seat_number': assignment.seat_number
+            }
+        return None
+
 
 class ConferenceSeatAssignmentSerializer(serializers.ModelSerializer):
+    guest_name = serializers.CharField(source='guest.name', read_only=True)
+    element_label = serializers.CharField(source='element.label', read_only=True)
+
     class Meta:
         model = ConferenceSeatAssignment
-        fields = "__all__"
-        read_only_fields = ("id", "created_at", "updated_at", "event")
+        fields = [
+            'id', 'event', 'element', 'element_label',
+            'guest', 'guest_name', 'seat_number',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
-class ConferenceEventSerializer(serializers.ModelSerializer):
-    guest_count = serializers.IntegerField(read_only=True)
-    element_count = serializers.IntegerField(read_only=True)
+
+# ========================================== Tradeshow Serializers ==========================================
+class TradeshowEventSerializer(serializers.ModelSerializer):
     class Meta:
-        model = ConferenceEvent
-        fields = "__all__"
-        read_only_fields = ("id", "created_at", "updated_at", "user", "share_token")
+        model = TradeshowEvent
+        fields = [
+            'id', 'name', 'description', 'event_date_start', 'event_date_end',
+            'hall_width', 'hall_height', 'preset_layout', 'is_public',
+            'share_token', 'metadata', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'share_token', 'created_at', 'updated_at']
 
-# Tradeshow
+
+class TradeshowEventListSerializer(serializers.ModelSerializer):
+    vendor_count = serializers.IntegerField(read_only=True)
+    booth_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = TradeshowEvent
+        fields = [
+            'id', 'name', 'description', 'event_date_start', 'event_date_end',
+            'vendor_count', 'booth_count', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
 class TradeshowBoothSerializer(serializers.ModelSerializer):
     class Meta:
         model = TradeshowBooth
-        fields = "__all__"
-        read_only_fields = ("id", "created_at", "updated_at", "event")
+        fields = [
+            'id', 'event', 'booth_type', 'category', 'label',
+            'position_x', 'position_y', 'width', 'height',
+            'rotation', 'scale_x', 'scale_y',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
 
 class TradeshowVendorSerializer(serializers.ModelSerializer):
+    booth_info = serializers.SerializerMethodField()
+
     class Meta:
         model = TradeshowVendor
-        fields = "__all__"
-        read_only_fields = ("id", "created_at", "updated_at", "event")
+        fields = [
+            'id', 'event', 'company_name', 'contact_name',
+            'contact_email', 'contact_phone', 'category',
+            'booth_size_preference', 'website', 'logo_url',
+            'description', 'checked_in', 'check_in_time',
+            'metadata', 'booth_info', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'check_in_time']
+
+    def get_booth_info(self, obj):
+        assignment = obj.assignments.first()
+        if assignment:
+            return {
+                'booth_id': str(assignment.booth_id),
+                'booth_label': assignment.booth.label,
+                'booth_type': assignment.booth.booth_type
+            }
+        return None
+
 
 class TradeshowBoothAssignmentSerializer(serializers.ModelSerializer):
+    vendor_name = serializers.CharField(source='vendor.company_name', read_only=True)
+    booth_label = serializers.CharField(source='booth.label', read_only=True)
+
     class Meta:
         model = TradeshowBoothAssignment
-        fields = "__all__"
-        read_only_fields = ("id", "created_at", "updated_at", "event")
+        fields = [
+            'id', 'event', 'booth', 'booth_label',
+            'vendor', 'vendor_name',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
 
 class TradeshowRouteSerializer(serializers.ModelSerializer):
     class Meta:
         model = TradeshowRoute
-        fields = "__all__"
-        read_only_fields = ("id", "created_at", "updated_at", "event")
+        fields = [
+            'id', 'event', 'name', 'route_type', 'booth_order',
+            'created_by', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
-class TradeshowEventSerializer(serializers.ModelSerializer):
-    vendor_count = serializers.IntegerField(read_only=True)
-    booth_count = serializers.IntegerField(read_only=True)
-    class Meta:
-        model = TradeshowEvent
-        fields = "__all__"
-        read_only_fields = ("id", "created_at", "updated_at", "user", "share_token")
 
-# 具体流程：
-# 例子，后续删掉，创建会议事件：
-# POST /api/conference/events/
-# {
-#   "name": "Annual Meeting",
-#   "description": "VIP dinner",
-#   "room_width": 24.0,
-#   "room_height": 16.0
-# }
+# ========================================== Bulk Import Serializers ==========================================
+class BulkGuestImportSerializer(serializers.Serializer):
+    """Serializer for bulk CSV guest import"""
+    guests = serializers.ListField(
+        child=serializers.DictField()
+    )
 
-# 响应（由 ConferenceEventSerializer 输出）：
-# {
-#   "id": "f5e8...-uuid",
-#   "user": 1,
-#   "name": "Annual Meeting",
-#   "description": "VIP dinner",
-#   "room_width": "24.00",
-#   "room_height": "16.00",
-#   "is_public": false,
-#   "share_token": null,
-#   "guest_count": 0,
-#   "element_count": 0,
-#   "created_at": "2025-10-06T10:20:30Z",
-#   "updated_at": "2025-10-06T10:20:30Z"
-# }
 
-# 批量新增元素（elements action 内部还是逐个用 ConferenceElementSerializer 校验）：
-# POST /api/conference/events/<event_id>/elements/
-# {
-#   "elements": [
-#     {
-#       "element_type": "table_round",
-#       "label": "T1",
-#       "seats": 8,
-#       "position_x": 100, "position_y": 120,
-#       "width": 1.8, "height": 1.8,
-#       "rotation": 0, "scale_x": 1, "scale_y": 1
-#     }
-#   ]
-# }
+class BulkVendorImportSerializer(serializers.Serializer):
+    """Serializer for bulk CSV vendor import"""
+    vendors = serializers.ListField(
+        child=serializers.DictField()
+    )

@@ -1,3 +1,11 @@
+// ==================== Design System API ====================
+// 设计稿系统API（云端保存、版本控制、分享功能）
+// 
+// 注意：会议和展会的API请使用 server-actions 目录中的模块：
+// - import * as ConferenceAPI from '@/server-actions/conference-planner'
+// - import * as TradeshowAPI from '@/server-actions/tradeshow-planner'
+// - import * as AuthAPI from '@/server-actions/auth'
+
 export function getAuthToken() {
   return localStorage.getItem('token') || '';
 }
@@ -8,6 +16,8 @@ function authHeaders() {
     ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
     : { 'Content-Type': 'application/json' };
 }
+
+// ==================== Design Management ====================
 
 export async function listDesigns() {
   const res = await fetch('/api/designs/', { headers: { Authorization: `Bearer ${getAuthToken()}` } });
@@ -24,6 +34,26 @@ export async function createOrGetDesign(name, kind = 'custom') {
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || 'Failed to create/get design');
   return data; // {id, name, kind, latest_version, updated_at}
+}
+
+export async function updateDesign(designId, { name, kind }) {
+  const res = await fetch(`/api/designs/${designId}/`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ name, kind }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Failed to update design');
+  return data;
+}
+
+export async function deleteDesign(designId) {
+  const res = await fetch(`/api/designs/${designId}/`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  });
+  if (!res.ok && res.status !== 204) throw new Error('Failed to delete design');
+  return true;
 }
 
 export async function saveDesignVersion(designId, data, note = '') {
@@ -63,34 +93,5 @@ export async function getLatestByToken(designId, token) {
   return out; // {version, data}
 }
 
-export async function listSharedDesigns() {
-  const res = await fetch('/api/designs/shared/', {
-    headers: { Authorization: `Bearer ${getAuthToken()}` },
-  });
-  if (!res.ok) throw new Error('Fetch shared designs failed');
-  return res.json();
-}
-
-export async function createShareLink(designId, role = 'view') {
-  const res = await fetch(`/api/designs/${designId}/share-link/`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({ role }),
-  });
-  const out = await res.json();
-  if (!res.ok) throw new Error(out.detail || 'Create share link failed');
-  return out; // {token, role}
-}
-
-export async function inviteUser(designId, email, role = 'view') {
-  const res = await fetch(`/api/designs/${designId}/invite/`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: JSON.stringify({ email, role }),
-  });
-  const out = await res.json();
-  if (!res.ok) throw new Error(out.detail || 'Invite failed');
-  return out; // {user_id, email, role}
-}
 
 

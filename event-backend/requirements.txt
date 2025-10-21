@@ -1,20 +1,7 @@
-# --- Core ---
-Django==5.2.7
-djangorestframework==3.16.1
-djangorestframework-simplejwt>=5.3,<6
-django-cors-headers>=4.3,<5
-django-filter>=24,<25
-python-dotenv>=1,<2
-psycopg[binary]>=3.1,<4
-Pillow>=10,<12
-qrcode[pil]>=7,<8
-
-# Django 的依赖
-PyJWT>=2.8,<3
-sqlparse>=0.5,<0.6
-tzdata>=2023.3
-
-# --- Optional: 实时/文档 ---
-# channels>=4,<5
-# channels-redis>=4,<5
-# drf-spectacular>=0.27,<0.28
+Django==5.2.6
+djangorestframework==3.15.2
+django-cors-headers==4.6.0
+psycopg2-binary==2.9.10
+PyJWT==2.10.1
+python-dotenv==1.0.1
+gunicorn==23.0.0

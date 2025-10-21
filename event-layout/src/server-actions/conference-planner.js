@@ -1,285 +1,440 @@
-// Conference Planner API Actions with Fake Data
-// TODO: Replace fake data with real API calls when backend is ready
+// Conference Planner API Actions - Connected to Real Backend
+// 会议规划器 - 已连接后端
 
-// Fake data for development
-const FAKE_GUESTS = [
-  {
-    id: 1,
-    name: 'Alice Johnson',
-    email: 'alice@example.com',
-    group: 'VIP',
-    dietaryPreference: 'Vegetarian',
-    attendance: true,
-    notes: 'Allergic to peanuts',
-    tableNumber: 1,
-    seatNumber: 1
-  },
-  {
-    id: 2,
-    name: 'Bob Smith',
-    email: 'bob@example.com',
-    group: 'General',
-    dietaryPreference: 'None',
-    attendance: true,
-    notes: '',
-    tableNumber: 1,
-    seatNumber: 2
-  },
-  {
-    id: 3,
-    name: 'Carol White',
-    email: 'carol@example.com',
-    group: 'VIP',
-    dietaryPreference: 'Vegan',
-    attendance: false,
-    notes: 'Late arrival expected',
-    tableNumber: 2,
-    seatNumber: 1
-  },
-  {
-    id: 4,
-    name: 'David Brown',
-    email: 'david@example.com',
-    group: 'Staff',
-    dietaryPreference: 'Halal',
-    attendance: true,
-    notes: '',
-    tableNumber: 2,
-    seatNumber: 2
+
+
+function getAuthToken() {
+  return localStorage.getItem('token') || '';
+}
+
+function authHeaders() {
+  const token = getAuthToken();
+  return {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  };
+}
+
+async function handleResponse(response) {
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `HTTP Error ${response.status}`);
   }
-];
+  return response.json();
+}
 
-const FAKE_EVENT = {
-  id: 1,
-  name: 'Annual Conference 2025',
-  description: 'Company annual conference',
-  date: '2025-12-15',
-  roomWidth: 24,
-  roomHeight: 16,
-  shareToken: 'fake-share-token-123'
-};
-
-const FAKE_ELEMENTS = [
-  {
-    id: 1,
-    type: 'table_round',
-    x: 5,
-    y: 5,
-    width: 1.8,
-    height: 1.8,
-    rotation: 0,
-    seats: 8,
-    label: 'Table 1'
-  },
-  {
-    id: 2,
-    type: 'table_rect',
-    x: 10,
-    y: 5,
-    width: 1.8,
-    height: 0.8,
-    rotation: 0,
-    seats: 6,
-    label: 'Table 2'
-  }
-];
-
-// Simulated delay for API calls
-const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
+// ========================================
+// 事件管理 API
+// ========================================
 
 /**
- * Get all guests for an event
- * @param {number} eventId - Event ID
- * @returns {Promise<Array>} List of guests
+ * Get all conference events
  */
-export async function getAllGuests(eventId) {
-  await delay();
-  console.log('Fetching guests for event:', eventId);
-  return { success: true, data: FAKE_GUESTS };
+export async function getAllEvents() {
+  try {
+    const response = await fetch('/api/conference/events/', {
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Get events failed:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 /**
+ * Get a single event by ID
+ */
+export async function getEvent(eventId) {
+  try {
+    const response = await fetch(`/api/conference/events/${eventId}/`, {
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Get event failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Create a new conference event
+ */
+export async function createEvent(eventData) {
+  try {
+    const response = await fetch('/api/conference/events/', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        name: eventData.name,
+        description: eventData.description || '',
+        room_width: eventData.roomWidth || eventData.room_width || 24.0,
+        room_height: eventData.roomHeight || eventData.room_height || 16.0,
+        event_date: eventData.eventDate || eventData.event_date || new Date().toISOString(),
+        canvas_shape: eventData.canvasShape || eventData.canvas_shape || 'rectangle',
+        is_public: eventData.isPublic || eventData.is_public || false
+      })
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Create event failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Update an existing event
+ */
+export async function updateEvent(eventId, updates) {
+  try {
+    const response = await fetch(`/api/conference/events/${eventId}/`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        name: updates.name,
+        description: updates.description,
+        room_width: updates.roomWidth || updates.room_width,
+        room_height: updates.roomHeight || updates.room_height,
+        event_date: updates.eventDate || updates.event_date,
+        canvas_shape: updates.canvasShape || updates.canvas_shape,
+        is_public: updates.isPublic || updates.is_public
+      })
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Update event failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Delete an event
+ */
+export async function deleteEvent(eventId) {
+  try {
+    const response = await fetch(`/api/conference/events/${eventId}/`, {
+      method: 'DELETE',
+      headers: authHeaders()
+    });
+    if (!response.ok) {
+      throw new Error(`Delete failed: ${response.status}`);
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Delete event failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ========================================
+// 嘉宾管理 API
+// ========================================
+
+/**
+ * Get all guests for an event
+ */
+export async function getAllGuests(eventId) {
+  try {
+    const response = await fetch(`/api/conference/events/${eventId}/guests/`, {
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Get guests failed:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+}
+
+// Backward-compatible alias
+export const getGuests = getAllGuests;
+
+/**
  * Get a single guest by ID
- * @param {number} guestId - Guest ID
- * @returns {Promise<Object>} Guest details
  */
 export async function getGuest(guestId) {
-  await delay();
-  const guest = FAKE_GUESTS.find(g => g.id === guestId);
-  return { success: !!guest, data: guest };
+  try {
+    const response = await fetch(`/api/conference/guests/${guestId}/`, {
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Get guest failed:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 /**
  * Create a new guest
- * @param {Object} guestData - Guest information
- * @returns {Promise<Object>} Created guest
  */
 export async function createGuest(guestData) {
-  await delay();
-  const newGuest = {
-    id: Math.max(...FAKE_GUESTS.map(g => g.id), 0) + 1,
-    ...guestData,
-    attendance: guestData.attendance ?? true
-  };
-  FAKE_GUESTS.push(newGuest);
-  return { success: true, data: newGuest };
+  try {
+    const response = await fetch('/api/conference/guests/', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        event: guestData.eventId || guestData.event,
+        name: guestData.name,
+        email: guestData.email || '',
+        company: guestData.company || '',
+        phone: guestData.phone || '',
+        dietary_requirements: guestData.dietaryPreference || guestData.dietary_requirements || '',
+        notes: guestData.notes || '',
+        group: guestData.group || '',
+        attendance: guestData.attendance !== undefined ? guestData.attendance : true
+      })
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Create guest failed:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 /**
  * Update an existing guest
- * @param {number} guestId - Guest ID
- * @param {Object} updates - Updated fields
- * @returns {Promise<Object>} Updated guest
  */
 export async function updateGuest(guestId, updates) {
-  await delay();
-  const index = FAKE_GUESTS.findIndex(g => g.id === guestId);
-  if (index !== -1) {
-    FAKE_GUESTS[index] = { ...FAKE_GUESTS[index], ...updates };
-    return { success: true, data: FAKE_GUESTS[index] };
+  try {
+    const response = await fetch(`/api/conference/guests/${guestId}/`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        name: updates.name,
+        email: updates.email,
+        company: updates.company,
+        phone: updates.phone,
+        dietary_requirements: updates.dietaryPreference || updates.dietary_requirements,
+        notes: updates.notes,
+        group: updates.group,
+        attendance: updates.attendance
+      })
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Update guest failed:', error);
+    return { success: false, error: error.message };
   }
-  return { success: false, error: 'Guest not found' };
 }
 
 /**
  * Delete a guest
- * @param {number} guestId - Guest ID
- * @returns {Promise<Object>} Success status
  */
 export async function deleteGuest(guestId) {
-  await delay();
-  const index = FAKE_GUESTS.findIndex(g => g.id === guestId);
-  if (index !== -1) {
-    FAKE_GUESTS.splice(index, 1);
+  try {
+    const response = await fetch(`/api/conference/guests/${guestId}/`, {
+      method: 'DELETE',
+      headers: authHeaders()
+    });
+    if (!response.ok) {
+      throw new Error(`Delete failed: ${response.status}`);
+    }
     return { success: true };
+  } catch (error) {
+    console.error('Delete guest failed:', error);
+    return { success: false, error: error.message };
   }
-  return { success: false, error: 'Guest not found' };
-}
-
-/**
- * Get all elements (tables, chairs, etc.) for an event
- * @param {number} eventId - Event ID
- * @returns {Promise<Array>} List of elements
- */
-export async function getElements(eventId) {
-  await delay();
-  console.log('Fetching elements for event:', eventId);
-  return { success: true, data: FAKE_ELEMENTS };
-}
-
-/**
- * Save layout (elements and their positions)
- * @param {number} eventId - Event ID
- * @param {Array} elements - Array of element data
- * @returns {Promise<Object>} Success status
- */
-export async function saveLayout(eventId, elements) {
-  await delay();
-  console.log('Saving layout for event:', eventId, elements);
-  // In real implementation, this would send to backend
-  // For now, save to localStorage
-  localStorage.setItem(`conference-layout-${eventId}`, JSON.stringify(elements));
-  return { success: true, data: { saved: elements.length } };
-}
-
-/**
- * Load saved layout from storage
- * @param {number} eventId - Event ID
- * @returns {Promise<Array>} Saved elements
- */
-export async function loadLayout(eventId) {
-  await delay();
-  const saved = localStorage.getItem(`conference-layout-${eventId}`);
-  if (saved) {
-    return { success: true, data: JSON.parse(saved) };
-  }
-  return { success: false, data: [] };
-}
-
-/**
- * Get event details
- * @param {number} eventId - Event ID
- * @returns {Promise<Object>} Event details
- */
-export async function getEvent(eventId) {
-  await delay();
-  return { success: true, data: FAKE_EVENT };
-}
-
-/**
- * Update event details
- * @param {number} eventId - Event ID
- * @param {Object} updates - Updated fields
- * @returns {Promise<Object>} Updated event
- */
-export async function updateEvent(eventId, updates) {
-  await delay();
-  const updatedEvent = { ...FAKE_EVENT, ...updates };
-  return { success: true, data: updatedEvent };
-}
-
-/**
- * Assign guest to seat
- * @param {number} guestId - Guest ID
- * @param {number} tableNumber - Table number
- * @param {number} seatNumber - Seat number
- * @returns {Promise<Object>} Success status
- */
-export async function assignGuestToSeat(guestId, tableNumber, seatNumber) {
-  await delay();
-  return updateGuest(guestId, { tableNumber, seatNumber });
 }
 
 /**
  * Bulk import guests from CSV data
- * @param {number} eventId - Event ID
- * @param {Array} guestsData - Array of guest objects
- * @returns {Promise<Object>} Import result
  */
 export async function bulkImportGuests(eventId, guestsData) {
-  await delay();
-  const imported = [];
-  for (const guestData of guestsData) {
-    const result = await createGuest(guestData);
-    if (result.success) {
-      imported.push(result.data);
-    }
+  try {
+    const response = await fetch(`/api/conference/events/${eventId}/guests_import/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        guests: guestsData.map(g => ({
+          name: g.name,
+          email: g.email || '',
+          company: g.company || '',
+          phone: g.phone || '',
+          dietary_requirements: g.dietaryPreference || g.dietary_requirements || '',
+          notes: g.notes || '',
+          group: g.group || '',
+          attendance: g.attendance !== undefined ? g.attendance : true
+        }))
+      })
+    });
+    const data = await handleResponse(response);
+    return { 
+      success: true, 
+      data: {
+        imported: data.imported_count || data.guests?.length || 0,
+        guests: data.guests || []
+      }
+    };
+  } catch (error) {
+    console.error('Bulk import failed:', error);
+    return { success: false, error: error.message, data: { imported: 0, guests: [] } };
   }
-  return { success: true, data: { imported: imported.length, guests: imported } };
 }
 
 /**
  * Export guests with filters
- * @param {number} eventId - Event ID
- * @param {Object} filters - Filter criteria (e.g., {dietaryPreference: 'Vegan', group: 'VIP'})
- * @returns {Promise<Array>} Filtered guests
  */
 export async function exportGuestsFiltered(eventId, filters = {}) {
-  await delay();
-  let filtered = [...FAKE_GUESTS];
-
-  if (filters.dietaryPreference) {
-    filtered = filtered.filter(g => g.dietaryPreference === filters.dietaryPreference);
+  try {
+    const result = await getAllGuests(eventId);
+    
+    if (!result.success) {
+      return result;
+    }
+    
+    let filtered = result.data;
+    
+    // Apply filters
+    if (filters.dietaryPreference) {
+      filtered = filtered.filter(g => 
+        g.dietary_requirements === filters.dietaryPreference
+      );
+    }
+    
+    if (filters.company) {
+      filtered = filtered.filter(g => g.company === filters.company);
+    }
+    
+    if (filters.group) {
+      filtered = filtered.filter(g => g.group === filters.group);
+    }
+    
+    if (filters.attendance !== undefined) {
+      filtered = filtered.filter(g => g.attendance === filters.attendance);
+    }
+    
+    return { success: true, data: filtered };
+  } catch (error) {
+    console.error('Export filtered guests failed:', error);
+    return { success: false, error: error.message, data: [] };
   }
+}
 
-  if (filters.group) {
-    filtered = filtered.filter(g => g.group === filters.group);
+// ========================================
+// 元素管理 API
+// ========================================
+
+/**
+ * Get all elements (tables, chairs, etc.) for an event
+ */
+export async function getElements(eventId) {
+  try {
+    const response = await fetch(`/api/conference/events/${eventId}/elements/`, {
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Get elements failed:', error);
+    return { success: false, error: error.message, data: [] };
   }
-
-  if (filters.attendance !== undefined) {
-    filtered = filtered.filter(g => g.attendance === filters.attendance);
-  }
-
-  return { success: true, data: filtered };
 }
 
 /**
+ * Save layout (elements and their positions)
+ */
+export async function saveLayout(eventId, elements) {
+  try {
+    const response = await fetch(`/api/conference/events/${eventId}/elements/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        elements: elements.map(el => ({
+          element_type: el.type || el.element_type,
+          label: el.label || '',
+          seats: el.seats || 0,
+          position_x: el.x !== undefined ? el.x : el.position_x,
+          position_y: el.y !== undefined ? el.y : el.position_y,
+          width: el.width,
+          height: el.height,
+          rotation: el.rotation || 0,
+          scale_x: el.scaleX || el.scale_x || 1.0,
+          scale_y: el.scaleY || el.scale_y || 1.0
+        }))
+      })
+    });
+    const data = await handleResponse(response);
+    return { 
+      success: true, 
+      data: { saved: data.elements?.length || 0 }
+    };
+  } catch (error) {
+    console.error('Save layout failed:', error);
+    return { success: false, error: error.message, data: { saved: 0 } };
+  }
+}
+
+/**
+ * Load saved layout from storage
+ */
+export async function loadLayout(eventId) {
+  return getElements(eventId);
+}
+
+// ========================================
+// 座位分配 API
+// ========================================
+
+/**
+ * Assign guest to seat
+ */
+export async function assignGuestToSeat(guestId, tableNumber, seatNumber) {
+  try {
+    // Note: Backend might have different API structure
+    // Adjust according to actual backend implementation
+    return await updateGuest(guestId, { 
+      tableNumber, 
+      seatNumber 
+    });
+  } catch (error) {
+    console.error('Assign guest to seat failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Get seat assignments for an event
+ */
+export async function getSeatAssignments(eventId) {
+  try {
+    const response = await fetch(`/api/conference/events/${eventId}/assignments/`, {
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Get seat assignments failed:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+}
+
+// ========================================
+// 分享功能 API
+// ========================================
+
+/**
  * Generate share token for event
- * @param {number} eventId - Event ID
- * @returns {Promise<Object>} Share token
  */
 export async function generateShareToken(eventId) {
-  await delay();
-  const token = `share-${eventId}-${Date.now()}`;
-  return { success: true, data: { shareToken: token } };
+  try {
+    const response = await fetch(`/api/conference/events/${eventId}/share/`, {
+      method: 'POST',
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
+    return { 
+      success: true, 
+      data: { shareToken: data.share_token || data.token }
+    };
+  } catch (error) {
+    console.error('Generate share token failed:', error);
+    return { success: false, error: error.message };
+  }
 }

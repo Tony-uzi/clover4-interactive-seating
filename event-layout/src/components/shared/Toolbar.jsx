@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { FiSave, FiDownload, FiShare2, FiUpload, FiTrash2, FiHome, FiChevronDown } from 'react-icons/fi';
+import { FiSave, FiDownload, FiUpload, FiTrash2, FiHome, FiChevronDown } from 'react-icons/fi';
 
 export default function Toolbar({
   onSave,
@@ -11,9 +11,9 @@ export default function Toolbar({
   onExportCSVFiltered,
   onExportCSVByGroup,
   onImportCSV,
-  onShare,
   onClear,
   title,
+  onNavigateHome,
 }) {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef(null);
@@ -32,14 +32,14 @@ export default function Toolbar({
     <div className="bg-white border-b border-gray-200 px-6 py-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link
-            to="/"
+          <button
+            onClick={onNavigateHome}
             className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
             title="Back to Home"
           >
             <FiHome className="w-5 h-5" />
             <span className="text-sm font-medium">Home</span>
-          </Link>
+          </button>
           <div className="h-6 w-px bg-gray-300"></div>
           <h1 className="text-xl font-bold text-gray-800">{title}</h1>
         </div>
@@ -126,17 +126,6 @@ export default function Toolbar({
             </button>
           )}
 
-          {onShare && (
-            <button
-              onClick={onShare}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              title="Share"
-            >
-              <FiShare2 className="w-4 h-4" />
-              <span className="text-sm">Share</span>
-            </button>
-          )}
-
           {onSave && (
             <button
               onClick={onSave}
@@ -144,7 +133,7 @@ export default function Toolbar({
               title="Save"
             >
               <FiSave className="w-4 h-4" />
-              <span className="text-sm">Save</span>
+              <span className="text-sm">Save Now</span>
             </button>
           )}
 

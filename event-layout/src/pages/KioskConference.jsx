@@ -1,14 +1,18 @@
 // Kiosk mode for Conference (read-only display with search)
 
 import React, { useState, useEffect } from 'react';
-import { FiSearch, FiX } from 'react-icons/fi';
+import { FiSearch, FiX, FiCamera } from 'react-icons/fi';
 import ConferenceCanvas from '../components/conference/ConferenceCanvas';
+import QRScanner from '../components/QRScanner';
 import {
   loadConferenceEvent,
   loadConferenceLayout,
   loadConferenceGuests,
+  saveConferenceEvent,
+  saveConferenceLayout,
   saveConferenceGuests,
 } from '../lib/utils/storage';
+import * as ConferenceAPI from '../server-actions/conference-planner';
 
 const REFRESH_INTERVAL = 60000; // 60 seconds
 
@@ -19,16 +23,93 @@ export default function KioskConference() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGuest, setSelectedGuest] = useState(null);
   const [highlightedElementId, setHighlightedElementId] = useState(null);
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [scanError, setScanError] = useState(null);
+  const [isOnline, setIsOnline] = useState(true);
 
-  // Load data
-  const loadData = () => {
-    const loadedEvent = loadConferenceEvent();
-    const loadedLayout = loadConferenceLayout();
-    const loadedGuests = loadConferenceGuests();
+  // Load data from backend API with fallback to localStorage
+  const loadData = async () => {
+    try {
+      // Try to load from localStorage first for immediate display
+      const cachedEvent = loadConferenceEvent();
+      const cachedLayout = loadConferenceLayout();
+      const cachedGuests = loadConferenceGuests();
 
-    setEvent(loadedEvent);
-    setElements(loadedLayout);
-    setGuests(loadedGuests);
+      // Use cached data immediately if available
+      if (cachedEvent) {
+        setEvent(cachedEvent);
+        setElements(cachedLayout);
+        setGuests(cachedGuests);
+      }
+
+      // Then fetch from backend API for latest data
+      if (cachedEvent?.id) {
+        const eventResponse = await ConferenceAPI.getEvent(cachedEvent.id);
+        const guestsResponse = await ConferenceAPI.getGuests(cachedEvent.id);
+        const elementsResponse = await ConferenceAPI.getElements(cachedEvent.id);
+
+        if (eventResponse.success && guestsResponse.success && elementsResponse.success) {
+          const updatedEvent = {
+            id: eventResponse.data.id,
+            name: eventResponse.data.name,
+            description: eventResponse.data.description,
+            date: eventResponse.data.date,
+            roomWidth: eventResponse.data.room_width,
+            roomHeight: eventResponse.data.room_height,
+          };
+
+          const updatedGuests = guestsResponse.data.map(g => ({
+            id: g.id,
+            name: g.name,
+            email: g.email,
+            group: g.group,
+            tableNumber: g.table_number,
+            seatNumber: g.seat_number,
+            dietaryPreference: g.dietary_preference,
+            attendance: g.attendance,
+            notes: g.notes,
+            checkedIn: g.checked_in || false,
+            elementId: g.element_id,
+          }));
+
+          const updatedElements = elementsResponse.data.map(el => ({
+            id: el.id,
+            type: el.element_type,
+            x: el.x,
+            y: el.y,
+            width: el.width,
+            height: el.height,
+            rotation: el.rotation || 0,
+            label: el.label,
+            seats: el.seats,
+          }));
+
+          setEvent(updatedEvent);
+          setElements(updatedElements);
+          setGuests(updatedGuests);
+
+          // Cache the updated data
+          saveConferenceEvent(updatedEvent);
+          saveConferenceLayout(updatedElements);
+          saveConferenceGuests(updatedGuests);
+
+          setIsOnline(true);
+          console.log('✓ Data refreshed from backend API');
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load from backend, using cached data:', error);
+      setIsOnline(false);
+
+      // Fallback to localStorage
+      const loadedEvent = loadConferenceEvent();
+      const loadedLayout = loadConferenceLayout();
+      const loadedGuests = loadConferenceGuests();
+
+      setEvent(loadedEvent);
+      setElements(loadedLayout);
+      setGuests(loadedGuests);
+    }
   };
 
   // Initial load and auto-refresh
@@ -85,20 +166,98 @@ export default function KioskConference() {
   };
 
   // Handle check-in
-  const handleCheckIn = () => {
-    if (!selectedGuest) return;
+  const handleCheckIn = async () => {
+    if (!selectedGuest || !event?.id) return;
 
-    const updatedGuests = guests.map(g => {
-      if (g.id === selectedGuest.id) {
-        const updatedGuest = { ...g, checkedIn: !g.checkedIn };
-        setSelectedGuest(updatedGuest); // Update selected guest in state
-        return updatedGuest;
+    const newCheckedInStatus = !selectedGuest.checkedIn;
+
+    try {
+      // Update backend first
+      const response = await ConferenceAPI.updateGuest(event.id, selectedGuest.id, {
+        checked_in: newCheckedInStatus,
+      });
+
+      if (response.success) {
+        // Update local state
+        const updatedGuests = guests.map(g => {
+          if (g.id === selectedGuest.id) {
+            const updatedGuest = { ...g, checkedIn: newCheckedInStatus };
+            setSelectedGuest(updatedGuest); // Update selected guest in state
+            return updatedGuest;
+          }
+          return g;
+        });
+
+        setGuests(updatedGuests);
+        saveConferenceGuests(updatedGuests);
+        console.log(`✓ ${selectedGuest.name} check-in status updated`);
       }
-      return g;
-    });
+    } catch (error) {
+      console.error('Failed to update check-in status:', error);
+      // Fallback to local update if API fails
+      const updatedGuests = guests.map(g => {
+        if (g.id === selectedGuest.id) {
+          const updatedGuest = { ...g, checkedIn: newCheckedInStatus };
+          setSelectedGuest(updatedGuest);
+          return updatedGuest;
+        }
+        return g;
+      });
 
-    setGuests(updatedGuests);
-    saveConferenceGuests(updatedGuests);
+      setGuests(updatedGuests);
+      saveConferenceGuests(updatedGuests);
+    }
+  };
+
+  // Handle QR code scan
+  const handleQRCodeScan = (qrData) => {
+    setShowQRScanner(false);
+    setScanError(null);
+
+    try {
+      // Parse QR code data
+      // Expected format: checkin://conference/{eventId}/{guestId}
+      const qrPattern = /^checkin:\/\/conference\/([^/]+)\/([^/]+)$/;
+      const match = qrData.match(qrPattern);
+
+      if (!match) {
+        setScanError('Invalid QR code format. Please use a valid check-in QR code.');
+        return;
+      }
+
+      const [, eventId, guestId] = match;
+
+      // Find the guest
+      const guest = guests.find(g => g.id === guestId || String(g.id) === guestId);
+
+      if (!guest) {
+        setScanError(`Guest not found. QR code may be for a different event.`);
+        return;
+      }
+
+      // Auto-select the guest
+      handleSelectGuest(guest);
+
+      // Auto check-in if not already checked in
+      if (!guest.checkedIn) {
+        setTimeout(() => {
+          const updatedGuests = guests.map(g => {
+            if (g.id === guest.id) {
+              return { ...g, checkedIn: true };
+            }
+            return g;
+          });
+          setGuests(updatedGuests);
+          saveConferenceGuests(updatedGuests);
+          
+          // Show success message
+          console.log(`✓ ${guest.name} checked in successfully via QR code`);
+        }, 300);
+      }
+    } catch (error) {
+      console.error('Error processing QR code:', error);
+      setScanError('Failed to process QR code. Please try again.');
+    }
   };
 
   if (!event) {
@@ -129,10 +288,12 @@ export default function KioskConference() {
         )}
       </div>
 
-      {/* Search bar */}
+      {/* Search and QR Scanner bar */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 relative">
         <div className="max-w-2xl mx-auto relative">
-          <div className="relative">
+          <div className="flex gap-2">
+            {/* Search input */}
+            <div className="flex-1 relative">
             <FiSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
@@ -149,6 +310,17 @@ export default function KioskConference() {
                 <FiX className="w-5 h-5" />
               </button>
             )}
+            </div>
+
+            {/* QR Scan button */}
+            <button
+              onClick={() => setShowQRScanner(true)}
+              className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+              title="Scan QR Code"
+            >
+              <FiCamera className="w-5 h-5" />
+              <span className="hidden sm:inline">Scan QR</span>
+            </button>
           </div>
 
           {/* Search results dropdown */}
@@ -331,12 +503,52 @@ export default function KioskConference() {
         )}
       </div>
 
+      {/* QR Scanner Modal */}
+      <QRScanner
+        isOpen={showQRScanner}
+        onClose={() => {
+          setShowQRScanner(false);
+          setScanError(null);
+        }}
+        onScan={(data) => {
+          console.log('QR Code scanned:', data);
+          handleQRCodeScan(data);
+        }}
+        onError={(error) => {
+          console.error('QR Scanner error:', error);
+          setScanError(error);
+        }}
+      />
+
+      {/* Scan Error Alert */}
+      {scanError && (
+        <div className="fixed bottom-4 right-4 z-40 max-w-md bg-red-50 border-2 border-red-300 rounded-lg shadow-lg p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 text-red-600 text-2xl">⚠️</div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-red-800 mb-1">Scan Error</h4>
+              <p className="text-sm text-red-700">{scanError}</p>
+            </div>
+            <button
+              onClick={() => setScanError(null)}
+              className="flex-shrink-0 text-red-400 hover:text-red-600"
+            >
+              <FiX className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
       <div className="bg-gray-800 text-gray-300 px-6 py-3 text-center text-sm">
         <div className="flex items-center justify-center gap-4">
           <span>📍 Conference Information System</span>
           <span>•</span>
           <span>Auto-refresh: Every 60 seconds</span>
+          <span>•</span>
+          <span className={isOnline ? 'text-green-400' : 'text-yellow-400'}>
+            {isOnline ? '🟢 Online' : '🟡 Offline (Cached)'}
+          </span>
           <span>•</span>
           <span>Total Guests: {guests.length}</span>
           <span>•</span>

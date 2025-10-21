@@ -648,8 +648,31 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
     [canvasWidth, canvasHeight]
   );
 
+  // Auto-resize canvas based on container
+  const [canvasDimensions, setCanvasDimensions] = React.useState({
+    width: 800,
+    height: 600,
+  });
+
+  useEffect(() => {
+    const updateDimensions = () => {
+      const container = document.getElementById('canvas-container');
+      if (container) {
+        setCanvasDimensions({
+          width: container.clientWidth,
+          height: container.clientHeight,
+        });
+      }
+    };
+
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+    return () => window.removeEventListener('resize', updateDimensions);
+  }, []);
+
   return (
     <div
+      id="canvas-container"
       className="relative w-full h-full bg-gray-50 rounded-lg overflow-hidden"
       onDragOver={handleContainerDragOver}
       onDrop={handleContainerDrop}
@@ -657,8 +680,8 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
     >
       <Stage
         ref={stageRef}
-        width={window.innerWidth - 500}
-        height={window.innerHeight - 200}
+        width={canvasDimensions.width}
+        height={canvasDimensions.height}
         scaleX={scale}
         scaleY={scale}
         x={stagePos.x}

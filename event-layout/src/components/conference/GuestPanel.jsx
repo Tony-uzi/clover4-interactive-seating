@@ -24,13 +24,20 @@ export default function GuestPanel({
   // Get all group names for filtering (including 'all' option)
   const groupFilterOptions = ['all', ...groups.map(g => g.name)];
 
-  // Filter guests
-  const filteredGuests = guests.filter(guest => {
-    const matchesSearch =
-      guest.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      guest.email.toLowerCase().includes(searchTerm.toLowerCase());
+  const normalizeString = (value) => (value ?? '').toString().trim();
+  const normalizedSearch = searchTerm.trim().toLowerCase();
 
-    const matchesGroup = filterGroup === 'all' || guest.group === filterGroup;
+  // Filter guests (guard against missing fields from imports)
+  const filteredGuests = guests.filter(guest => {
+    const name = normalizeString(guest?.name).toLowerCase();
+    const email = normalizeString(guest?.email).toLowerCase();
+    const groupName = normalizeString(guest?.group);
+
+    const matchesSearch =
+      name.includes(normalizedSearch) ||
+      email.includes(normalizedSearch);
+
+    const matchesGroup = filterGroup === 'all' || groupName === filterGroup;
 
     return matchesSearch && matchesGroup;
   });
@@ -231,108 +238,111 @@ export default function GuestPanel({
         onDeleteGroup={onDeleteGroup}
       />
 
-      {/* Add form */}
-      {showAddForm && (
-        <div className="p-4 border-b border-gray-200">
-          <GuestForm
-            onSave={(guestData) => {
-              onAddGuest({
-                ...guestData,
-                id: Date.now(),
-                tableNumber: null,
-                seatNumber: null,
-                checkedIn: false, // Default check-in status for new guests
-              });
-              setShowAddForm(false);
-            }}
-            onCancel={() => setShowAddForm(false)}
-          />
-        </div>
-      )}
-
-      {/* Guest list */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        {filteredGuests.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">
-            {searchTerm ? 'No matching guests found' : 'No guests yet, click "Add" to start'}
+      {/* Content area with scroll */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        {/* Add form */}
+        {showAddForm && (
+          <div className="flex-shrink-0 p-4 border-b border-gray-200 bg-white shadow-sm">
+            <GuestForm
+              onSave={(guestData) => {
+                onAddGuest({
+                  ...guestData,
+                  id: Date.now(),
+                  tableNumber: null,
+                  seatNumber: null,
+                  checkedIn: false, // Default check-in status for new guests
+                });
+                setShowAddForm(false);
+              }}
+              onCancel={() => setShowAddForm(false)}
+            />
           </div>
-        ) : (
-          filteredGuests.map((guest) => (
-            <div
-              key={guest.id}
-              className="p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-400 transition-colors"
-              draggable={!!onGuestDragStart}
-              onDragStart={(event) => handleDragStart(event, guest)}
-              onDragEnd={handleDragEnd}
-            >
-              {editingGuest?.id === guest.id ? (
-                <GuestForm
-                  guest={editingGuest}
-                  onSave={(updatedGuest) => {
-                    onUpdateGuest(guest.id, updatedGuest);
-                    setEditingGuest(null);
-                  }}
-                  onCancel={() => setEditingGuest(null)}
-                />
-              ) : (
-                <>
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-800">{guest.name}</h3>
-                      {guest.email && (
-                        <p className="text-xs text-gray-500">{guest.email}</p>
-                      )}
-                    </div>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => setEditingGuest(guest)}
-                        className="p-1 hover:bg-gray-200 rounded"
-                      >
-                        <FiEdit2 className="w-4 h-4 text-gray-600" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (confirm('Are you sure you want to delete this guest?')) {
-                            onDeleteGuest(guest.id);
-                          }
-                        }}
-                        className="p-1 hover:bg-red-100 rounded"
-                      >
-                        <FiTrash2 className="w-4 h-4 text-red-600" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-1 text-xs mb-2">
-                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
-                      {guest.group}
-                    </span>
-                    {guest.dietaryPreference !== 'None' && (
-                      <span className="px-2 py-1 bg-green-100 text-green-700 rounded">
-                        🥗 {guest.dietaryPreference}
-                      </span>
-                    )}
-                    {guest.tableNumber && (
-                      <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
-                        📍 Table: {guest.tableNumber}
-                      </span>
-                    )}
-                    <span className={`px-2 py-1 rounded ${guest.attendance ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
-                      {guest.attendance ? '✓ Attending' : '✗ Not Attending'}
-                    </span>
-                    <span className={`px-2 py-1 rounded ${guest.checkedIn ? 'bg-teal-100 text-teal-700' : 'bg-orange-100 text-orange-700'}`}>
-                      {guest.checkedIn ? '✓ Checked In' : '○ Not Checked In'}
-                    </span>
-                  </div>
-
-                  {guest.notes && (
-                    <p className="text-xs text-gray-600 mt-1 italic">💬 {guest.notes}</p>
-                  )}
-                </>
-              )}
-            </div>
-          ))
         )}
+
+        {/* Guest list */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {filteredGuests.length === 0 ? (
+            <div className="text-center text-gray-500 py-8">
+              {searchTerm ? 'No matching guests found' : 'No guests yet, click "Add" to start'}
+            </div>
+          ) : (
+            filteredGuests.map(guest => (
+              <div
+                key={guest.id}
+                className="mx-4 mb-2 p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-400 transition-colors"
+                draggable={!!onGuestDragStart}
+                onDragStart={(event) => handleDragStart(event, guest)}
+                onDragEnd={handleDragEnd}
+              >
+                {editingGuest?.id === guest.id ? (
+                  <GuestForm
+                    guest={editingGuest}
+                    onSave={(updatedGuest) => {
+                      onUpdateGuest(guest.id, updatedGuest);
+                      setEditingGuest(null);
+                    }}
+                    onCancel={() => setEditingGuest(null)}
+                  />
+                ) : (
+                  <>
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-800">{guest.name}</h3>
+                        {guest.email && (
+                          <p className="text-xs text-gray-500">{guest.email}</p>
+                        )}
+                      </div>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => setEditingGuest(guest)}
+                          className="p-1 hover:bg-gray-200 rounded"
+                        >
+                          <FiEdit2 className="w-4 h-4 text-gray-600" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm('Are you sure you want to delete this guest?')) {
+                              onDeleteGuest(guest.id);
+                            }
+                          }}
+                          className="p-1 hover:bg-red-100 rounded"
+                        >
+                          <FiTrash2 className="w-4 h-4 text-red-600" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1 text-xs mb-2">
+                      <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                        {guest.group}
+                      </span>
+                      {guest.dietaryPreference !== 'None' && (
+                        <span className="px-2 py-1 bg-green-100 text-green-700 rounded">
+                          🥗 {guest.dietaryPreference}
+                        </span>
+                      )}
+                      {guest.tableNumber && (
+                        <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">
+                          📍 Table: {guest.tableNumber}
+                        </span>
+                      )}
+                      <span className={`px-2 py-1 rounded ${guest.attendance ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
+                        {guest.attendance ? '✓ Attending' : '✗ Not Attending'}
+                      </span>
+                      <span className={`px-2 py-1 rounded ${guest.checkedIn ? 'bg-teal-100 text-teal-700' : 'bg-orange-100 text-orange-700'}`}>
+                        {guest.checkedIn ? '✓ Checked In' : '○ Not Checked In'}
+                      </span>
+                    </div>
+
+                    {guest.notes && (
+                      <p className="text-xs text-gray-600 mt-1 italic">💬 {guest.notes}</p>
+                    )}
+                  </>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

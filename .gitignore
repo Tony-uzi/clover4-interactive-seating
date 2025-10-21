@@ -41,3 +41,7 @@ media/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# AI instructions
+.claude/
+.cursor/

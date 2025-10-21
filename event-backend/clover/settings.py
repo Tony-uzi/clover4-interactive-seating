@@ -11,22 +11,27 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Load environment variables
+load_dotenv()
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-8(pjrjnofge28%zooth-$ukuwm!*m&ah=hc8gt&gh7cge7hysp'
+SECRET_KEY = os.getenv(
+    'SECRET_KEY', 'django-insecure-8(pjrjnofge28%zooth-$ukuwm!*m&ah=hc8gt&gh7cge7hysp')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = []
-
+# ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "0830bb326f1d.ngrok-free.app"]
 
 # Application definition
 
@@ -75,12 +80,25 @@ WSGI_APPLICATION = 'clover.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Use PostgreSQL if DATABASE_ENGINE is set in environment, otherwise fallback to SQLite
+if os.getenv('DATABASE_ENGINE') == 'django.db.backends.postgresql':
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DATABASE_NAME', 'event_db'),
+            'USER': os.getenv('DATABASE_USER', 'event_user'),
+            'PASSWORD': os.getenv('DATABASE_PASSWORD', 'event_password'),
+            'HOST': os.getenv('DATABASE_HOST', 'localhost'),
+            'PORT': os.getenv('DATABASE_PORT', '5432'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -132,7 +150,12 @@ MIDDLEWARE = [
 ]
 
 # 3. 允许前端开发端口
-CORS_ALLOW_ALL_ORIGINS = True   # 生产环境再细化
+CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'True') == 'True'
+
+# In production, use specific origins
+if not CORS_ALLOW_ALL_ORIGINS:
+    CORS_ALLOWED_ORIGINS = os.getenv(
+        'CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://localhost:5173').split(',')
 
 # 4. REST 框架默认配置
 REST_FRAMEWORK = {

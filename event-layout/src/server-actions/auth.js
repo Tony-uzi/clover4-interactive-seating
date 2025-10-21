@@ -1,52 +1,67 @@
-// Authentication API Actions with Fake Data
-// TODO: Replace fake authentication with real API when backend is ready
-
-const FAKE_USER = {
-  id: 1,
-  username: 'admin',
-  email: 'admin@example.com',
-  firstName: 'Admin',
-  lastName: 'User',
-  role: 'admin'
-};
-
-const FAKE_TOKEN = 'fake-jwt-token-' + Date.now();
-
-// Simulated delay for API calls
-const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
+// Authentication API Actions - Connected to Real Backend
+// 认证API - 已连接真实后端
 
 /**
- * Login with username and password
- * @param {string} username - Username
+ * Get stored auth token
+ * @returns {string|null} Auth token
+ */
+export function getAuthToken() {
+  return localStorage.getItem('token');
+}
+
+/**
+ * Check if user is authenticated
+ * @returns {boolean} Authentication status
+ */
+export function isAuthenticated() {
+  const token = getAuthToken();
+  return !!token;
+}
+
+/**
+ * Login with email and password
+ * @param {string} email - User email
  * @param {string} password - Password
  * @returns {Promise<Object>} Login result with token
  */
-export async function login(username, password) {
-  await delay();
+export async function login(email, password) {
+  try {
+    const response = await fetch('/api/auth/login/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
 
-  // Fake authentication: accept admin/admin
-  if (username === 'admin' && password === 'admin') {
-    const token = FAKE_TOKEN;
-    const user = { ...FAKE_USER };
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.detail || 'Login failed'
+      };
+    }
 
     // Store token in localStorage
-    localStorage.setItem('authToken', token);
-    localStorage.setItem('user', JSON.stringify(user));
+    localStorage.setItem('token', data.token);
+    if (data.user) {
+      localStorage.setItem('user', JSON.stringify(data.user));
+    }
 
-    console.log('Login successful:', username);
+    console.log('Login successful:', email);
     return {
       success: true,
       data: {
-        token,
-        user
+        token: data.token,
+        user: data.user
       }
     };
+  } catch (error) {
+    console.error('Login error:', error);
+    return {
+      success: false,
+      error: error.message || 'Network error'
+    };
   }
-
-  return {
-    success: false,
-    error: 'Invalid credentials. Use admin/admin for fake login.'
-  };
 }
 
 /**
@@ -54,10 +69,8 @@ export async function login(username, password) {
  * @returns {Promise<Object>} Logout result
  */
 export async function logout() {
-  await delay();
-
   // Clear stored authentication
-  localStorage.removeItem('authToken');
+  localStorage.removeItem('token');
   localStorage.removeItem('user');
 
   console.log('Logout successful');
@@ -67,45 +80,55 @@ export async function logout() {
 /**
  * Register new user
  * @param {Object} userData - User registration data
+ * @param {string} userData.name - User's name
+ * @param {string} userData.email - User's email
+ * @param {string} userData.password - User's password
  * @returns {Promise<Object>} Registration result
  */
 export async function register(userData) {
-  await delay();
+  try {
+    const response = await fetch('/api/auth/register/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: userData.name,
+        email: userData.email,
+        password: userData.password
+      })
+    });
 
-  console.log('Registering user:', userData.username);
+    const data = await response.json();
 
-  // Fake registration - auto-login after register
-  const token = FAKE_TOKEN;
-  const user = {
-    id: Math.floor(Math.random() * 1000) + 2,
-    username: userData.username,
-    email: userData.email,
-    firstName: userData.firstName || '',
-    lastName: userData.lastName || '',
-    role: 'user'
-  };
-
-  // Store token in localStorage
-  localStorage.setItem('authToken', token);
-  localStorage.setItem('user', JSON.stringify(user));
-
-  return {
-    success: true,
-    data: {
-      token,
-      user
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.detail || 'Registration failed'
+      };
     }
-  };
+
+    console.log('Registration successful:', userData.email);
+    return {
+      success: true,
+      data: {
+        id: data.id,
+        name: data.name
+      }
+    };
+  } catch (error) {
+    console.error('Registration error:', error);
+    return {
+      success: false,
+      error: error.message || 'Network error'
+    };
+  }
 }
 
 /**
- * Get current user profile
+ * Get current user profile from localStorage
  * @returns {Promise<Object>} User profile
  */
 export async function getCurrentUser() {
-  await delay();
-
-  const token = localStorage.getItem('authToken');
+  const token = getAuthToken();
   const userStr = localStorage.getItem('user');
 
   if (token && userStr) {
@@ -121,74 +144,15 @@ export async function getCurrentUser() {
 }
 
 /**
- * Update user profile
- * @param {Object} updates - Profile updates
- * @returns {Promise<Object>} Updated user
- */
-export async function updateProfile(updates) {
-  await delay();
-
-  const userStr = localStorage.getItem('user');
-  if (!userStr) {
-    return { success: false, error: 'Not authenticated' };
-  }
-
-  try {
-    const user = JSON.parse(userStr);
-    const updatedUser = { ...user, ...updates };
-    localStorage.setItem('user', JSON.stringify(updatedUser));
-
-    console.log('Profile updated:', updatedUser);
-    return { success: true, data: updatedUser };
-  } catch (e) {
-    return { success: false, error: 'Failed to update profile' };
-  }
-}
-
-/**
- * Check if user is authenticated
- * @returns {boolean} Authentication status
- */
-export function isAuthenticated() {
-  const token = localStorage.getItem('authToken');
-  return !!token;
-}
-
-/**
- * Get stored auth token
- * @returns {string|null} Auth token
- */
-export function getAuthToken() {
-  return localStorage.getItem('authToken');
-}
-
-/**
- * Verify token validity
+ * Verify token validity (checks if token exists)
  * @returns {Promise<Object>} Verification result
  */
 export async function verifyToken() {
-  await delay();
-
   const token = getAuthToken();
   if (!token) {
     return { success: false, error: 'No token found' };
   }
 
-  // In fake implementation, all tokens are valid
+  // Token存在即视为有效（实际验证由后端处理）
   return { success: true, data: { valid: true } };
-}
-
-/**
- * Change password
- * @param {string} oldPassword - Current password
- * @param {string} newPassword - New password
- * @returns {Promise<Object>} Change result
- */
-export async function changePassword(oldPassword, newPassword) {
-  await delay();
-
-  console.log('Password change requested (fake implementation)');
-
-  // In fake implementation, always succeed
-  return { success: true, message: 'Password changed successfully (fake)' };
 }

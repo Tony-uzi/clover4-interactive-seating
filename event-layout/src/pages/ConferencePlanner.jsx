@@ -1,6 +1,7 @@
 // Conference Planner main page
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import Toolbar from '../components/shared/Toolbar';
 import ElementToolbar from '../components/conference/ElementToolbar';
 import ConferenceCanvas from '../components/conference/ConferenceCanvas';
@@ -18,8 +19,11 @@ import {
 } from '../lib/utils/storage';
 import { parseGuestCSV, guestsToCSV, guestsToCSVFiltered, exportGuestsByGroup, downloadCSV } from '../lib/utils/csvParser';
 import { jsPDF } from 'jspdf';
+import * as ConferenceAPI from '../server-actions/conference-planner';
+import { createOrGetDesign, saveDesignVersion } from '../lib/api';
 
 export default function ConferencePlanner() {
+  const location = useLocation();
   const [event, setEvent] = useState(null);
   const [elements, setElements] = useState([]);
   const [guests, setGuests] = useState([]);
@@ -28,38 +32,124 @@ export default function ConferencePlanner() {
   const fileInputRef = useRef(null);
   const canvasRef = useRef(null);
   const [draggingGuestId, setDraggingGuestId] = useState(null);
+  const saveLayoutTimerRef = useRef(null);
+  const saveEventTimerRef = useRef(null);
+  const [designId, setDesignId] = useState(null);
+  const [dirty, setDirty] = useState(false);
 
   // Track if initial load is complete
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  // Load data on mount
+  // Load data on mount and ensure backend event exists
   useEffect(() => {
-    const loadedEvent = loadConferenceEvent();
-    const loadedLayout = loadConferenceLayout();
-    const loadedGuests = loadConferenceGuests();
-    const loadedGroups = loadConferenceGroups();
+    (async () => {
+      const loadedEvent = loadConferenceEvent();
+      const loadedLayout = [];
+      const loadedGuests = loadConferenceGuests();
+      const loadedGroups = loadConferenceGroups();
 
-    setEvent(loadedEvent);
-    setElements(loadedLayout);
-    setGuests(loadedGuests);
-    setGroups(loadedGroups);
-    
-    // Mark initial load as complete after a brief delay
-    setTimeout(() => setIsInitialLoad(false), 100);
-  }, []);
+      let ensuredEvent = loadedEvent;
+      try {
+        if (!loadedEvent?.id) {
+          const resp = await ConferenceAPI.createEvent(loadedEvent);
+          if (resp.success) {
+            ensuredEvent = {
+              ...loadedEvent,
+              id: resp.data.id,
+              roomWidth: resp.data.room_width ?? loadedEvent.roomWidth,
+              roomHeight: resp.data.room_height ?? loadedEvent.roomHeight,
+            };
+            saveConferenceEvent(ensuredEvent);
+          }
+        }
+      } catch (e) {
+        console.warn('Ensure event failed:', e);
+      }
+
+      setEvent(ensuredEvent);
+      setElements(loadedLayout);
+      setGuests(loadedGuests);
+      setGroups(loadedGroups);
+
+      // If URL provides a designId, load from design system; otherwise try backend event layout
+      try {
+        const params = new URLSearchParams(location.search);
+        const providedDesignId = params.get('designId');
+        if (providedDesignId) {
+          // load from cloud design system
+          const { getLatestDesign } = await import('../lib/api');
+          const latest = await getLatestDesign(providedDesignId);
+          const items = Array.isArray(latest.data) ? latest.data : latest.data.items || [];
+          if (Array.isArray(items) && items.length) {
+            setElements(items);
+            saveConferenceLayout(items);
+            setDesignId(parseInt(providedDesignId, 10));
+            try { localStorage.setItem('designId.conference', String(providedDesignId)); } catch {}
+          }
+        }
+      } catch (e) {
+        console.warn('Load backend layout failed:', e);
+      }
+
+      setTimeout(() => setIsInitialLoad(false), 100);
+    })();
+  }, [location.search]);
 
   // Auto-save (skip during initial load to prevent overwriting)
   useEffect(() => {
     if (event && !isInitialLoad) {
       saveConferenceEvent(event);
+      if (saveEventTimerRef.current) clearTimeout(saveEventTimerRef.current);
+      if (event.id) {
+        saveEventTimerRef.current = setTimeout(async () => {
+          try {
+            await ConferenceAPI.updateEvent(event.id, {
+              name: event.name,
+              description: event.description,
+              roomWidth: event.roomWidth,
+              roomHeight: event.roomHeight,
+            });
+          } catch (e) {
+            console.warn('Auto-save event failed:', e);
+          }
+        }, 600);
+      }
     }
   }, [event, isInitialLoad]);
 
   useEffect(() => {
     if (!isInitialLoad) {
       saveConferenceLayout(elements);
+      if (saveLayoutTimerRef.current) clearTimeout(saveLayoutTimerRef.current);
+      if (event?.id) {
+        saveLayoutTimerRef.current = setTimeout(async () => {
+          try {
+            await ConferenceAPI.saveLayout(event.id, elements);
+          } catch (e) {
+            console.warn('Auto-save layout failed:', e);
+          }
+        }, 600);
+      }
     }
-  }, [elements, isInitialLoad]);
+  }, [elements, isInitialLoad, event?.id]);
+
+  // Mark dirty on changes
+  useEffect(() => {
+    if (isInitialLoad) return;
+    setDirty(true);
+  }, [elements, event?.name, event?.roomWidth, event?.roomHeight, isInitialLoad]);
+
+  // beforeunload warning
+  useEffect(() => {
+    const handler = (e) => {
+      if (!dirty) return;
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
 
   useEffect(() => {
     if (!isInitialLoad) {
@@ -245,13 +335,6 @@ export default function ConferencePlanner() {
     pdf.save(`conference-layout-${Date.now()}.pdf`);
   };
 
-  // Share
-  const handleShare = () => {
-    const shareUrl = `${window.location.origin}/kiosk/conference`;
-    navigator.clipboard.writeText(shareUrl);
-    alert(`Share link copied to clipboard:\n${shareUrl}`);
-  };
-
   // Clear
   const handleClear = () => {
     if (confirm('Are you sure you want to clear the canvas? This action cannot be undone!')) {
@@ -282,13 +365,41 @@ export default function ConferencePlanner() {
       {/* Toolbar */}
       <Toolbar
         title={event.name}
-        onSave={() => alert('Auto-saved!')}
+        onNavigateHome={() => {
+          if (dirty && !confirm('Not saved, leave anyway?')) return;
+          window.location.href = '/';
+        }}
+        onSave={async () => {
+          try {
+            // ask for name to create/get design consistently
+            let desiredName = (event?.name || '').trim();
+            const input = prompt('请输入要保存的文件名', desiredName || 'Untitled Conference');
+            if (!input) return;
+            desiredName = input.trim();
+            if (desiredName && desiredName !== event.name) {
+              const next = { ...event, name: desiredName };
+              setEvent(next);
+            }
+            let did = designId;
+            if (!did) {
+              const d = await createOrGetDesign(desiredName || event.name, 'conference');
+              did = d.id;
+              setDesignId(did);
+              try { localStorage.setItem('designId.conference', String(did)); } catch {}
+            }
+            const payload = { items: elements, meta: { name: desiredName || event.name, kind: 'conference', roomWidth: event.roomWidth, roomHeight: event.roomHeight } };
+            await saveDesignVersion(did, payload, 'manual save');
+            setDirty(false);
+            alert('Saved to cloud');
+          } catch (e) {
+            alert(e.message || 'Save failed');
+          }
+        }}
         onExportPDF={handleExportPDF}
         onExportCSV={handleExportCSV}
         onExportCSVFiltered={handleExportCSVFiltered}
         onExportCSVByGroup={handleExportCSVByGroup}
         onImportCSV={handleImportCSV}
-        onShare={handleShare}
         onClear={handleClear}
       />
 
@@ -333,8 +444,8 @@ export default function ConferencePlanner() {
         {/* Left: Element toolbar */}
         <ElementToolbar onAddElement={handleAddElement} />
 
-        {/* Center: Canvas */}
-        <div className="flex-1 min-w-0 p-4">
+        {/* Center: Canvas - now takes full height */}
+        <div className="flex-1 min-w-0 flex flex-col">
           <ConferenceCanvas
             ref={canvasRef}
             elements={elements}
@@ -353,17 +464,19 @@ export default function ConferencePlanner() {
           />
         </div>
 
-        {/* Right: Properties and Guest panel */}
-        <div className="w-96 flex flex-col overflow-hidden">
-          <div className="flex-shrink-0 overflow-y-auto" style={{ height: '250px' }}>
-            <PropertiesPanel
-              selectedElement={selectedElement}
-              onUpdateElement={handleUpdateElement}
-              onDeleteElement={handleDeleteElement}
-              onDuplicateElement={handleDuplicateElement}
-            />
-          </div>
-          <div className="flex-1 min-h-0 border-t border-gray-200">
+        {/* Right: Properties and Guest panel - improved layout */}
+        <div className="w-96 flex flex-col overflow-hidden border-l border-gray-200 bg-white">
+          {selectedElement && (
+            <div className="flex-shrink-0 border-b border-gray-200" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              <PropertiesPanel
+                selectedElement={selectedElement}
+                onUpdateElement={handleUpdateElement}
+                onDeleteElement={handleDeleteElement}
+                onDuplicateElement={handleDuplicateElement}
+              />
+            </div>
+          )}
+          <div className="flex-1 min-h-0 overflow-hidden">
             <GuestPanel
               guests={guests}
               groups={groups}

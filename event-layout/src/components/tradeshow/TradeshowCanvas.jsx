@@ -455,8 +455,31 @@ export default function TradeshowCanvas({
     );
   };
 
+  // Auto-resize canvas based on container
+  const [canvasDimensions, setCanvasDimensions] = React.useState({
+    width: 800,
+    height: 600,
+  });
+
+  useEffect(() => {
+    const updateDimensions = () => {
+      const container = document.getElementById('tradeshow-canvas-container');
+      if (container) {
+        setCanvasDimensions({
+          width: container.clientWidth,
+          height: container.clientHeight,
+        });
+      }
+    };
+
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+    return () => window.removeEventListener('resize', updateDimensions);
+  }, []);
+
   return (
     <div
+      id="tradeshow-canvas-container"
       className="relative w-full h-full bg-gray-50 rounded-lg overflow-hidden"
       onDragOver={handleContainerDragOver}
       onDrop={handleContainerDrop}
@@ -464,8 +487,8 @@ export default function TradeshowCanvas({
     >
       <Stage
         ref={stageRef}
-        width={window.innerWidth - 600}
-        height={window.innerHeight - 200}
+        width={canvasDimensions.width}
+        height={canvasDimensions.height}
         scaleX={scale}
         scaleY={scale}
         x={stagePos.x}

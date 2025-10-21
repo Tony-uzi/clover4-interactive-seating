@@ -1,139 +1,157 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-
-const FAKE_USERNAME = "admin";
-const FAKE_PASSWORD = "admin";
-const TOKEN_STORAGE_KEY = "planner_auth_token";
-const USER_STORAGE_KEY = "planner_auth_user";
+import { Link, useNavigate } from "react-router-dom";
+import { FiMail, FiLock, FiAlertCircle, FiArrowRight } from 'react-icons/fi';
+import * as AuthAPI from "../server-actions/auth";
 
 export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const navigate = useNavigate();
 
   const onChange = (event) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const onSubmit = (event) => {
+  const onSubmit = async (event) => {
     event.preventDefault();
     if (loading) return;
     setLoading(true);
     setError("");
 
-    const username = form.email.trim().toLowerCase();
-    const password = form.password;
-
-    if (username === FAKE_USERNAME && password === FAKE_PASSWORD) {
-      const token = `fake-admin-token-${Date.now().toString(36)}`;
-      const payload = {
-        username: FAKE_USERNAME,
-        issuedAt: new Date().toISOString()
-      };
-      localStorage.setItem(TOKEN_STORAGE_KEY, token);
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(payload));
-      alert("Logged in successfully. Demo token issued.");
-      const params = new URLSearchParams(window.location.search);
-      const redirect = params.get("redirect");
-      window.location.href = redirect || "/conference-planner";
-      return;
+    try {
+      const result = await AuthAPI.login(form.email, form.password);
+      
+      if (result.success) {
+        const params = new URLSearchParams(window.location.search);
+        const redirect = params.get("redirect");
+        navigate(redirect || "/");
+      } else {
+        setError(result.error || "Invalid credentials");
+        setLoading(false);
+      }
+    } catch (err) {
+      setError("Network error. Please check if the backend is running.");
+      setLoading(false);
     }
-
-    setError("Invalid credentials. Use admin / admin to access the demo.");
-    setLoading(false);
   };
 
   return (
-    <section className="page auth">
-      <h1>Log In</h1>
-
-      <form className="form-card" onSubmit={onSubmit}>
-        <label htmlFor="email">Username</label>
-        <input
-          id="email"
-          name="email"
-          type="text"
-          placeholder="admin"
-          value={form.email}
-          onChange={onChange}
-          autoComplete="username"
-          required
-        />
-
-        <label htmlFor="password" style={{ marginTop: 8 }}>
-          Password
-        </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          placeholder="admin"
-          value={form.password}
-          onChange={onChange}
-          autoComplete="current-password"
-          required
-        />
-
-        {error && (
-          <div
-            style={{
-              marginTop: 8,
-              padding: "8px 12px",
-              borderRadius: 6,
-              background: "#fee2e2",
-              color: "#b91c1c",
-              fontSize: 13
-            }}
-          >
-            {error}
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md">
+        {/* Logo and title */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl mb-4 shadow-lg">
+            <span className="text-3xl">🍀</span>
           </div>
-        )}
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Welcome Back
+          </h1>
+          <p className="text-gray-600">
+            Sign in to your Clover 4 account
+          </p>
+        </div>
 
-        <button
-          type="submit"
-          className="btn btn-primary"
-          style={{ marginTop: 12 }}
-          disabled={loading}
-        >
-          {loading ? "Signing in..." : "Log In"}
-        </button>
-      </form>
+        {/* Login form */}
+        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+          <form onSubmit={onSubmit} className="space-y-6">
+            {/* Email field */}
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                Email Address
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <FiMail className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={form.email}
+                  onChange={onChange}
+                  autoComplete="email"
+                  required
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                />
+              </div>
+            </div>
 
-      <div
-        style={{
-          marginTop: 16,
-          fontSize: 13,
-          color: "#64748b",
-          background: "#f8fafc",
-          padding: "12px 16px",
-          borderRadius: 8
-        }}
-      >
-        Demo access only: enter <strong>admin</strong> as both username and password to receive a fake token stored in
-        local storage for later use.
+            {/* Password field */}
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                Password
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <FiLock className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={form.password}
+                  onChange={onChange}
+                  autoComplete="current-password"
+                  required
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Error message */}
+            {error && (
+              <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+                <FiAlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-800">{error}</p>
+              </div>
+            )}
+
+            {/* Submit button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  <span>Signing in...</span>
+                </>
+              ) : (
+                <>
+                  <span>Sign In</span>
+                  <FiArrowRight className="w-5 h-5" />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Sign up link */}
+          <div className="mt-6 text-center">
+            <p className="text-gray-600">
+              Don't have an account?{' '}
+              <Link 
+                to="/signup" 
+                className="font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+              >
+                Sign up
+              </Link>
+            </p>
+          </div>
+        </div>
+
+        {/* Additional info */}
+        <p className="text-center text-sm text-gray-500 mt-6">
+          By signing in, you agree to our Terms of Service and Privacy Policy
+        </p>
       </div>
-
-      <div className="alt-actions" style={{ marginTop: 12 }}>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => alert("TODO: Google OAuth")}
-        >
-          <i className="fab fa-google" /> &nbsp;Continue with Google
-        </button>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => alert("TODO: SSO")}
-        >
-          <i className="fas fa-user" /> &nbsp;Single Sign-On
-        </button>
-      </div>
-
-      <p style={{ marginTop: 12 }}>
-        Don't have an account? <Link to="/signup">Sign up</Link>
-      </p>
-    </section>
+    </div>
   );
 }

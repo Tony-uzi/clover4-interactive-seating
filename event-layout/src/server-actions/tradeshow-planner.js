@@ -1,325 +1,494 @@
-// Tradeshow Planner API Actions with Fake Data
-// TODO: Replace fake data with real API calls when backend is ready
+// Tradeshow Planner API Actions - Connected to Real Backend
+// 展会规划器 - 已连接真实后端
 
-// Fake data for development
-const FAKE_VENDORS = [
-  {
-    id: 1,
-    name: 'Tech Solutions Inc',
-    contactName: 'John Doe',
-    email: 'john@techsolutions.com',
-    phone: '+1-555-0100',
-    boothNumber: 'A101',
-    category: 'Technology',
-    notes: 'Premium sponsor'
-  },
-  {
-    id: 2,
-    name: 'Green Energy Co',
-    contactName: 'Jane Smith',
-    email: 'jane@greenenergy.com',
-    phone: '+1-555-0200',
-    boothNumber: 'B205',
-    category: 'Energy',
-    notes: ''
-  },
-  {
-    id: 3,
-    name: 'Innovation Labs',
-    contactName: 'Mike Johnson',
-    email: 'mike@innovationlabs.com',
-    phone: '+1-555-0300',
-    boothNumber: 'C301',
-    category: 'Research',
-    notes: 'Island booth required'
+// ========================================
+// 工具函数
+// ========================================
+
+function getAuthToken() {
+  return localStorage.getItem('token') || '';
+}
+
+function authHeaders() {
+  const token = getAuthToken();
+  return {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  };
+}
+
+async function handleResponse(response) {
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `HTTP Error ${response.status}`);
   }
-];
+  return response.json();
+}
 
-const FAKE_EVENT = {
-  id: 1,
-  name: 'Tech Expo 2025',
-  description: 'Annual technology trade show',
-  date: '2025-12-20',
-  hallWidth: 40,
-  hallHeight: 30,
-  shareToken: 'fake-tradeshow-token-456'
-};
+// ========================================
+// 展会事件 API
+// ========================================
 
-const FAKE_BOOTHS = [
-  {
-    id: 1,
-    type: 'booth_standard',
-    x: 3,
-    y: 3,
-    width: 3,
-    height: 3,
-    rotation: 0,
-    label: 'A101',
-    vendorId: 1
-  },
-  {
-    id: 2,
-    type: 'booth_large',
-    x: 8,
-    y: 3,
-    width: 6,
-    height: 3,
-    rotation: 0,
-    label: 'B205',
-    vendorId: 2
-  },
-  {
-    id: 3,
-    type: 'booth_island',
-    x: 16,
-    y: 8,
-    width: 6,
-    height: 6,
-    rotation: 0,
-    label: 'C301',
-    vendorId: 3
+/**
+ * Get all tradeshow events
+ */
+export async function getAllEvents() {
+  try {
+    const response = await fetch('/api/tradeshow/events/', {
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Get events failed:', error);
+    return { success: false, error: error.message };
   }
-];
+}
 
-const FAKE_ROUTES = [
-  {
-    id: 1,
-    name: 'Main Route',
-    description: 'Primary visitor path through hall',
-    boothOrder: [1, 2, 3],
-    color: '#3B82F6'
-  },
-  {
-    id: 2,
-    name: 'VIP Route',
-    description: 'Premium sponsor route',
-    boothOrder: [3, 1],
-    color: '#EF4444'
+/**
+ * Get a single event by ID
+ */
+export async function getEvent(eventId) {
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/`, {
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Get event failed:', error);
+    return { success: false, error: error.message };
   }
-];
+}
 
-// Simulated delay for API calls
-const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
+/**
+ * Create a new tradeshow event
+ */
+export async function createEvent(eventData) {
+  try {
+    const response = await fetch('/api/tradeshow/events/', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        name: eventData.name,
+        description: eventData.description || '',
+        hall_width: eventData.hallWidth || eventData.hall_width || 40.0,
+        hall_height: eventData.hallHeight || eventData.hall_height || 30.0,
+        event_date_start: eventData.dateStart || eventData.event_date_start || new Date().toISOString(),
+        event_date_end: eventData.dateEnd || eventData.event_date_end || new Date().toISOString(),
+        is_public: eventData.isPublic || eventData.is_public || false
+      })
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Create event failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Update an existing event
+ */
+export async function updateEvent(eventId, updates) {
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        name: updates.name,
+        description: updates.description,
+        hall_width: updates.hallWidth || updates.hall_width,
+        hall_height: updates.hallHeight || updates.hall_height,
+        event_date_start: updates.dateStart || updates.event_date_start,
+        event_date_end: updates.dateEnd || updates.event_date_end,
+        is_public: updates.isPublic || updates.is_public
+      })
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Update event failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Delete an event
+ */
+export async function deleteEvent(eventId) {
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/`, {
+      method: 'DELETE',
+      headers: authHeaders()
+    });
+    if (!response.ok) {
+      throw new Error(`Delete failed: ${response.status}`);
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Delete event failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ========================================
+// 展商管理 API
+// ========================================
 
 /**
  * Get all vendors for an event
- * @param {number} eventId - Event ID
- * @returns {Promise<Array>} List of vendors
  */
 export async function getAllVendors(eventId) {
-  await delay();
-  console.log('Fetching vendors for event:', eventId);
-  return { success: true, data: FAKE_VENDORS };
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/vendors/`, {
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Get vendors failed:', error);
+    return { success: false, error: error.message, data: [] };
+  }
 }
 
 /**
  * Get a single vendor by ID
- * @param {number} vendorId - Vendor ID
- * @returns {Promise<Object>} Vendor details
  */
 export async function getVendor(vendorId) {
-  await delay();
-  const vendor = FAKE_VENDORS.find(v => v.id === vendorId);
-  return { success: !!vendor, data: vendor };
+  try {
+    const response = await fetch(`/api/tradeshow/vendors/${vendorId}/`, {
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Get vendor failed:', error);
+    return { success: false, error: error.message };
+  }
 }
+
+// Backward-compatible alias
+export const getVendors = getAllVendors;
 
 /**
  * Create a new vendor
- * @param {Object} vendorData - Vendor information
- * @returns {Promise<Object>} Created vendor
  */
 export async function createVendor(vendorData) {
-  await delay();
-  const newVendor = {
-    id: Math.max(...FAKE_VENDORS.map(v => v.id), 0) + 1,
-    ...vendorData
-  };
-  FAKE_VENDORS.push(newVendor);
-  return { success: true, data: newVendor };
+  try {
+    const response = await fetch('/api/tradeshow/vendors/', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        event: vendorData.eventId || vendorData.event,
+        company_name: vendorData.name || vendorData.company_name,
+        contact_name: vendorData.contactName || vendorData.contact_name || '',
+        contact_email: vendorData.email || vendorData.contact_email || '',
+        contact_phone: vendorData.phone || vendorData.contact_phone || '',
+        category: vendorData.category || '',
+        booth_preference: vendorData.boothPreference || vendorData.booth_preference || '',
+        notes: vendorData.notes || ''
+      })
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Create vendor failed:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 /**
  * Update an existing vendor
- * @param {number} vendorId - Vendor ID
- * @param {Object} updates - Updated fields
- * @returns {Promise<Object>} Updated vendor
  */
 export async function updateVendor(vendorId, updates) {
-  await delay();
-  const index = FAKE_VENDORS.findIndex(v => v.id === vendorId);
-  if (index !== -1) {
-    FAKE_VENDORS[index] = { ...FAKE_VENDORS[index], ...updates };
-    return { success: true, data: FAKE_VENDORS[index] };
+  try {
+    const response = await fetch(`/api/tradeshow/vendors/${vendorId}/`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        company_name: updates.name || updates.company_name,
+        contact_name: updates.contactName || updates.contact_name,
+        contact_email: updates.email || updates.contact_email,
+        contact_phone: updates.phone || updates.contact_phone,
+        category: updates.category,
+        booth_preference: updates.boothPreference || updates.booth_preference,
+        notes: updates.notes
+      })
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Update vendor failed:', error);
+    return { success: false, error: error.message };
   }
-  return { success: false, error: 'Vendor not found' };
 }
 
 /**
  * Delete a vendor
- * @param {number} vendorId - Vendor ID
- * @returns {Promise<Object>} Success status
  */
 export async function deleteVendor(vendorId) {
-  await delay();
-  const index = FAKE_VENDORS.findIndex(v => v.id === vendorId);
-  if (index !== -1) {
-    FAKE_VENDORS.splice(index, 1);
+  try {
+    const response = await fetch(`/api/tradeshow/vendors/${vendorId}/`, {
+      method: 'DELETE',
+      headers: authHeaders()
+    });
+    if (!response.ok) {
+      throw new Error(`Delete failed: ${response.status}`);
+    }
     return { success: true };
+  } catch (error) {
+    console.error('Delete vendor failed:', error);
+    return { success: false, error: error.message };
   }
-  return { success: false, error: 'Vendor not found' };
 }
 
 /**
+ * Bulk import vendors from CSV
+ */
+export async function bulkImportVendors(eventId, vendorsData) {
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/vendors_import/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        vendors: vendorsData.map(v => ({
+          company_name: v.name || v.company_name,
+          contact_name: v.contactName || v.contact_name || '',
+          contact_email: v.email || v.contact_email || '',
+          contact_phone: v.phone || v.contact_phone || '',
+          category: v.category || '',
+          booth_preference: v.boothPreference || v.booth_preference || '',
+          notes: v.notes || ''
+        }))
+      })
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Bulk import vendors failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ========================================
+// 展位管理 API
+// ========================================
+
+/**
  * Get all booths for an event
- * @param {number} eventId - Event ID
- * @returns {Promise<Array>} List of booths
  */
 export async function getBooths(eventId) {
-  await delay();
-  console.log('Fetching booths for event:', eventId);
-  return { success: true, data: FAKE_BOOTHS };
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/booths/`, {
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Get booths failed:', error);
+    return { success: false, error: error.message, data: [] };
+  }
 }
 
 /**
  * Save layout (booths and their positions)
- * @param {number} eventId - Event ID
- * @param {Array} booths - Array of booth data
- * @returns {Promise<Object>} Success status
  */
 export async function saveLayout(eventId, booths) {
-  await delay();
-  console.log('Saving layout for event:', eventId, booths);
-  // In real implementation, this would send to backend
-  // For now, save to localStorage
-  localStorage.setItem(`tradeshow-layout-${eventId}`, JSON.stringify(booths));
-  return { success: true, data: { saved: booths.length } };
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/booths/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        booths: booths.map(b => ({
+          booth_type: b.type || b.booth_type,
+          category: b.category || 'booth',
+          label: b.label || '',
+          position_x: b.x !== undefined ? b.x : b.position_x,
+          position_y: b.y !== undefined ? b.y : b.position_y,
+          width: b.width,
+          height: b.height,
+          rotation: b.rotation || 0
+        }))
+      })
+    });
+    const data = await handleResponse(response);
+    return { 
+      success: true, 
+      data: { saved: data.booths?.length || 0 }
+    };
+  } catch (error) {
+    console.error('Save layout failed:', error);
+    return { success: false, error: error.message, data: { saved: 0 } };
+  }
 }
 
 /**
  * Load saved layout from storage
- * @param {number} eventId - Event ID
- * @returns {Promise<Array>} Saved booths
  */
 export async function loadLayout(eventId) {
-  await delay();
-  const saved = localStorage.getItem(`tradeshow-layout-${eventId}`);
-  if (saved) {
-    return { success: true, data: JSON.parse(saved) };
-  }
-  return { success: false, data: [] };
+  return getBooths(eventId);
 }
 
-/**
- * Get event details
- * @param {number} eventId - Event ID
- * @returns {Promise<Object>} Event details
- */
-export async function getEvent(eventId) {
-  await delay();
-  return { success: true, data: FAKE_EVENT };
-}
-
-/**
- * Update event details
- * @param {number} eventId - Event ID
- * @param {Object} updates - Updated fields
- * @returns {Promise<Object>} Updated event
- */
-export async function updateEvent(eventId, updates) {
-  await delay();
-  const updatedEvent = { ...FAKE_EVENT, ...updates };
-  return { success: true, data: updatedEvent };
-}
+// ========================================
+// 展位分配 API
+// ========================================
 
 /**
  * Assign vendor to booth
- * @param {number} vendorId - Vendor ID
- * @param {string} boothNumber - Booth number
- * @returns {Promise<Object>} Success status
  */
 export async function assignVendorToBooth(vendorId, boothNumber) {
-  await delay();
-  return updateVendor(vendorId, { boothNumber });
+  try {
+    return await updateVendor(vendorId, { 
+      boothNumber 
+    });
+  } catch (error) {
+    console.error('Assign vendor to booth failed:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 /**
+ * Get booth assignments for an event
+ */
+export async function getBoothAssignments(eventId) {
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/assignments/`, {
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Get booth assignments failed:', error);
+    return { success: false, error: error.message, data: [] };
+  }
+}
+
+// ========================================
+// 路线管理 API
+// ========================================
+
+/**
  * Get all routes for an event
- * @param {number} eventId - Event ID
- * @returns {Promise<Array>} List of routes
  */
 export async function getRoutes(eventId) {
-  await delay();
-  console.log('Fetching routes for event:', eventId);
-  return { success: true, data: FAKE_ROUTES };
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/routes/`, {
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Get routes failed:', error);
+    return { success: false, error: error.message, data: [] };
+  }
 }
 
 /**
  * Create a new route
- * @param {Object} routeData - Route information
- * @returns {Promise<Object>} Created route
  */
 export async function createRoute(routeData) {
-  await delay();
-  const newRoute = {
-    id: Math.max(...FAKE_ROUTES.map(r => r.id), 0) + 1,
-    ...routeData,
-    color: routeData.color || '#3B82F6'
-  };
-  FAKE_ROUTES.push(newRoute);
-  return { success: true, data: newRoute };
+  try {
+    const eventId = routeData.eventId || routeData.event;
+    const response = await fetch(`/api/tradeshow/events/${eventId}/routes/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        name: routeData.name,
+        description: routeData.description || '',
+        route_type: routeData.routeType || routeData.route_type || 'custom',
+        booth_order: routeData.boothOrder || routeData.booth_order || [],
+        color: routeData.color || '#3B82F6'
+      })
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Create route failed:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 /**
  * Update an existing route
- * @param {number} routeId - Route ID
- * @param {Object} updates - Updated fields
- * @returns {Promise<Object>} Updated route
  */
 export async function updateRoute(routeId, updates) {
-  await delay();
-  const index = FAKE_ROUTES.findIndex(r => r.id === routeId);
-  if (index !== -1) {
-    FAKE_ROUTES[index] = { ...FAKE_ROUTES[index], ...updates };
-    return { success: true, data: FAKE_ROUTES[index] };
+  try {
+    const response = await fetch(`/api/tradeshow/routes/${routeId}/`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        name: updates.name,
+        description: updates.description,
+        booth_order: updates.boothOrder || updates.booth_order,
+        color: updates.color
+      })
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Update route failed:', error);
+    return { success: false, error: error.message };
   }
-  return { success: false, error: 'Route not found' };
 }
 
 /**
  * Delete a route
- * @param {number} routeId - Route ID
- * @returns {Promise<Object>} Success status
  */
 export async function deleteRoute(routeId) {
-  await delay();
-  const index = FAKE_ROUTES.findIndex(r => r.id === routeId);
-  if (index !== -1) {
-    FAKE_ROUTES.splice(index, 1);
+  try {
+    const response = await fetch(`/api/tradeshow/routes/${routeId}/`, {
+      method: 'DELETE',
+      headers: authHeaders()
+    });
+    if (!response.ok) {
+      throw new Error(`Delete failed: ${response.status}`);
+    }
     return { success: true };
+  } catch (error) {
+    console.error('Delete route failed:', error);
+    return { success: false, error: error.message };
   }
-  return { success: false, error: 'Route not found' };
 }
+
+// ========================================
+// 预设和分享功能 API
+// ========================================
 
 /**
  * Apply preset layout to event
- * @param {number} eventId - Event ID
- * @param {string} presetId - Preset layout ID
- * @returns {Promise<Object>} Applied layout data
  */
 export async function applyPresetLayout(eventId, presetId) {
-  await delay();
-  console.log('Applying preset layout:', presetId, 'to event:', eventId);
-  // In real implementation, this would load preset from backend
-  return { success: true, data: { presetId, applied: true } };
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/apply_preset/`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ preset_id: presetId })
+    });
+    const data = await handleResponse(response);
+    return { success: true, data };
+  } catch (error) {
+    console.error('Apply preset layout failed:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 /**
  * Generate share token for event
- * @param {number} eventId - Event ID
- * @returns {Promise<Object>} Share token
  */
 export async function generateShareToken(eventId) {
-  await delay();
-  const token = `share-tradeshow-${eventId}-${Date.now()}`;
-  return { success: true, data: { shareToken: token } };
+  try {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/share/`, {
+      method: 'POST',
+      headers: authHeaders()
+    });
+    const data = await handleResponse(response);
+    return { 
+      success: true, 
+      data: { shareToken: data.share_token || data.token }
+    };
+  } catch (error) {
+    console.error('Generate share token failed:', error);
+    return { success: false, error: error.message };
+  }
 }
