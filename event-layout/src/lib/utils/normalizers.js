@@ -171,12 +171,12 @@ export function normalizeConferenceElement(raw) {
     id: String(resolvedId),
     type: mappedType,
     label: raw.label || raw.element_label || '',
-    x: raw.x ?? raw.position_x ?? 0,
-    y: raw.y ?? raw.position_y ?? 0,
-    width: raw.width ?? 1,
-    height: raw.height ?? 1,
-    rotation: raw.rotation || 0,
-    seats: raw.seats ?? 0,
+    x: parseFloat(raw.x ?? raw.position_x ?? 0),
+    y: parseFloat(raw.y ?? raw.position_y ?? 0),
+    width: parseFloat(raw.width ?? 1),
+    height: parseFloat(raw.height ?? 1),
+    rotation: parseFloat(raw.rotation || 0),
+    seats: parseInt(raw.seats ?? 0, 10),
   };
 }
 
@@ -223,10 +223,10 @@ export function normalizeTradeshowBooth(raw) {
     id: String(resolvedId),
     type: mappedType,
     label: raw.label || raw.booth_label || '',
-    x: raw.x ?? raw.position_x ?? 0,
-    y: raw.y ?? raw.position_y ?? 0,
-    width: raw.width ?? 1,
-    height: raw.height ?? 1,
-    rotation: raw.rotation || 0,
+    x: parseFloat(raw.x ?? raw.position_x ?? 0),
+    y: parseFloat(raw.y ?? raw.position_y ?? 0),
+    width: parseFloat(raw.width ?? 1),
+    height: parseFloat(raw.height ?? 1),
+    rotation: parseFloat(raw.rotation || 0),
   };
 }

@@ -410,11 +410,19 @@ export default function TradeshowCanvas({
         continue;
       }
 
-      // Validate booth coordinates before rendering
-      const isValidNumber = (val) => typeof val === 'number' && !isNaN(val) && isFinite(val);
+      // Convert string coordinates to numbers and validate
+      const toNumber = (val) => {
+        const num = typeof val === 'string' ? parseFloat(val) : val;
+        return (typeof num === 'number' && !isNaN(num) && isFinite(num)) ? num : null;
+      };
 
-      if (!isValidNumber(startBooth.x) || !isValidNumber(startBooth.y) ||
-          !isValidNumber(startBooth.width) || !isValidNumber(startBooth.height)) {
+      const startBoothX = toNumber(startBooth.x);
+      const startBoothY = toNumber(startBooth.y);
+      const startBoothWidth = toNumber(startBooth.width);
+      const startBoothHeight = toNumber(startBooth.height);
+
+      if (startBoothX === null || startBoothY === null ||
+          startBoothWidth === null || startBoothHeight === null) {
         console.error('❌ Start booth has invalid coordinates:', {
           boothId: startBoothId,
           label: startBooth.label,
@@ -426,8 +434,13 @@ export default function TradeshowCanvas({
         continue;
       }
 
-      if (!isValidNumber(endBooth.x) || !isValidNumber(endBooth.y) ||
-          !isValidNumber(endBooth.width) || !isValidNumber(endBooth.height)) {
+      const endBoothX = toNumber(endBooth.x);
+      const endBoothY = toNumber(endBooth.y);
+      const endBoothWidth = toNumber(endBooth.width);
+      const endBoothHeight = toNumber(endBooth.height);
+
+      if (endBoothX === null || endBoothY === null ||
+          endBoothWidth === null || endBoothHeight === null) {
         console.error('❌ End booth has invalid coordinates:', {
           boothId: endBoothId,
           label: endBooth.label,
@@ -439,23 +452,12 @@ export default function TradeshowCanvas({
         continue;
       }
 
-      const startX = (startBooth.x + startBooth.width / 2) * PIXELS_PER_METER;
-      const startY = (startBooth.y + startBooth.height / 2) * PIXELS_PER_METER;
-      const endX = (endBooth.x + endBooth.width / 2) * PIXELS_PER_METER;
-      const endY = (endBooth.y + endBooth.height / 2) * PIXELS_PER_METER;
+      const startX = (startBoothX + startBoothWidth / 2) * PIXELS_PER_METER;
+      const startY = (startBoothY + startBoothHeight / 2) * PIXELS_PER_METER;
+      const endX = (endBoothX + endBoothWidth / 2) * PIXELS_PER_METER;
+      const endY = (endBoothY + endBoothHeight / 2) * PIXELS_PER_METER;
 
-      // Final validation of calculated coordinates
-      if (!isValidNumber(startX) || !isValidNumber(startY) ||
-          !isValidNumber(endX) || !isValidNumber(endY)) {
-        console.error('❌ Calculated coordinates are invalid:', {
-          startX, startY, endX, endY,
-          startBooth: { id: startBoothId, x: startBooth.x, y: startBooth.y },
-          endBooth: { id: endBoothId, x: endBooth.x, y: endBooth.y }
-        });
-        continue;
-      }
-
-      console.log(`✓ Rendering arrow ${i}: (${startX.toFixed(1)}, ${startY.toFixed(1)}) -> (${endX.toFixed(1)}, ${endY.toFixed(1)})`);
+      console.log(`✓ Rendering arrow ${i}: ${startBooth.label} (${startX.toFixed(1)}, ${startY.toFixed(1)}) -> ${endBooth.label} (${endX.toFixed(1)}, ${endY.toFixed(1)})`);
 
       arrows.push(
         <Arrow
