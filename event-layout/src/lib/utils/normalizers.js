@@ -141,18 +141,35 @@ export function normalizeConferenceElement(raw) {
     raw.uuid ??
     null;
   if (!resolvedId) return null;
-  
-  // Validate element type - only accept known conference element types
-  const elementType = raw.type || raw.element_type;
-  const validTypes = ['table_round', 'table_rectangle', 'table_rect', 'table_square', 'chair', 'podium', 'door', 'outlet'];
-  if (!elementType || !validTypes.includes(elementType)) {
-    console.warn('Invalid element type, skipping:', elementType, raw);
+
+  // Normalize/validate element type (map synonyms to frontend types)
+  const incomingType = (raw.type || raw.element_type || '').toLowerCase();
+  const typeMap = {
+    table_rectangle: 'table_rect',
+    table_rect: 'table_rect',
+    table_square: 'table_square',
+    table_round: 'table_round',
+    chair: 'chair',
+    podium: 'podium',
+    stage: 'stage',
+    door: 'door1',
+    door1: 'door1',
+    door2: 'door2',
+    outlet: 'power_outlet',
+    power_outlet: 'power_outlet',
+    window: 'window',
+    tactile_paving: 'tactile_paving',
+    custom: 'custom',
+  };
+  const mappedType = typeMap[incomingType];
+  if (!mappedType) {
+    console.warn('Invalid element type, skipping:', incomingType, raw);
     return null;
   }
-  
+
   return {
     id: String(resolvedId),
-    type: elementType,
+    type: mappedType,
     label: raw.label || raw.element_label || '',
     x: raw.x ?? raw.position_x ?? 0,
     y: raw.y ?? raw.position_y ?? 0,
@@ -173,21 +190,38 @@ export function normalizeTradeshowBooth(raw) {
     raw.uuid ??
     null;
   if (!resolvedId) return null;
-  
-  // Validate booth type - accept both booth and facility types
-  const boothType = raw.type || raw.booth_type;
-  const validTypes = [
-    'booth_standard', 'booth_large', 'booth_premium', 'booth_island',
-    'aisle', 'tactile_paving', 'waiting_area', 'restroom', 'info_desk'
-  ];
-  if (!boothType || !validTypes.includes(boothType)) {
-    console.warn('Invalid booth type, skipping:', boothType, raw);
+
+  // Normalize/validate booth type (map synonyms to frontend types)
+  const incomingType = (raw.type || raw.booth_type || '').toLowerCase();
+  const typeMap = {
+    booth_standard: 'booth_standard',
+    standard: 'booth_standard',
+    booth_large: 'booth_large',
+    large: 'booth_large',
+    booth_premium: 'booth_premium',
+    premium: 'booth_premium',
+    booth_island: 'booth_island',
+    island: 'booth_island',
+    aisle: 'aisle',
+    tactile_paving: 'tactile_paving',
+    waiting_area: 'waiting_area',
+    restroom: 'restroom',
+    info_desk: 'info_desk',
+    door: 'door1',
+    door1: 'door1',
+    door2: 'door2',
+    power_outlet: 'power_outlet',
+    outlet: 'power_outlet',
+  };
+  const mappedType = typeMap[incomingType];
+  if (!mappedType) {
+    console.warn('Invalid booth type, skipping:', incomingType, raw);
     return null;
   }
   
   return {
     id: String(resolvedId),
-    type: boothType,
+    type: mappedType,
     label: raw.label || raw.booth_label || '',
     x: raw.x ?? raw.position_x ?? 0,
     y: raw.y ?? raw.position_y ?? 0,

@@ -1,7 +1,7 @@
 // Unified Kiosk Mode - Combines Conference and Tradeshow kiosks with mode toggle
 
-import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   FiCalendar,
   FiGrid,
@@ -9,13 +9,18 @@ import {
   FiX,
   FiMapPin,
   FiCheckCircle,
+  FiRepeat,
+  FiShare2,
 } from 'react-icons/fi';
 import ConferenceCanvas from '../components/conference/ConferenceCanvas';
 import TradeshowCanvas from '../components/tradeshow/TradeshowCanvas';
-// Removed localStorage imports - all data now comes from backend via URL
+import EventSelectorModal from '../components/EventSelectorModal';
+import ShareModal from '../components/conference/ShareModal';
+// Import localStorage helpers for event ID management
 import * as ConferenceAPI from '../server-actions/conference-planner';
 import * as TradeshowAPI from '../server-actions/tradeshow-planner';
-import { normalizeConferenceGuest, normalizeTradeshowVendor } from '../lib/utils/normalizers';
+import { normalizeConferenceGuest, normalizeTradeshowVendor, normalizeConferenceElement, normalizeTradeshowBooth } from '../lib/utils/normalizers';
+import { getLastKioskEventId, setLastKioskEventId } from '../lib/utils/storage';
 
 const REFRESH_INTERVAL = 60000; // 60 seconds
 const UUID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
@@ -65,6 +70,10 @@ export default function Kiosk() {
 
 export function ConferenceKiosk() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [currentEventId, setCurrentEventId] = useState(null);
+  const [showEventSelector, setShowEventSelector] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [event, setEvent] = useState(null);
   const [elements, setElements] = useState([]);
   const [guests, setGuests] = useState([]);
@@ -83,24 +92,19 @@ export function ConferenceKiosk() {
     return parsed.toLocaleString();
   };
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
+    if (!currentEventId) {
+      console.warn('No eventId available.');
+      setIsOnline(false);
+      return;
+    }
+
     try {
-      // Get event ID from URL parameter
-      const params = new URLSearchParams(location.search);
-      const urlEventId = params.get('eventId');
-
-      if (!urlEventId) {
-        console.warn('No eventId in URL. Please provide ?eventId=xxx in the URL.');
-        setIsOnline(false);
-        return;
-      }
-
-      // Load data from backend using URL event ID
-      const eventResponse = await ConferenceAPI.getEvent(urlEventId);
-      const guestsResponse = await ConferenceAPI.getGuests(urlEventId);
-      const elementsResponse = await ConferenceAPI.getElements(urlEventId);
-
-      if (eventResponse.success && guestsResponse.success && elementsResponse.success) {
+      // Load data from backend using current event ID
+      const eventResponse = await ConferenceAPI.getEvent(currentEventId);
+      const guestsResponse = await ConferenceAPI.getGuests(currentEventId);
+      
+      if (eventResponse.success && guestsResponse.success) {
         const updatedEvent = {
           id: eventResponse.data.id,
           name: eventResponse.data.name,
@@ -114,43 +118,104 @@ export function ConferenceKiosk() {
           .map(normalizeConferenceGuest)
           .filter(Boolean);
 
-        const updatedElements = elementsResponse.data.map(el => ({
-          id: el.id,
-          type: el.element_type,
-          x: el.position_x,
-          y: el.position_y,
-          width: el.width,
-          height: el.height,
-          rotation: el.rotation || 0,
-          label: el.label,
-          seats: el.seats,
-        }));
+        // Load elements from backend
+        let updatedElements = [];
+        {
+          const elementsResponse = await ConferenceAPI.getElements(currentEventId);
+          if (elementsResponse.success) {
+            const normalizedElements = elementsResponse.data
+              .map(normalizeConferenceElement)
+              .filter(Boolean);
+            const uniqueElementsMap = new Map();
+            normalizedElements.forEach(el => {
+              if (!uniqueElementsMap.has(el.id)) uniqueElementsMap.set(el.id, el);
+            });
+            const bySignature = new Map();
+            Array.from(uniqueElementsMap.values()).forEach(el => {
+              const sig = [
+                el.type,
+                el.label || '',
+                Math.round((Number(el.x) || 0) * 100) / 100,
+                Math.round((Number(el.y) || 0) * 100) / 100,
+                Math.round((Number(el.width) || 0) * 100) / 100,
+                Math.round((Number(el.height) || 0) * 100) / 100,
+                Math.round((Number(el.rotation) || 0) % 360),
+              ].join('|');
+              if (!bySignature.has(sig)) bySignature.set(sig, el);
+            });
+            updatedElements = Array.from(bySignature.values());
+            console.log(`✓ Loaded ${updatedElements.length} elements from backend`);
+          }
+        }
 
         setEvent(updatedEvent);
         setGuests(updatedGuests);
         setElements(updatedElements);
         setIsOnline(true);
-        console.log('✓ Data loaded from backend API');
+        console.log('✓ Data loaded from backend API for event:', currentEventId);
       } else {
         console.warn('Failed to load event data from backend');
+        // Set a placeholder event to break out of loading state
+        setEvent({
+          id: currentEventId,
+          name: 'Event Not Found',
+          description: 'Unable to load event data',
+          date: '',
+          roomWidth: 24,
+          roomHeight: 16,
+        });
+        setGuests([]);
+        setElements([]);
         setIsOnline(false);
       }
     } catch (error) {
       console.error('Failed to load from backend:', error);
+      // Set a placeholder event to break out of loading state
+      setEvent({
+        id: currentEventId,
+        name: 'Error Loading Event',
+        description: error.message || 'Failed to connect to backend',
+        date: '',
+        roomWidth: 24,
+        roomHeight: 16,
+      });
+      setGuests([]);
+      setElements([]);
       setIsOnline(false);
     }
-  };
+  }, [currentEventId, location.search]);
 
+  // Initialize event ID on mount
   useEffect(() => {
-    loadData();
+    // Priority: URL parameter > localStorage > show modal
+    const params = new URLSearchParams(location.search);
+    let eventId = params.get('eventId');
 
-    const interval = setInterval(() => {
-      console.log('Auto-refreshing kiosk data...');
+    if (!eventId) {
+      eventId = getLastKioskEventId();
+    }
+
+    if (eventId) {
+      setCurrentEventId(eventId);
+      setLastKioskEventId(eventId);
+    } else {
+      setShowEventSelector(true);
+    }
+  }, [location.search]);
+
+  // Load data when currentEventId changes
+  useEffect(() => {
+    if (currentEventId) {
       loadData();
-    }, REFRESH_INTERVAL);
 
-    return () => clearInterval(interval);
-  }, []);
+      const interval = setInterval(() => {
+        console.log('Auto-refreshing kiosk data...');
+        loadData();
+      }, REFRESH_INTERVAL);
+
+      return () => clearInterval(interval);
+    }
+  }, [currentEventId, loadData]);
 
   useEffect(() => {
     if (!checkInNotice) return;
@@ -158,9 +223,30 @@ export function ConferenceKiosk() {
     return () => clearTimeout(timer);
   }, [checkInNotice]);
 
+  const handleEventSelect = (eventId) => {
+    // Clear current data
+    setEvent(null);
+    setGuests([]);
+    setElements([]);
+    setSelectedGuest(null);
+    setHighlightedElementId(null);
+
+    // Update event ID
+    setCurrentEventId(eventId);
+    setLastKioskEventId(eventId);
+
+    // Update URL with eventId
+    const params = new URLSearchParams(location.search);
+    params.set('eventId', eventId);
+    const newUrl = `${location.pathname}?${params.toString()}`;
+    navigate(newUrl, { replace: true });
+
+    // Close modal
+    setShowEventSelector(false);
+  };
+
   const filteredGuests = guests.filter(guest =>
-    guest.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    guest.email?.toLowerCase().includes(searchTerm.toLowerCase())
+    guest.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const showNotice = (type, message) => {
@@ -294,20 +380,30 @@ export function ConferenceKiosk() {
     handleSelectGuest(guest);
   };
 
-  if (!event) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-gray-100">
-        <div className="text-center">
-          <div className="text-2xl font-bold text-gray-800 mb-2">Loading...</div>
-          <div className="text-gray-600">Loading conference information</div>
-        </div>
-      </div>
-    );
-  }
-
   const selectedGuestCheckInLabel = selectedGuest?.checkInTime
     ? formatDateTime(selectedGuest.checkInTime)
     : null;
+
+  // Always render the modal first, even if event is not loaded
+  if (!event) {
+    return (
+      <>
+        <EventSelectorModal
+          isOpen={showEventSelector}
+          onClose={currentEventId ? () => setShowEventSelector(false) : null}
+          onSelectEvent={handleEventSelect}
+          mode="conference"
+          lastEventId={getLastKioskEventId()}
+        />
+        <div className="flex items-center justify-center h-screen bg-gray-100">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-gray-800 mb-2">Loading...</div>
+            <div className="text-gray-600">Loading conference information</div>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <div className="flex flex-col bg-gray-100" style={{
@@ -315,14 +411,44 @@ export function ConferenceKiosk() {
       margin: '0 calc(-50vw + 50%)',
       width: '100vw'
     }}>
+      <EventSelectorModal
+        isOpen={showEventSelector}
+        onClose={currentEventId ? () => setShowEventSelector(false) : null}
+        onSelectEvent={handleEventSelect}
+        mode="conference"
+        lastEventId={getLastKioskEventId()}
+      />
+      
       <div className="bg-blue-600 text-white px-6 py-4">
-        <h1 className="text-2xl font-bold">{event.name}</h1>
-        {event.description && (
-          <p className="text-blue-100 mt-1">{event.description}</p>
-        )}
-        {event.date && (
-          <p className="text-blue-200 text-sm mt-1">Date: {event.date}</p>
-        )}
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold">{event.name}</h1>
+            {event.description && (
+              <p className="text-blue-100 mt-1">{event.description}</p>
+            )}
+            {event.date && (
+              <p className="text-blue-200 text-sm mt-1">Date: {event.date}</p>
+            )}
+          </div>
+          <div className="ml-4 flex gap-2">
+            <button
+              onClick={() => setShowShareModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold text-sm transition-colors"
+              title="Share this event"
+            >
+              <FiShare2 className="w-4 h-4" />
+              Share
+            </button>
+            <button
+              onClick={() => setShowEventSelector(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-700 hover:bg-blue-800 rounded-lg font-semibold text-sm transition-colors"
+              title="Switch to a different event"
+            >
+              <FiRepeat className="w-4 h-4" />
+              Switch Event
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="bg-white border-b border-gray-200 px-6 py-4 relative">
@@ -361,9 +487,6 @@ export function ConferenceKiosk() {
                     className="flex-1 text-left"
                   >
                     <div className="font-semibold text-gray-800">{guest.name}</div>
-                    {guest.email && (
-                      <div className="text-sm text-gray-600">{guest.email}</div>
-                    )}
                     {guest.tableNumber && (
                       <div className="text-sm text-blue-600 mt-1">
                         Table: {guest.tableNumber}
@@ -413,6 +536,7 @@ export function ConferenceKiosk() {
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 p-6">
           <ConferenceCanvas
+            key={event.id}
             elements={elements}
             onElementsChange={() => {}}
             roomWidth={event.roomWidth}
@@ -601,12 +725,25 @@ export function ConferenceKiosk() {
           </span>
         </div>
       </div>
+
+      {/* Share Modal */}
+      <ShareModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        eventId={event?.id}
+        onGenerateToken={ConferenceAPI.generateShareToken}
+        guests={guests}
+      />
     </div>
   );
 }
 
 export function TradeshowKiosk() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [currentEventId, setCurrentEventId] = useState(null);
+  const [showEventSelector, setShowEventSelector] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [event, setEvent] = useState(null);
   const [booths, setBooths] = useState([]);
   const [vendors, setVendors] = useState([]);
@@ -618,25 +755,20 @@ export function TradeshowKiosk() {
   const [checkInNotice, setCheckInNotice] = useState(null);
   const [isOnline, setIsOnline] = useState(true);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
+    if (!currentEventId) {
+      console.warn('No eventId available.');
+      setIsOnline(false);
+      return;
+    }
+
     try {
-      // Get event ID from URL parameter
-      const params = new URLSearchParams(location.search);
-      const urlEventId = params.get('eventId');
-
-      if (!urlEventId) {
-        console.warn('No eventId in URL. Please provide ?eventId=xxx in the URL.');
-        setIsOnline(false);
-        return;
-      }
-
-      // Load data from backend using URL event ID
-      const eventResponse = await TradeshowAPI.getEvent(urlEventId);
-      const vendorsResponse = await TradeshowAPI.getVendors(urlEventId);
-      const boothsResponse = await TradeshowAPI.getBooths(urlEventId);
-      const routesResponse = await TradeshowAPI.getRoutes(urlEventId);
-
-      if (eventResponse.success && vendorsResponse.success && boothsResponse.success) {
+      // Load data from backend using current event ID
+      const eventResponse = await TradeshowAPI.getEvent(currentEventId);
+      const vendorsResponse = await TradeshowAPI.getVendors(currentEventId);
+      const routesResponse = await TradeshowAPI.getRoutes(currentEventId);
+      
+      if (eventResponse.success && vendorsResponse.success) {
         const updatedEvent = {
           id: eventResponse.data.id,
           name: eventResponse.data.name,
@@ -650,16 +782,35 @@ export function TradeshowKiosk() {
           .map(normalizeTradeshowVendor)
           .filter(Boolean);
 
-        const updatedBooths = boothsResponse.data.map(booth => ({
-          id: booth.id,
-          type: booth.booth_type,
-          x: booth.position_x,
-          y: booth.position_y,
-          width: booth.width,
-          height: booth.height,
-          rotation: booth.rotation || 0,
-          label: booth.label,
-        }));
+        // Load booths from backend
+        let updatedBooths = [];
+        {
+          const boothsResponse = await TradeshowAPI.getBooths(currentEventId);
+          if (boothsResponse.success) {
+            const normalizedBooths = boothsResponse.data
+              .map(normalizeTradeshowBooth)
+              .filter(Boolean);
+            const uniqueBoothsMap = new Map();
+            normalizedBooths.forEach(b => {
+              if (!uniqueBoothsMap.has(b.id)) uniqueBoothsMap.set(b.id, b);
+            });
+            const byBoothSignature = new Map();
+            Array.from(uniqueBoothsMap.values()).forEach(b => {
+              const sig = [
+                b.type,
+                b.label || '',
+                Math.round((Number(b.x) || 0) * 100) / 100,
+                Math.round((Number(b.y) || 0) * 100) / 100,
+                Math.round((Number(b.width) || 0) * 100) / 100,
+                Math.round((Number(b.height) || 0) * 100) / 100,
+                Math.round((Number(b.rotation) || 0) % 360),
+              ].join('|');
+              if (!byBoothSignature.has(sig)) byBoothSignature.set(sig, b);
+            });
+            updatedBooths = Array.from(byBoothSignature.values());
+            console.log(`✓ Loaded ${updatedBooths.length} booths from backend`);
+          }
+        }
 
         const updatedRoutes = routesResponse.success ? routesResponse.data.map(route => ({
           id: route.id,
@@ -673,33 +824,102 @@ export function TradeshowKiosk() {
         setBooths(updatedBooths);
         setRoutes(updatedRoutes);
         setIsOnline(true);
-        console.log('✓ Data loaded from backend API');
+        console.log('✓ Data loaded from backend API for event:', currentEventId);
       } else {
         console.warn('Failed to load event data from backend');
+        // Set a placeholder event to break out of loading state
+        setEvent({
+          id: currentEventId,
+          name: 'Event Not Found',
+          description: 'Unable to load event data',
+          date: '',
+          hallWidth: 40,
+          hallHeight: 30,
+        });
+        setVendors([]);
+        setBooths([]);
+        setRoutes([]);
         setIsOnline(false);
       }
     } catch (error) {
       console.error('Failed to load from backend:', error);
+      // Set a placeholder event to break out of loading state
+      setEvent({
+        id: currentEventId,
+        name: 'Error Loading Event',
+        description: error.message || 'Failed to connect to backend',
+        date: '',
+        hallWidth: 40,
+        hallHeight: 30,
+      });
+      setVendors([]);
+      setBooths([]);
+      setRoutes([]);
       setIsOnline(false);
     }
-  };
+  }, [currentEventId, location.search]);
 
+  // Initialize event ID on mount
   useEffect(() => {
-    loadData();
+    // Priority: URL parameter > localStorage > show modal
+    const params = new URLSearchParams(location.search);
+    let eventId = params.get('eventId');
 
-    const interval = setInterval(() => {
-      console.log('Auto-refreshing kiosk data...');
+    if (!eventId) {
+      eventId = getLastKioskEventId();
+    }
+
+    if (eventId) {
+      setCurrentEventId(eventId);
+      setLastKioskEventId(eventId);
+    } else {
+      setShowEventSelector(true);
+    }
+  }, [location.search]);
+
+  // Load data when currentEventId changes
+  useEffect(() => {
+    if (currentEventId) {
       loadData();
-    }, REFRESH_INTERVAL);
 
-    return () => clearInterval(interval);
-  }, []);
+      const interval = setInterval(() => {
+        console.log('Auto-refreshing kiosk data...');
+        loadData();
+      }, REFRESH_INTERVAL);
+
+      return () => clearInterval(interval);
+    }
+  }, [currentEventId, loadData]);
 
   useEffect(() => {
     if (!checkInNotice) return;
     const timer = setTimeout(() => setCheckInNotice(null), 6000);
     return () => clearTimeout(timer);
   }, [checkInNotice]);
+
+  const handleEventSelect = (eventId) => {
+    // Clear current data
+    setEvent(null);
+    setVendors([]);
+    setBooths([]);
+    setRoutes([]);
+    setSelectedVendor(null);
+    setHighlightedBoothId(null);
+    setActiveRouteId(null);
+
+    // Update event ID
+    setCurrentEventId(eventId);
+    setLastKioskEventId(eventId);
+
+    // Update URL with eventId
+    const params = new URLSearchParams(location.search);
+    params.set('eventId', eventId);
+    const newUrl = `${location.pathname}?${params.toString()}`;
+    navigate(newUrl, { replace: true });
+
+    // Close modal
+    setShowEventSelector(false);
+  };
 
   const filteredVendors = vendors.filter(vendor =>
     vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -850,14 +1070,24 @@ export function TradeshowKiosk() {
   const checkedInCount = vendors.filter(v => v.checkedIn).length;
   const vendorCheckInLabel = selectedVendor ? formatDateTime(selectedVendor.checkInTime) : null;
 
+  // Always render the modal first, even if event is not loaded
   if (!event) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-100">
-        <div className="text-center">
-          <div className="text-2xl font-bold text-gray-800 mb-2">Loading...</div>
-          <div className="text-gray-600">Loading tradeshow information</div>
+      <>
+        <EventSelectorModal
+          isOpen={showEventSelector}
+          onClose={currentEventId ? () => setShowEventSelector(false) : null}
+          onSelectEvent={handleEventSelect}
+          mode="tradeshow"
+          lastEventId={getLastKioskEventId()}
+        />
+        <div className="flex items-center justify-center h-screen bg-gray-100">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-gray-800 mb-2">Loading...</div>
+            <div className="text-gray-600">Loading tradeshow information</div>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -867,17 +1097,47 @@ export function TradeshowKiosk() {
       margin: '0 calc(-50vw + 50%)',
       width: '100vw'
     }}>
+      <EventSelectorModal
+        isOpen={showEventSelector}
+        onClose={currentEventId ? () => setShowEventSelector(false) : null}
+        onSelectEvent={handleEventSelect}
+        mode="tradeshow"
+        lastEventId={getLastKioskEventId()}
+      />
+      
       <div className="bg-green-600 text-white px-6 py-4">
-        <h1 className="text-2xl font-bold">{event.name}</h1>
-        {event.description && (
-          <p className="text-green-100 mt-1">{event.description}</p>
-        )}
-        {event.date && (
-          <p className="text-green-200 text-sm mt-1">Date: {event.date}</p>
-        )}
-        <div className="flex flex-wrap items-center gap-4 mt-2 text-green-100 text-sm">
-          <span>Total Vendors: {vendors.length}</span>
-          <span className="text-green-200">✓ Checked In: {checkedInCount}</span>
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold">{event.name}</h1>
+            {event.description && (
+              <p className="text-green-100 mt-1">{event.description}</p>
+            )}
+            {event.date && (
+              <p className="text-green-200 text-sm mt-1">Date: {event.date}</p>
+            )}
+            <div className="flex flex-wrap items-center gap-4 mt-2 text-green-100 text-sm">
+              <span>Total Vendors: {vendors.length}</span>
+              <span className="text-green-200">✓ Checked In: {checkedInCount}</span>
+            </div>
+          </div>
+          <div className="ml-4 flex gap-2">
+            <button
+              onClick={() => setShowShareModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold text-sm transition-colors"
+              title="Share this event"
+            >
+              <FiShare2 className="w-4 h-4" />
+              Share
+            </button>
+            <button
+              onClick={() => setShowEventSelector(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-700 hover:bg-green-800 rounded-lg font-semibold text-sm transition-colors"
+              title="Switch to a different event"
+            >
+              <FiRepeat className="w-4 h-4" />
+              Switch Event
+            </button>
+          </div>
         </div>
       </div>
 
@@ -991,6 +1251,7 @@ export function TradeshowKiosk() {
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 p-6">
           <TradeshowCanvas
+            key={event.id}
             booths={booths}
             onBoothsChange={() => {}}
             hallWidth={event.hallWidth}
@@ -1187,6 +1448,15 @@ export function TradeshowKiosk() {
           <span>Total Booths: {booths.length}</span>
         </div>
       </div>
+
+      {/* Share Modal */}
+      <ShareModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        eventId={event?.id}
+        onGenerateToken={TradeshowAPI.generateShareToken || ConferenceAPI.generateShareToken}
+        guests={vendors}
+      />
     </div>
   );
 }

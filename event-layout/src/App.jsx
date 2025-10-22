@@ -11,11 +11,13 @@ import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
 import QRCode from "./pages/QRCode.jsx";
 import Profile from "./pages/Profile.jsx";
-import EditorDesign from "./pages/EditorDesign.jsx";
 
 // Planner pages
 import ConferencePlanner from "./pages/ConferencePlanner.jsx";
 import TradeshowPlanner from "./pages/TradeshowPlanner.jsx";
+
+// Shared view pages (public)
+import ConferenceSharedView from "./pages/ConferenceSharedView.jsx";
 
 // Kiosk pages
 import Kiosk from "./pages/Kiosk.jsx";
@@ -37,6 +39,9 @@ function NotFound() {
 export default function App() {
   return (
     <Routes>
+      {/* Public shared view routes (no auth, no layout/header) */}
+      <Route path="/conference/share/:shareToken" element={<ConferenceSharedView />} />
+
       {/* Kiosk routes (no auth, no layout/header) */}
       <Route path="/kiosk" element={<Kiosk />} />
       {/* <Route path="/kiosk-conference" element={<KioskConference />} /> */}
@@ -53,7 +58,6 @@ export default function App() {
         <Route path="/about" element={<About />} />
         <Route path="/conference" element={<ConferencePlanner />} />
         <Route path="/tradeshow" element={<TradeshowPlanner />} />
-        <Route path="/editor/:designId" element={<EditorDesign />} />
       </Route>
 
       {/* Public auth routes with Layout (no auth required) */}

@@ -79,6 +79,7 @@ class ConferenceGroupSerializer(serializers.ModelSerializer):
 class ConferenceGuestSerializer(serializers.ModelSerializer):
     group_name = serializers.CharField(source='group.name', read_only=True, required=False)
     seat_info = serializers.SerializerMethodField()
+    email = serializers.EmailField(required=False, allow_blank=True)
 
     class Meta:
         model = ConferenceGuest

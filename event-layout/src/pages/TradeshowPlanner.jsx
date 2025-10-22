@@ -12,7 +12,6 @@ import PropertiesPanel from '../components/conference/PropertiesPanel';
 import { parseVendorCSV, vendorsToCSV, downloadCSV } from '../lib/utils/csvParser';
 import { jsPDF } from 'jspdf';
 import * as TradeshowAPI from '../server-actions/tradeshow-planner';
-import { createOrGetDesign, saveDesignVersion } from '../lib/api';
 import { normalizeTradeshowVendor, normalizeTradeshowBooth } from '../lib/utils/normalizers';
 
 export default function TradeshowPlanner() {
@@ -28,8 +27,6 @@ export default function TradeshowPlanner() {
   const fileInputRef = useRef(null);
   const saveLayoutTimerRef = useRef(null);
   const saveEventTimerRef = useRef(null);
-  const [designId, setDesignId] = useState(null);
-  const [dirty, setDirty] = useState(false);
   const [canvasVersion, setCanvasVersion] = useState(0);
   
   // Track if initial load is complete
@@ -53,23 +50,7 @@ export default function TradeshowPlanner() {
 
       // Get event ID from URL parameter
       const params = new URLSearchParams(location.search);
-      let urlEventId = params.get('eventId');
-      const providedDesignId = params.get('designId');
-
-      // If designId is provided but no eventId, try to get eventId from design metadata
-      if (providedDesignId && !urlEventId) {
-        try {
-          const { getLatestDesign } = await import('../lib/api');
-          const latest = await getLatestDesign(providedDesignId);
-          const meta = latest.data?.meta || {};
-          if (meta.eventId) {
-            urlEventId = meta.eventId;
-            console.log('✓ Found eventId in design metadata:', urlEventId);
-          }
-        } catch (e) {
-          console.warn('Failed to load design metadata:', e);
-        }
-      }
+      const urlEventId = params.get('eventId');
 
       try {
         if (urlEventId) {
@@ -84,10 +65,6 @@ export default function TradeshowPlanner() {
               hallWidth: eventResp.data.hall_width ?? defaultEvent.hallWidth,
               hallHeight: eventResp.data.hall_height ?? defaultEvent.hallHeight,
             };
-            // Update URL to include both eventId and designId if available
-            if (providedDesignId && !params.get('eventId')) {
-              navigate(`/tradeshow?eventId=${ensuredEvent.id}&designId=${providedDesignId}`, { replace: true });
-            }
             console.log('✓ Loaded existing event from URL:', ensuredEvent.id);
           } else {
             // Event doesn't exist, create new one and update URL
@@ -100,11 +77,7 @@ export default function TradeshowPlanner() {
                 hallWidth: resp.data.hall_width ?? defaultEvent.hallWidth,
                 hallHeight: resp.data.hall_height ?? defaultEvent.hallHeight,
               };
-              // Update URL with new event ID (preserve designId if present)
-              const newUrl = providedDesignId
-                ? `/tradeshow?eventId=${resp.data.id}&designId=${providedDesignId}`
-                : `/tradeshow?eventId=${resp.data.id}`;
-              navigate(newUrl, { replace: true });
+              navigate(`/tradeshow?eventId=${resp.data.id}`, { replace: true });
               console.log('✓ Created new event and updated URL:', resp.data.id);
             }
           }
@@ -118,11 +91,7 @@ export default function TradeshowPlanner() {
               hallWidth: resp.data.hall_width ?? defaultEvent.hallWidth,
               hallHeight: resp.data.hall_height ?? defaultEvent.hallHeight,
             };
-            // Add event ID to URL (preserve designId if present)
-            const newUrl = providedDesignId
-              ? `/tradeshow?eventId=${resp.data.id}&designId=${providedDesignId}`
-              : `/tradeshow?eventId=${resp.data.id}`;
-            navigate(newUrl, { replace: true });
+            navigate(`/tradeshow?eventId=${resp.data.id}`, { replace: true });
             console.log('✓ Created new event and added to URL:', resp.data.id);
           }
         }
@@ -135,57 +104,7 @@ export default function TradeshowPlanner() {
       setRoutes([]);
 
       try {
-        const params = new URLSearchParams(location.search);
-        const providedDesignId = params.get('designId');
-        const providedVersion = params.get('version');
-
-        if (providedDesignId) {
-          if (providedVersion) {
-            // Load specific version
-            const { getDesignVersionDetail } = await import('../lib/api');
-            const versionData = await getDesignVersionDetail(providedDesignId, providedVersion);
-            const data = versionData.data || {};
-            const items = Array.isArray(data) ? data : data.items || [];
-            const meta = data.meta || {};
-
-            if (Array.isArray(items) && items.length) {
-              setBooths(items);
-              setDesignId(parseInt(providedDesignId, 10));
-
-              // Restore event metadata if available
-              if (meta.name || meta.hallWidth || meta.hallHeight) {
-                setEvent(prev => ({
-                  ...prev,
-                  name: meta.name || prev?.name || 'Tradeshow Event',
-                  hallWidth: meta.hallWidth || prev?.hallWidth || 40,
-                  hallHeight: meta.hallHeight || prev?.hallHeight || 30,
-                }));
-              }
-            }
-          } else {
-            // Load latest version
-            const { getLatestDesign } = await import('../lib/api');
-            const latest = await getLatestDesign(providedDesignId);
-            const data = latest.data || {};
-            const items = Array.isArray(data) ? data : data.items || [];
-            const meta = data.meta || {};
-
-            if (Array.isArray(items) && items.length) {
-              setBooths(items);
-              setDesignId(parseInt(providedDesignId, 10));
-
-              // Restore event metadata if available
-              if (meta.name || meta.hallWidth || meta.hallHeight) {
-                setEvent(prev => ({
-                  ...prev,
-                  name: meta.name || prev?.name || 'Tradeshow Event',
-                  hallWidth: meta.hallWidth || prev?.hallWidth || 40,
-                  hallHeight: meta.hallHeight || prev?.hallHeight || 30,
-                }));
-              }
-            }
-          }
-        } else if (ensuredEvent?.id) {
+        if (ensuredEvent?.id) {
           // ALWAYS load from backend
           const layoutResp = await TradeshowAPI.loadLayout(ensuredEvent.id);
           if (layoutResp.success) {
@@ -216,59 +135,8 @@ export default function TradeshowPlanner() {
     })();
   }, [location.search]);
 
-  // Auto-save to BACKEND ONLY (no localStorage)
-  useEffect(() => {
-    if (event && !isInitialLoad && event.id) {
-      if (saveEventTimerRef.current) clearTimeout(saveEventTimerRef.current);
-      saveEventTimerRef.current = setTimeout(async () => {
-        try {
-          await TradeshowAPI.updateEvent(event.id, {
-            name: event.name,
-            description: event.description,
-            hallWidth: event.hallWidth,
-            hallHeight: event.hallHeight,
-          });
-          console.log('✓ Event auto-saved to backend');
-        } catch (e) {
-          console.warn('Auto-save tradeshow event failed:', e);
-        }
-      }, 600);
-    }
-  }, [event, isInitialLoad]);
-
-  useEffect(() => {
-    if (!isInitialLoad && event?.id) {
-      if (saveLayoutTimerRef.current) clearTimeout(saveLayoutTimerRef.current);
-      saveLayoutTimerRef.current = setTimeout(async () => {
-        try {
-          await TradeshowAPI.saveLayout(event.id, booths);
-          console.log('✓ Layout auto-saved to backend');
-        } catch (e) {
-          console.warn('Auto-save tradeshow layout failed:', e);
-        }
-      }, 600);
-    }
-  }, [booths, isInitialLoad, event?.id]);
-
-  // Mark dirty on changes and guard beforeunload
-  useEffect(() => {
-    if (isInitialLoad) return;
-    setDirty(true);
-  }, [booths, event?.name, event?.hallWidth, event?.hallHeight, isInitialLoad]);
-
-  useEffect(() => {
-    const handler = (e) => {
-      if (!dirty) return;
-      e.preventDefault();
-      e.returnValue = '';
-      return '';
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [dirty]);
-
-  // Vendors and routes are auto-saved via their respective API calls
-  // No localStorage needed
+  // Auto-save disabled - users must manually save using the Save button
+  // This prevents duplicate booths caused by React StrictMode double-rendering
 
   // Get selected booth
   const selectedBooth = booths.find(b => b.id === selectedBoothId);
@@ -694,46 +562,22 @@ export default function TradeshowPlanner() {
       <Toolbar
         title={event.name}
         onNavigateHome={() => {
-          if (dirty && !confirm('Not saved, leave anyway?')) return;
           window.location.href = '/';
         }}
         onSave={async () => {
           try {
-            // ask for name
-            let desiredName = (event?.name || '').trim();
-            const input = prompt('请输入要保存的文件名', desiredName || 'Untitled Tradeshow');
-            if (!input) return;
-            desiredName = input.trim();
-
-            // Update event name immediately
-            if (desiredName && desiredName !== event.name) {
-              const next = { ...event, name: desiredName };
-              setEvent(next);
+            if (!event?.id) {
+              alert('Please create an event first');
+              return;
             }
 
-            let did = designId;
-            if (!did) {
-              // Create new design
-              const d = await createOrGetDesign(desiredName || event.name, 'tradeshow');
-              did = d.id;
-              setDesignId(did);
-              try { localStorage.setItem('designId.tradeshow', String(did)); } catch {}
+            // Save booths to backend
+            const saveResult = await TradeshowAPI.saveLayout(event.id, booths);
+            if (saveResult.success) {
+              alert(`✓ Saved ${saveResult.data.saved} booths to event`);
+            } else {
+              throw new Error(saveResult.error || 'Failed to save layout');
             }
-
-            const payload = {
-              items: booths,
-              meta: {
-                name: desiredName || event.name,
-                kind: 'tradeshow',
-                hallWidth: event.hallWidth,
-                hallHeight: event.hallHeight,
-                eventId: event.id  // Save eventId to link design with event
-              }
-            };
-
-            await saveDesignVersion(did, payload, 'manual save');
-            setDirty(false);
-            alert('Saved to cloud');
           } catch (e) {
             alert(e.message || 'Save failed');
           }

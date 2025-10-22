@@ -30,12 +30,9 @@ export default function GuestPanel({
   // Filter guests (guard against missing fields from imports)
   const filteredGuests = guests.filter(guest => {
     const name = normalizeString(guest?.name).toLowerCase();
-    const email = normalizeString(guest?.email).toLowerCase();
     const groupName = normalizeString(guest?.group);
 
-    const matchesSearch =
-      name.includes(normalizedSearch) ||
-      email.includes(normalizedSearch);
+    const matchesSearch = name.includes(normalizedSearch);
 
     const matchesGroup = filterGroup === 'all' || groupName === filterGroup;
 
@@ -52,7 +49,6 @@ export default function GuestPanel({
     const [formData, setFormData] = useState(
       guest || {
         name: '',
-        email: '',
         group: 'General',
         dietaryPreference: 'None',
         attendance: true,
@@ -74,14 +70,6 @@ export default function GuestPanel({
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           required
-        />
-
-        <input
-          type="email"
-          placeholder="Email"
-          value={formData.email}
-          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
 
         <select
@@ -288,9 +276,6 @@ export default function GuestPanel({
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1">
                         <h3 className="font-semibold text-gray-800">{guest.name}</h3>
-                        {guest.email && (
-                          <p className="text-xs text-gray-500">{guest.email}</p>
-                        )}
                       </div>
                       <div className="flex gap-1">
                         <button

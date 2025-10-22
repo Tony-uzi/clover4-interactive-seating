@@ -7,11 +7,11 @@ import ElementToolbar from '../components/conference/ElementToolbar';
 import ConferenceCanvas from '../components/conference/ConferenceCanvas';
 import GuestPanel from '../components/conference/GuestPanel';
 import PropertiesPanel from '../components/conference/PropertiesPanel';
+import ShareModal from '../components/conference/ShareModal';
 // Removed localStorage imports - all data now comes from backend only
 import { parseGuestCSV, guestsToCSV, guestsToCSVFiltered, exportGuestsByGroup, downloadCSV } from '../lib/utils/csvParser';
 import { jsPDF } from 'jspdf';
 import * as ConferenceAPI from '../server-actions/conference-planner';
-import { createOrGetDesign, saveDesignVersion } from '../lib/api';
 import { normalizeConferenceGuest, normalizeConferenceElement } from '../lib/utils/normalizers';
 
 export default function ConferencePlanner() {
@@ -27,9 +27,8 @@ export default function ConferencePlanner() {
   const [draggingGuestId, setDraggingGuestId] = useState(null);
   const saveLayoutTimerRef = useRef(null);
   const saveEventTimerRef = useRef(null);
-  const [designId, setDesignId] = useState(null);
-  const [dirty, setDirty] = useState(false);
   const [canvasVersion, setCanvasVersion] = useState(0);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const mapBackendGuest = normalizeConferenceGuest;
 
@@ -61,23 +60,7 @@ export default function ConferencePlanner() {
 
       // Get event ID from URL parameter
       const params = new URLSearchParams(location.search);
-      let urlEventId = params.get('eventId');
-      const providedDesignId = params.get('designId');
-
-      // If designId is provided but no eventId, try to get eventId from design metadata
-      if (providedDesignId && !urlEventId) {
-        try {
-          const { getLatestDesign } = await import('../lib/api');
-          const latest = await getLatestDesign(providedDesignId);
-          const meta = latest.data?.meta || {};
-          if (meta.eventId) {
-            urlEventId = meta.eventId;
-            console.log('✓ Found eventId in design metadata:', urlEventId);
-          }
-        } catch (e) {
-          console.warn('Failed to load design metadata:', e);
-        }
-      }
+      const urlEventId = params.get('eventId');
 
       try {
         if (urlEventId) {
@@ -92,10 +75,6 @@ export default function ConferencePlanner() {
               roomWidth: eventResp.data.room_width ?? defaultEvent.roomWidth,
               roomHeight: eventResp.data.room_height ?? defaultEvent.roomHeight,
             };
-            // Update URL to include both eventId and designId if available
-            if (providedDesignId && !params.get('eventId')) {
-              navigate(`/conference?eventId=${ensuredEvent.id}&designId=${providedDesignId}`, { replace: true });
-            }
             console.log('✓ Loaded existing event from URL:', ensuredEvent.id);
           } else {
             // Event doesn't exist, create new one and update URL
@@ -108,11 +87,7 @@ export default function ConferencePlanner() {
                 roomWidth: resp.data.room_width ?? defaultEvent.roomWidth,
                 roomHeight: resp.data.room_height ?? defaultEvent.roomHeight,
               };
-              // Update URL with new event ID (preserve designId if present)
-              const newUrl = providedDesignId
-                ? `/conference?eventId=${resp.data.id}&designId=${providedDesignId}`
-                : `/conference?eventId=${resp.data.id}`;
-              navigate(newUrl, { replace: true });
+              navigate(`/conference?eventId=${resp.data.id}`, { replace: true });
               console.log('✓ Created new event and updated URL:', resp.data.id);
             }
           }
@@ -126,11 +101,7 @@ export default function ConferencePlanner() {
               roomWidth: resp.data.room_width ?? defaultEvent.roomWidth,
               roomHeight: resp.data.room_height ?? defaultEvent.roomHeight,
             };
-            // Add event ID to URL (preserve designId if present)
-            const newUrl = providedDesignId
-              ? `/conference?eventId=${resp.data.id}&designId=${providedDesignId}`
-              : `/conference?eventId=${resp.data.id}`;
-            navigate(newUrl, { replace: true });
+            navigate(`/conference?eventId=${resp.data.id}`, { replace: true });
             console.log('✓ Created new event and added to URL:', resp.data.id);
           }
         }
@@ -173,122 +144,12 @@ export default function ConferencePlanner() {
         }
       }
 
-      // If URL provides a designId, load from design system (this takes precedence)
-      try {
-        const params = new URLSearchParams(location.search);
-        const providedDesignId = params.get('designId');
-        const providedVersion = params.get('version');
-
-        if (providedDesignId) {
-          // load from cloud design system
-          if (providedVersion) {
-            // Load specific version
-            const { getDesignVersionDetail } = await import('../lib/api');
-            const versionData = await getDesignVersionDetail(providedDesignId, providedVersion);
-            const data = versionData.data || {};
-            const items = Array.isArray(data) ? data : data.items || [];
-            const meta = data.meta || {};
-
-            if (Array.isArray(items) && items.length) {
-              setElements(items);
-              setDesignId(parseInt(providedDesignId, 10));
-
-              // Restore event metadata if available
-              if (meta.name || meta.roomWidth || meta.roomHeight) {
-                setEvent(prev => ({
-                  ...prev,
-                  name: meta.name || prev?.name || 'Conference Event',
-                  roomWidth: meta.roomWidth || prev?.roomWidth || 40,
-                  roomHeight: meta.roomHeight || prev?.roomHeight || 30,
-                }));
-              }
-            }
-          } else {
-            // Load latest version
-            const { getLatestDesign } = await import('../lib/api');
-            const latest = await getLatestDesign(providedDesignId);
-            const data = latest.data || {};
-            const items = Array.isArray(data) ? data : data.items || [];
-            const meta = data.meta || {};
-
-            if (Array.isArray(items) && items.length) {
-              setElements(items);
-              setDesignId(parseInt(providedDesignId, 10));
-
-              // Restore event metadata if available
-              if (meta.name || meta.roomWidth || meta.roomHeight) {
-                setEvent(prev => ({
-                  ...prev,
-                  name: meta.name || prev?.name || 'Conference Event',
-                  roomWidth: meta.roomWidth || prev?.roomWidth || 40,
-                  roomHeight: meta.roomHeight || prev?.roomHeight || 30,
-                }));
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('Load backend layout failed:', e);
-      }
-
       setTimeout(() => setIsInitialLoad(false), 100);
     })();
   }, [location.search]);
 
-  // Auto-save to BACKEND ONLY (no localStorage)
-  useEffect(() => {
-    if (event && !isInitialLoad && event.id) {
-      if (saveEventTimerRef.current) clearTimeout(saveEventTimerRef.current);
-      saveEventTimerRef.current = setTimeout(async () => {
-        try {
-          await ConferenceAPI.updateEvent(event.id, {
-            name: event.name,
-            description: event.description,
-            roomWidth: event.roomWidth,
-            roomHeight: event.roomHeight,
-          });
-          console.log('✓ Event auto-saved to backend');
-        } catch (e) {
-          console.warn('Auto-save event failed:', e);
-        }
-      }, 600);
-    }
-  }, [event, isInitialLoad]);
-
-  useEffect(() => {
-    if (!isInitialLoad && event?.id) {
-      if (saveLayoutTimerRef.current) clearTimeout(saveLayoutTimerRef.current);
-      saveLayoutTimerRef.current = setTimeout(async () => {
-        try {
-          await ConferenceAPI.saveLayout(event.id, elements);
-          console.log('✓ Layout auto-saved to backend');
-        } catch (e) {
-          console.warn('Auto-save layout failed:', e);
-        }
-      }, 600);
-    }
-  }, [elements, isInitialLoad, event?.id]);
-
-  // Mark dirty on changes
-  useEffect(() => {
-    if (isInitialLoad) return;
-    setDirty(true);
-  }, [elements, event?.name, event?.roomWidth, event?.roomHeight, isInitialLoad]);
-
-  // beforeunload warning
-  useEffect(() => {
-    const handler = (e) => {
-      if (!dirty) return;
-      e.preventDefault();
-      e.returnValue = '';
-      return '';
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [dirty]);
-
-  // Guests and groups are auto-saved via their respective API calls
-  // No localStorage needed
+  // Auto-save disabled - users must manually save using the Save button
+  // This prevents duplicate elements caused by React StrictMode double-rendering
 
   // Get selected element
   const selectedElement = elements.find(el => el.id === selectedElementId);
@@ -713,6 +574,14 @@ export default function ConferencePlanner() {
     }
   };
 
+  const handleShare = () => {
+    if (!event?.id) {
+      alert('Please save the event first before sharing');
+      return;
+    }
+    setShowShareModal(true);
+  };
+
   if (!event) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
   }
@@ -736,50 +605,27 @@ export default function ConferencePlanner() {
       <Toolbar
         title={event.name}
         onNavigateHome={() => {
-          if (dirty && !confirm('Not saved, leave anyway?')) return;
           window.location.href = '/';
         }}
         onSave={async () => {
           try {
-            // ask for name
-            let desiredName = (event?.name || '').trim();
-            const input = prompt('请输入要保存的文件名', desiredName || 'Untitled Conference');
-            if (!input) return;
-            desiredName = input.trim();
-
-            // Update event name immediately
-            if (desiredName && desiredName !== event.name) {
-              const next = { ...event, name: desiredName };
-              setEvent(next);
+            if (!event?.id) {
+              alert('Please create an event first');
+              return;
             }
 
-            let did = designId;
-            if (!did) {
-              // Create new design
-              const d = await createOrGetDesign(desiredName || event.name, 'conference');
-              did = d.id;
-              setDesignId(did);
-              try { localStorage.setItem('designId.conference', String(did)); } catch {}
+            // Save elements to backend
+            const saveResult = await ConferenceAPI.saveLayout(event.id, elements);
+            if (saveResult.success) {
+              alert(`✓ Saved ${saveResult.data.saved} elements to event`);
+            } else {
+              throw new Error(saveResult.error || 'Failed to save layout');
             }
-
-            const payload = {
-              items: elements,
-              meta: {
-                name: desiredName || event.name,
-                kind: 'conference',
-                roomWidth: event.roomWidth,
-                roomHeight: event.roomHeight,
-                eventId: event.id  // Save eventId to link design with event
-              }
-            };
-
-            await saveDesignVersion(did, payload, 'manual save');
-            setDirty(false);
-            alert('Saved to cloud');
           } catch (e) {
             alert(e.message || 'Save failed');
           }
         }}
+        onShare={handleShare}
         onExportPDF={handleExportPDF}
         onExportCSV={handleExportCSV}
         onExportCSVFiltered={handleExportCSVFiltered}
@@ -878,6 +724,15 @@ export default function ConferencePlanner() {
           </div>
         </div>
       </div>
+
+      {/* Share Modal */}
+      <ShareModal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        eventId={event?.id}
+        onGenerateToken={ConferenceAPI.generateShareToken}
+        guests={guests}
+      />
     </div>
   );
 }

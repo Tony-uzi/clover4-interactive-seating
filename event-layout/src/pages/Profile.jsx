@@ -1,75 +1,91 @@
 import { useEffect, useState } from "react";
-import { listDesigns, deleteDesign, getDesignVersions } from "../lib/api.js";
 import { useNavigate } from "react-router-dom";
 import {
   FiUser, FiCalendar, FiGrid, FiEdit3, FiTrash2,
-  FiFolder, FiLayers, FiAlertCircle, FiLoader, FiClock, FiX
+  FiFolder, FiAlertCircle, FiLoader
 } from 'react-icons/fi';
+import * as ConferenceAPI from '../server-actions/conference-planner';
+import * as TradeshowAPI from '../server-actions/tradeshow-planner';
 
 export default function Profile() {
   const navigate = useNavigate();
-  const [cloud, setCloud] = useState({ loading: false, designs: [], error: "" });
-  const [versionModal, setVersionModal] = useState({
-    open: false,
-    design: null,
-    versions: [],
-    loading: false,
-    error: ""
-  });
+  const [events, setEvents] = useState({ loading: false, conferenceEvents: [], tradeshowEvents: [], error: "" });
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        setCloud((s) => ({ ...s, loading: true }));
-        const list = await listDesigns();
-        if (mounted) setCloud({ loading: false, designs: list, error: "" });
+        setEvents((s) => ({ ...s, loading: true }));
+
+        // Load conference events
+        const confResp = await ConferenceAPI.getAllEvents();
+        const conferenceEvents = confResp.success ? confResp.data : [];
+
+        // Load tradeshow events
+        const tradeResp = await TradeshowAPI.getAllEvents();
+        const tradeshowEvents = tradeResp.success ? tradeResp.data : [];
+
+        if (mounted) {
+          setEvents({
+            loading: false,
+            conferenceEvents,
+            tradeshowEvents,
+            error: ""
+          });
+        }
       } catch (e) {
-        if (mounted) setCloud({ loading: false, designs: [], error: e.message || "" });
+        if (mounted) {
+          setEvents({
+            loading: false,
+            conferenceEvents: [],
+            tradeshowEvents: [],
+            error: e.message || "Failed to load events"
+          });
+        }
       }
     })();
     return () => (mounted = false);
   }, []);
 
-  const openVersionHistory = async (design) => {
-    setVersionModal({
-      open: true,
-      design,
-      versions: [],
-      loading: true,
-      error: ""
-    });
+  const handleDeleteConferenceEvent = async (eventId, eventName) => {
+    if (!confirm(`Delete event "${eventName}"? This cannot be undone.`)) return;
 
     try {
-      const versions = await getDesignVersions(design.id);
-      setVersionModal(prev => ({
-        ...prev,
-        versions,
-        loading: false
-      }));
+      const resp = await ConferenceAPI.deleteEvent(eventId);
+      if (resp.success) {
+        setEvents(prev => ({
+          ...prev,
+          conferenceEvents: prev.conferenceEvents.filter(e => e.id !== eventId)
+        }));
+        alert('Event deleted successfully');
+      } else {
+        alert(`Failed to delete event: ${resp.error}`);
+      }
     } catch (e) {
-      setVersionModal(prev => ({
-        ...prev,
-        loading: false,
-        error: e.message || "Failed to load versions"
-      }));
+      alert(`Error deleting event: ${e.message}`);
     }
   };
 
-  const closeVersionModal = () => {
-    setVersionModal({
-      open: false,
-      design: null,
-      versions: [],
-      loading: false,
-      error: ""
-    });
+  const handleDeleteTradeshowEvent = async (eventId, eventName) => {
+    if (!confirm(`Delete event "${eventName}"? This cannot be undone.`)) return;
+
+    try {
+      const resp = await TradeshowAPI.deleteEvent(eventId);
+      if (resp.success) {
+        setEvents(prev => ({
+          ...prev,
+          tradeshowEvents: prev.tradeshowEvents.filter(e => e.id !== eventId)
+        }));
+        alert('Event deleted successfully');
+      } else {
+        alert(`Failed to delete event: ${resp.error}`);
+      }
+    } catch (e) {
+      alert(`Error deleting event: ${e.message}`);
+    }
   };
 
-  const openVersion = (version) => {
-    const route = versionModal.design.kind === 'tradeshow' ? '/tradeshow' : '/conference';
-    navigate(`${route}?designId=${versionModal.design.id}&version=${version}`);
-  };
+  const totalEvents = events.conferenceEvents.length + events.tradeshowEvents.length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
@@ -83,7 +99,7 @@ export default function Profile() {
             <h1 className="text-4xl font-bold text-gray-900">My Profile</h1>
           </div>
           <p className="text-lg text-gray-600 ml-16">
-            Manage your saved designs and event layouts
+            Manage your saved events and layouts
           </p>
         </div>
 
@@ -96,9 +112,9 @@ export default function Profile() {
               </div>
               <div>
                 <div className="text-2xl font-bold text-gray-900">
-                  {cloud.loading ? "..." : cloud.designs.length}
+                  {events.loading ? "..." : totalEvents}
                 </div>
-                <div className="text-sm text-gray-600">Total Designs</div>
+                <div className="text-sm text-gray-600">Total Events</div>
               </div>
             </div>
           </div>
@@ -110,9 +126,9 @@ export default function Profile() {
               </div>
               <div>
                 <div className="text-2xl font-bold text-gray-900">
-                  {cloud.loading ? "..." : cloud.designs.filter(d => d.kind === 'conference').length}
+                  {events.loading ? "..." : events.conferenceEvents.length}
                 </div>
-                <div className="text-sm text-gray-600">Conferences</div>
+                <div className="text-sm text-gray-600">Conference Events</div>
               </div>
             </div>
           </div>
@@ -124,268 +140,171 @@ export default function Profile() {
               </div>
               <div>
                 <div className="text-2xl font-bold text-gray-900">
-                  {cloud.loading ? "..." : cloud.designs.filter(d => d.kind === 'tradeshow').length}
+                  {events.loading ? "..." : events.tradeshowEvents.length}
                 </div>
-                <div className="text-sm text-gray-600">Tradeshows</div>
+                <div className="text-sm text-gray-600">Tradeshow Events</div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Designs list */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <FiLayers className="w-5 h-5 text-gray-600" />
-                <h2 className="text-xl font-bold text-gray-900">My Designs</h2>
-              </div>
-              {!cloud.loading && (
-                <span className="text-sm text-gray-600">
-                  {cloud.designs.length} {cloud.designs.length === 1 ? 'design' : 'designs'}
-                </span>
-              )}
+        {/* Conference Events Section */}
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <FiCalendar className="w-5 h-5 text-blue-600" />
+            <h2 className="text-2xl font-bold text-gray-900">Conference Events</h2>
+          </div>
+
+          {events.loading ? (
+            <div className="flex items-center justify-center py-12 bg-white rounded-2xl border-2 border-gray-100">
+              <FiLoader className="w-8 h-8 text-blue-600 animate-spin mr-3" />
+              <span className="text-gray-600">Loading events...</span>
             </div>
-          </div>
-
-          <div className="p-6">
-            {/* Loading state */}
-            {cloud.loading && (
-              <div className="flex flex-col items-center justify-center py-12">
-                <FiLoader className="w-8 h-8 text-blue-600 animate-spin mb-4" />
-                <p className="text-gray-600">Loading your designs...</p>
-              </div>
-            )}
-
-            {/* Error state */}
-            {cloud.error && (
-              <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
-                <FiAlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-red-800">{cloud.error}</p>
-              </div>
-            )}
-
-            {/* Empty state */}
-            {!cloud.loading && !cloud.error && cloud.designs.length === 0 && (
-              <div className="text-center py-12">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-2xl mb-4">
-                  <FiFolder className="w-8 h-8 text-gray-400" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  No designs yet
-                </h3>
-                <p className="text-gray-600 mb-6">
-                  Start creating your first event layout
-                </p>
-                <div className="flex gap-3 justify-center">
-                  <button
-                    onClick={() => navigate('/conference')}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-                  >
-                    Create Conference
-                  </button>
-                  <button
-                    onClick={() => navigate('/tradeshow')}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
-                  >
-                    Create Tradeshow
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Designs grid */}
-            {!cloud.loading && cloud.designs.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {cloud.designs.map((d) => (
-                  <div
-                    key={d.id}
-                    className="group bg-gray-50 rounded-xl p-4 border-2 border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all duration-300"
-                  >
-                    {/* Design header */}
-                    <div className="flex items-start gap-3 mb-3">
-                      <div className={`p-2 rounded-lg ${
-                        d.kind === 'conference' 
-                          ? 'bg-blue-100 text-blue-600' 
-                          : 'bg-green-100 text-green-600'
-                      }`}>
-                        {d.kind === 'conference' ? (
-                          <FiCalendar className="w-5 h-5" />
-                        ) : (
-                          <FiGrid className="w-5 h-5" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-lg font-bold text-gray-900 truncate">
-                          {d.name}
-                        </h3>
-                        <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
-                          <span className="capitalize">{d.kind}</span>
-                          <span>•</span>
-                          <span>v{d.latest_version || 0}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={async () => {
-                          try {
-                            const route = d.kind === 'tradeshow' ? '/tradeshow' : '/conference';
-                            navigate(`${route}?designId=${d.id}`);
-                          } catch (e) {
-                            alert(e.message || "Open failed");
-                          }
-                        }}
-                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-                      >
-                        <FiEdit3 className="w-4 h-4" />
-                        <span>Edit</span>
-                      </button>
-                      <button
-                        onClick={() => openVersionHistory(d)}
-                        className="px-3 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg transition-colors"
-                        title="View version history"
-                      >
-                        <FiClock className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (!window.confirm(`Delete design "${d.name}"? This cannot be undone.`)) return;
-                          try {
-                            await deleteDesign(d.id);
-                            setCloud((s) => ({ ...s, designs: s.designs.filter(x => x.id !== d.id) }));
-                          } catch (e) {
-                            alert(e.message || 'Delete failed');
-                          }
-                        }}
-                        className="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors"
-                        title="Delete design"
-                      >
-                        <FiTrash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Version History Modal */}
-        {versionModal.open && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
-              {/* Modal Header */}
-              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <FiClock className="w-5 h-5 text-purple-600" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900">Version History</h2>
-                    {versionModal.design && (
-                      <p className="text-sm text-gray-600">{versionModal.design.name}</p>
-                    )}
-                  </div>
-                </div>
-                <button
-                  onClick={closeVersionModal}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          ) : events.error ? (
+            <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-6 text-center">
+              <FiAlertCircle className="w-12 h-12 text-red-600 mx-auto mb-3" />
+              <p className="text-red-800 font-semibold">{events.error}</p>
+            </div>
+          ) : events.conferenceEvents.length === 0 ? (
+            <div className="bg-white border-2 border-dashed border-gray-300 rounded-2xl p-12 text-center">
+              <FiCalendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600 text-lg mb-4">No conference events yet</p>
+              <button
+                onClick={() => navigate('/conference')}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+              >
+                Create Your First Conference Event
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {events.conferenceEvents.map((event) => (
+                <div
+                  key={event.id}
+                  className="bg-white border-2 border-gray-100 rounded-xl p-5 hover:shadow-lg transition-shadow"
                 >
-                  <FiX className="w-5 h-5 text-gray-600" />
-                </button>
-              </div>
-
-              {/* Modal Body */}
-              <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
-                {/* Loading State */}
-                {versionModal.loading && (
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <FiLoader className="w-8 h-8 text-purple-600 animate-spin mb-4" />
-                    <p className="text-gray-600">Loading versions...</p>
-                  </div>
-                )}
-
-                {/* Error State */}
-                {versionModal.error && (
-                  <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
-                    <FiAlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-red-800">{versionModal.error}</p>
-                  </div>
-                )}
-
-                {/* Empty State */}
-                {!versionModal.loading && !versionModal.error && versionModal.versions.length === 0 && (
-                  <div className="text-center py-12">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-2xl mb-4">
-                      <FiClock className="w-8 h-8 text-gray-400" />
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <h3 className="font-bold text-lg text-gray-900 mb-1">
+                        {event.name}
+                      </h3>
+                      {event.description && (
+                        <p className="text-sm text-gray-600 line-clamp-2">
+                          {event.description}
+                        </p>
+                      )}
                     </div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No versions yet</h3>
-                    <p className="text-gray-600">Save your first version to see it here</p>
                   </div>
-                )}
 
-                {/* Versions List */}
-                {!versionModal.loading && versionModal.versions.length > 0 && (
-                  <div className="space-y-3">
-                    {versionModal.versions.map((v, idx) => (
-                      <div
-                        key={v.version}
-                        className="bg-gray-50 rounded-xl p-4 border-2 border-gray-200 hover:border-purple-300 hover:bg-purple-50 transition-all"
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <div className="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg font-bold text-sm">
-                                v{v.version}
-                              </div>
-                              {idx === 0 && (
-                                <div className="px-2 py-1 bg-green-100 text-green-700 rounded-md text-xs font-medium">
-                                  Latest
-                                </div>
-                              )}
-                            </div>
+                  {event.event_date && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
+                      <FiCalendar className="w-4 h-4" />
+                      <span>{new Date(event.event_date).toLocaleDateString()}</span>
+                    </div>
+                  )}
 
-                            {v.note && (
-                              <p className="text-sm text-gray-700 mb-2">
-                                {v.note}
-                              </p>
-                            )}
-
-                            <div className="flex items-center gap-2 text-xs text-gray-600">
-                              <FiClock className="w-3 h-3" />
-                              <span>
-                                {new Date(v.created_at).toLocaleString('en-US', {
-                                  year: 'numeric',
-                                  month: 'short',
-                                  day: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
-                              </span>
-                            </div>
-                          </div>
-
-                          <button
-                            onClick={() => openVersion(v.version)}
-                            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors text-sm"
-                          >
-                            Open
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
+                    <FiGrid className="w-4 h-4" />
+                    <span>{event.room_width}m × {event.room_height}m</span>
                   </div>
-                )}
-              </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => navigate(`/conference?eventId=${event.id}`)}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <FiEdit3 className="w-4 h-4" />
+                      Open
+                    </button>
+                    <button
+                      onClick={() => handleDeleteConferenceEvent(event.id, event.name)}
+                      className="px-4 py-2 bg-red-50 text-red-600 rounded-lg font-medium hover:bg-red-100 transition-colors"
+                    >
+                      <FiTrash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
+          )}
+        </div>
+
+        {/* Tradeshow Events Section */}
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <FiGrid className="w-5 h-5 text-purple-600" />
+            <h2 className="text-2xl font-bold text-gray-900">Tradeshow Events</h2>
           </div>
-        )}
+
+          {events.loading ? (
+            <div className="flex items-center justify-center py-12 bg-white rounded-2xl border-2 border-gray-100">
+              <FiLoader className="w-8 h-8 text-purple-600 animate-spin mr-3" />
+              <span className="text-gray-600">Loading events...</span>
+            </div>
+          ) : events.tradeshowEvents.length === 0 ? (
+            <div className="bg-white border-2 border-dashed border-gray-300 rounded-2xl p-12 text-center">
+              <FiGrid className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600 text-lg mb-4">No tradeshow events yet</p>
+              <button
+                onClick={() => navigate('/tradeshow')}
+                className="px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition-colors"
+              >
+                Create Your First Tradeshow Event
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {events.tradeshowEvents.map((event) => (
+                <div
+                  key={event.id}
+                  className="bg-white border-2 border-gray-100 rounded-xl p-5 hover:shadow-lg transition-shadow"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <h3 className="font-bold text-lg text-gray-900 mb-1">
+                        {event.name}
+                      </h3>
+                      {event.description && (
+                        <p className="text-sm text-gray-600 line-clamp-2">
+                          {event.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {event.event_date && (
+                    <div className="flex items-center gap-2 text-sm text-gray-500 mb-3">
+                      <FiCalendar className="w-4 h-4" />
+                      <span>{new Date(event.event_date).toLocaleDateString()}</span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
+                    <FiGrid className="w-4 h-4" />
+                    <span>{event.hall_width}m × {event.hall_height}m</span>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => navigate(`/tradeshow?eventId=${event.id}`)}
+                      className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <FiEdit3 className="w-4 h-4" />
+                      Open
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTradeshowEvent(event.id, event.name)}
+                      className="px-4 py-2 bg-red-50 text-red-600 rounded-lg font-medium hover:bg-red-100 transition-colors"
+                    >
+                      <FiTrash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
-
-

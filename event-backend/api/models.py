@@ -143,7 +143,7 @@ class ConferenceGuest(TimeStamped):
     event = models.ForeignKey(ConferenceEvent, on_delete=models.CASCADE, related_name="guests")
     group = models.ForeignKey(ConferenceGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name="guests")
     name = models.CharField(max_length=255)
-    email = models.EmailField()
+    email = models.EmailField(blank=True, default='')
     dietary_requirements = models.TextField(blank=True)
     company = models.CharField(max_length=255, blank=True)
     phone = models.CharField(max_length=50, blank=True)

@@ -206,6 +206,23 @@ export function loadTradeshowSessions() {
   return loadFromStorage(STORAGE_KEYS.TRADESHOW_SESSIONS, []);
 }
 
+// ========================================
+// Kiosk Event ID Management
+// ========================================
+export const KIOSK_EVENT_ID_KEY = 'kiosk_last_event_id';
+
+export function getLastKioskEventId() {
+  return localStorage.getItem(KIOSK_EVENT_ID_KEY);
+}
+
+export function setLastKioskEventId(eventId) {
+  if (eventId) {
+    localStorage.setItem(KIOSK_EVENT_ID_KEY, eventId);
+  } else {
+    localStorage.removeItem(KIOSK_EVENT_ID_KEY);
+  }
+}
+
 // Export all data (for backup/restore)
 export function exportAllData() {
   const data = {};

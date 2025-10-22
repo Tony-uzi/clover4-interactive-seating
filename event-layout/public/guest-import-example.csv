@@ -1,2 +1,21 @@
-name,email,group,dietaryPreference,notes
-John Smith,john.smith@example.com,VIP,Vegetarian,Allergy: Peanuts
+name,group,dietaryPreference,notes
+John Smith,VIP,Vegetarian,Allergy: Peanuts
+Jane Doe,General,None,
+Robert Johnson,VIP,Vegan,Needs window seat
+Emily Williams,Staff,Halal,
+Michael Brown,Speaker,None,Main speaker
+Sarah Davis,General,Kosher,
+James Wilson,VIP,Vegetarian,Arriving 30 min late
+Patricia Garcia,Media,None,Needs front row seat
+Christopher Martinez,General,None,
+Jennifer Rodriguez,VIP,Vegan,Bringing assistant
+Daniel Lee,Staff,None,
+Linda Anderson,General,Vegetarian,
+David Taylor,Speaker,None,
+Barbara Thomas,VIP,Halal,Important client
+Richard Jackson,General,None,
+Karen White,Media,Kosher,Reporter
+Matthew Harris,Staff,None,
+Susan Martin,VIP,Vegetarian,
+Joseph Thompson,General,None,
+Nancy Garcia,Speaker,Vegan,Guest speaker

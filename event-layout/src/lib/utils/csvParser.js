@@ -4,7 +4,7 @@ import Papa from 'papaparse';
 
 /**
  * Parse CSV file for conference guests
- * Expected columns: name, email, group, dietaryPreference, notes
+ * Expected columns: name, group, dietaryPreference, notes
  */
 export function parseGuestCSV(file) {
   return new Promise((resolve, reject) => {
@@ -74,20 +74,18 @@ export function parseGuestCSV(file) {
             };
 
             const name = formatString(getField('name', '姓名', 'Name'));
-            const email = formatString(getField('email', '邮箱', 'Email'));
             const group = formatString(getField('group', '分组', 'Group'));
             const dietaryPreference = formatString(getField('dietaryPreference', '饮食偏好', 'Dietary Preference'));
             const notes = formatString(getField('notes', '备注', 'Notes'));
             const attendanceValue = getField('attendance', '参加', 'Attendance');
 
-            if (!name && !email) {
+            if (!name) {
               return null;
             }
 
             return {
               id: `guest-${timestamp}-${index}-${Math.random().toString(36).slice(2, 8)}`,
               name,
-              email,
               group: group || 'General',
               dietaryPreference: dietaryPreference || 'None',
               attendance: parseAttendance(attendanceValue),
@@ -235,10 +233,9 @@ export function parseVendorCSV(file) {
  * Convert guests array to CSV string
  */
 export function guestsToCSV(guests) {
-  const headers = ['Name', 'Email', 'Group', 'Dietary Preference', 'Attendance', 'Table Number', 'Seat Number', 'Notes'];
+  const headers = ['Name', 'Group', 'Dietary Preference', 'Attendance', 'Table Number', 'Seat Number', 'Notes'];
   const data = guests.map(g => [
     g.name,
-    g.email,
     g.group,
     g.dietaryPreference,
     g.attendance ? 'Yes' : 'No',
@@ -258,10 +255,9 @@ export function guestsToCSV(guests) {
  */
 export function guestsToCSVFiltered(guests, dietaryPreference) {
   const filtered = guests.filter(g => g.dietaryPreference === dietaryPreference);
-  const headers = ['Name', 'Email', 'Group', 'Dietary Preference', 'Attendance', 'Table Number', 'Seat Number', 'Notes'];
+  const headers = ['Name', 'Group', 'Dietary Preference', 'Attendance', 'Table Number', 'Seat Number', 'Notes'];
   const data = filtered.map(g => [
     g.name,
-    g.email,
     g.group,
     g.dietaryPreference,
     g.attendance ? 'Yes' : 'No',

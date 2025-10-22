@@ -1,5 +1,5 @@
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
@@ -278,7 +278,7 @@ def conference_guests_import(request, event_id):
                 'email': row.get('email', ''),
                 'company': row.get('company', ''),
                 'phone': row.get('phone', ''),
-                'dietary_requirements': row.get('dietary_requirements', ''),
+                'dietary_requirements': row.get('dietaryPreference') or row.get('dietary_preference') or row.get('dietary_requirements', ''),
                 'group': str(group.id) if group else None
             }
 
@@ -362,3 +362,35 @@ def conference_seat_assignment_detail(request, event_id, assignment_id):
     assignment = get_object_or_404(ConferenceSeatAssignment, id=assignment_id, event=event)
     assignment.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ========================================== Public Share Views ==========================================
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def conference_shared_view(request, share_token):
+    """Public endpoint to view shared conference event data (no authentication required)"""
+    event = get_object_or_404(ConferenceEvent, share_token=share_token)
+    
+    # Get event details
+    event_data = {
+        'id': str(event.id),
+        'name': event.name,
+        'description': event.description,
+        'date': event.event_date,
+        'room_width': float(event.room_width),
+        'room_height': float(event.room_height),
+    }
+    
+    # Get elements
+    elements = ConferenceElement.objects.filter(event=event).order_by('created_at')
+    elements_data = ConferenceElementSerializer(elements, many=True).data
+    
+    # Get guests with seat assignments
+    guests = ConferenceGuest.objects.filter(event=event).select_related('group').prefetch_related('seat_assignments')
+    guests_data = ConferenceGuestSerializer(guests, many=True).data
+    
+    return Response({
+        'event': event_data,
+        'elements': elements_data,
+        'guests': guests_data,
+    })

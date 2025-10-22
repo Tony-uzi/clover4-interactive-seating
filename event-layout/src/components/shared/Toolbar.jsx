@@ -2,10 +2,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { FiSave, FiDownload, FiUpload, FiTrash2, FiHome, FiChevronDown } from 'react-icons/fi';
+import { FiSave, FiDownload, FiUpload, FiTrash2, FiHome, FiChevronDown, FiShare2 } from 'react-icons/fi';
 
 export default function Toolbar({
   onSave,
+  onShare,
   onExportPDF,
   onExportCSV,
   onExportCSVFiltered,
@@ -123,6 +124,17 @@ export default function Toolbar({
             >
               <FiDownload className="w-4 h-4" />
               <span className="text-sm">Export PDF</span>
+            </button>
+          )}
+
+          {onShare && (
+            <button
+              onClick={onShare}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              title="Share Event"
+            >
+              <FiShare2 className="w-4 h-4" />
+              <span className="text-sm">Share</span>
             </button>
           )}
 

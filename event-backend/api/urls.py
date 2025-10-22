@@ -6,7 +6,8 @@ from .views_conference import (
     conference_elements, conference_element_detail, conference_elements_bulk,
     conference_groups, conference_group_detail,
     conference_guests, conference_guest_detail, conference_guests_import, conference_guest_checkin, conference_guest_search,
-    conference_seat_assignments, conference_seat_assignment_detail
+    conference_seat_assignments, conference_seat_assignment_detail,
+    conference_shared_view
 )
 from .views_tradeshow import (
     tradeshow_events, tradeshow_event_detail, tradeshow_event_share,
@@ -104,4 +105,7 @@ urlpatterns = [
     path('qr/tradeshow/<uuid:event_id>/vendor/<uuid:vendor_id>/checkin/', qr_checkin_tradeshow, name='qr-checkin-tradeshow'),
     path('qr/conference/<uuid:event_id>/guest/<uuid:guest_id>/info/', qr_guest_info, name='qr-guest-info'),
     path('qr/tradeshow/<uuid:event_id>/vendor/<uuid:vendor_id>/info/', qr_vendor_info, name='qr-vendor-info'),
+    
+    # Public shared views (no authentication required)
+    path('conference/share/<str:share_token>/', conference_shared_view, name='conference-shared-view'),
 ]

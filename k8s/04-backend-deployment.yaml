@@ -22,6 +22,7 @@ spec:
       containers:
       - name: backend
         image: australia-southeast1-docker.pkg.dev/linen-striker-451222-k9/deco3801-demo-project-registry/event-backend:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8000
         env:
