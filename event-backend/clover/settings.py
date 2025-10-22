@@ -30,8 +30,12 @@ SECRET_KEY = os.getenv(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
-# ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "0830bb326f1d.ngrok-free.app"]
+default_allowed_hosts = ['.ngrok-free.app', 'localhost', '127.0.0.1']
+allowed_hosts_env = os.getenv('ALLOWED_HOSTS')
+if allowed_hosts_env:
+    ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(',') if host.strip()]
+else:
+    ALLOWED_HOSTS = default_allowed_hosts
 
 # Application definition
 
@@ -51,7 +55,8 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    # CSRF disabled for API endpoints - using JWT authentication instead
+    # 'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -172,3 +177,28 @@ REST_FRAMEWORK = {
 # 5. 媒体文件目录
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# 6. 日志配置 - 过滤health check请求
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'filters': {
+        'skip_health_checks': {
+            '()': 'django.utils.log.CallbackFilter',
+            'callback': lambda record: '/api/health/' not in record.getMessage()
+        }
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'filters': ['skip_health_checks'],
+        },
+    },
+    'loggers': {
+        'django.server': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}

@@ -95,12 +95,15 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
   // Handle element drag
   const handleDragEnd = (e, element) => {
     if (readOnly) return;
+    const node = e.target;
+    const offsetX = node.offsetX() || 0;
+    const offsetY = node.offsetY() || 0;
     const newElements = elements.map(el =>
       el.id === element.id
         ? {
             ...el,
-            x: e.target.x() / PIXELS_PER_METER,
-            y: e.target.y() / PIXELS_PER_METER,
+            x: (node.x() - offsetX) / PIXELS_PER_METER,
+            y: (node.y() - offsetY) / PIXELS_PER_METER,
           }
         : el
     );
@@ -114,6 +117,8 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
     const node = e.target;
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
+    const offsetX = node.offsetX() || 0;
+    const offsetY = node.offsetY() || 0;
 
     node.scaleX(1);
     node.scaleY(1);
@@ -122,8 +127,8 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
       el.id === element.id
         ? {
             ...el,
-            x: node.x() / PIXELS_PER_METER,
-            y: node.y() / PIXELS_PER_METER,
+            x: (node.x() - offsetX) / PIXELS_PER_METER,
+            y: (node.y() - offsetY) / PIXELS_PER_METER,
             width: Math.max(0.1, (node.width() * scaleX) / PIXELS_PER_METER),
             height: Math.max(0.1, (node.height() * scaleY) / PIXELS_PER_METER),
             rotation: node.rotation(),
@@ -338,6 +343,7 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
     const y = element.y * PIXELS_PER_METER;
     const width = element.width * PIXELS_PER_METER;
     const height = element.height * PIXELS_PER_METER;
+    const rotation = element.rotation || 0;
     const isSelected = selectedElementId === element.id;
     const isDropTarget = dropTargetId === element.id;
 
@@ -349,10 +355,13 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
       <Group
         key={element.id}
         id={`element-${element.id}`}
-        x={x}
-        y={y}
+        x={x + width / 2}
+        y={y + height / 2}
         width={width}
         height={height}
+        offsetX={width / 2}
+        offsetY={height / 2}
+        rotation={rotation}
         draggable={!readOnly}
         onDragEnd={(e) => handleDragEnd(e, element)}
         onTransformEnd={(e) => handleTransformEnd(e, element)}

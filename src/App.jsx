@@ -35,25 +35,48 @@ function NotFound() {
 export default function App() {
   return (
     <Routes>
-      {/* Protected routes with Layout (requires auth) */}
-      <Route element={<RequireAuth><Layout /></RequireAuth>}>
+      {/* Routes with shared layout */}
+      <Route element={<Layout />}>
+        {/* Public routes */}
         <Route path="/" element={<Home />} />
-        <Route path="/event" element={<EventVenue />} />
-        <Route path="/profile" element={<Profile />} />
-        <Route path="/share/:shareId" element={<ShareView />} />
-        <Route path="/qrcode" element={<QRCode />} />
-        <Route path="/about" element={<About />} />
-        <Route path="/conference" element={<ConferencePlanner />} />
-        <Route path="/tradeshow" element={<TradeshowPlanner />} />
         <Route path="/conference-kiosk" element={<KioskConference />} />
         <Route path="/tradeshow-kiosk" element={<KioskTradeshow />} />
-        <Route path="/editor/:designId" element={<EditorDesign />} />
-      </Route>
-
-      {/* Public auth routes with Layout (no auth required) */}
-      <Route element={<Layout />}>
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+
+        {/* Protected routes */}
+        <Route
+          path="/event"
+          element={<RequireAuth><EventVenue /></RequireAuth>}
+        />
+        <Route
+          path="/profile"
+          element={<RequireAuth><Profile /></RequireAuth>}
+        />
+        <Route
+          path="/share/:shareId"
+          element={<RequireAuth><ShareView /></RequireAuth>}
+        />
+        <Route
+          path="/qrcode"
+          element={<RequireAuth><QRCode /></RequireAuth>}
+        />
+        <Route
+          path="/about"
+          element={<RequireAuth><About /></RequireAuth>}
+        />
+        <Route
+          path="/conference"
+          element={<RequireAuth><ConferencePlanner /></RequireAuth>}
+        />
+        <Route
+          path="/tradeshow"
+          element={<RequireAuth><TradeshowPlanner /></RequireAuth>}
+        />
+        <Route
+          path="/editor/:designId"
+          element={<RequireAuth><EditorDesign /></RequireAuth>}
+        />
       </Route>
 
       {/* 404 */}

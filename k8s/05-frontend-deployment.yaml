@@ -20,9 +20,6 @@ spec:
         image: australia-southeast1-docker.pkg.dev/linen-striker-451222-k9/deco3801-demo-project-registry/event-frontend:latest
         ports:
         - containerPort: 80
-        env:
-        - name: VITE_API_URL
-          value: "http://backend-service:8000"
         resources:
           requests:
             memory: "128Mi"
