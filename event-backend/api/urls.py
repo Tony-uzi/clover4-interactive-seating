@@ -14,7 +14,8 @@ from .views_tradeshow import (
     tradeshow_booths, tradeshow_booth_detail, tradeshow_booths_bulk,
     tradeshow_vendors, tradeshow_vendor_detail, tradeshow_vendors_import, tradeshow_vendor_checkin, tradeshow_vendor_search,
     tradeshow_booth_assignments, tradeshow_booth_assignment_detail,
-    tradeshow_routes, tradeshow_route_detail
+    tradeshow_routes, tradeshow_route_detail,
+    tradeshow_shared_view
 )
 from .views_qr_checkin import (
     qr_checkin_conference, qr_checkin_tradeshow,
@@ -108,4 +109,5 @@ urlpatterns = [
     
     # Public shared views (no authentication required)
     path('conference/share/<str:share_token>/', conference_shared_view, name='conference-shared-view'),
+    path('tradeshow/share/<str:share_token>/', tradeshow_shared_view, name='tradeshow-shared-view'),
 ]

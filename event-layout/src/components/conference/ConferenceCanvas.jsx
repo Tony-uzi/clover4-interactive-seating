@@ -446,7 +446,7 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
           />
         )}
 
-        {element.label && (
+        {/* {element.label && (
           <Text
             text={element.label}
             x={0}
@@ -458,7 +458,7 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
             fill="#333"
             listening={false}
           />
-        )}
+        )} */}
 
         {assignedGuests.length > 0 && (
           <Group listening={false}>
@@ -524,68 +524,6 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
     );
   };
 
-  // Render seats around table
-  const renderSeats = (element, width, height) => {
-    const seats = [];
-    const seatRadius = 8;
-
-    if (element.type === 'table_round') {
-      const radius = width / 2 - seatRadius - 5;
-      for (let i = 0; i < element.seats; i++) {
-        const angle = (i / element.seats) * 2 * Math.PI - Math.PI / 2;
-        const x = width / 2 + radius * Math.cos(angle);
-        const y = height / 2 + radius * Math.sin(angle);
-
-        seats.push(
-          <Circle
-            key={`seat-${i}`}
-            x={x}
-            y={y}
-            radius={seatRadius}
-            fill="#fff"
-            stroke="#666"
-            strokeWidth={1}
-            listening={false}
-          />
-        );
-      }
-    } else {
-      const seatsPerSide = Math.ceil(element.seats / 2);
-      const spacing = width / (seatsPerSide + 1);
-
-      for (let i = 0; i < Math.floor(element.seats / 2); i++) {
-        seats.push(
-          <Circle
-            key={`seat-top-${i}`}
-            x={spacing * (i + 1)}
-            y={-seatRadius - 5}
-            radius={seatRadius}
-            fill="#fff"
-            stroke="#666"
-            strokeWidth={1}
-            listening={false}
-          />
-        );
-      }
-
-      for (let i = 0; i < Math.ceil(element.seats / 2); i++) {
-        seats.push(
-          <Circle
-            key={`seat-bottom-${i}`}
-            x={spacing * (i + 1)}
-            y={height + seatRadius + 5}
-            radius={seatRadius}
-            fill="#fff"
-            stroke="#666"
-            strokeWidth={1}
-            listening={false}
-          />
-        );
-      }
-    }
-
-    return seats;
-  };
 
   // Render room boundary as polygon with draggable vertices
   const renderRoomBoundary = () => {

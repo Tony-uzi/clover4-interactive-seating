@@ -90,8 +90,8 @@ kubectl cluster-info
 kubectl get nodes
 
 # Step 9: Build and push Docker images
-echo_info "Step 9: Building and pushing Docker images..."
-./build-and-push.sh
+# echo_info "Step 9: Building and pushing Docker images..."
+# ./build-and-push.sh
 
 # Step 10: Create Kubernetes namespace
 echo_info "Step 10: Creating Kubernetes namespace..."

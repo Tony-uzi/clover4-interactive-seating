@@ -4,9 +4,9 @@ import { NavLink } from "react-router-dom";
 export default function Home() {
   return (
     <>
-      {/* Hero 区 */}
+      {/* Hero section */}
       <section className="hero">
-        {/* 背景图在 CSS 里设置；图片放 /public/images/conference-bg.jpg */}
+        {/* Background image configured in CSS; store asset at /public/images/conference-bg.jpg */}
         <div className="hero__inner">
           <h1>Visualize Your Event Layouts</h1>
           <p>
@@ -24,7 +24,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 功能特性 */}
+      {/* Feature highlights */}
       <section className="container features">
         <div className="feature-item">
           <i className="fas fa-th-large" />
@@ -88,10 +88,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 两个事件类型卡片 */}
+      {/* Two event type cards */}
       <section className="event-type">
         <div className="event-card">
-          {/* 放到 /public/images/conference.jpg */}
+          {/* Place the image at /public/images/conference.jpg */}
           <img src="/images/conference.jpg" alt="conference layout" />
           <h3>Create the perfect conference layout</h3>
           <p>
@@ -103,7 +103,7 @@ export default function Home() {
         </div>
 
         <div className="event-card">
-          {/* 放到 /public/images/tradeshow.jpg */}
+          {/* Place the image at /public/images/tradeshow.jpg */}
           <img src="/images/tradeshow.jpg" alt="Tradeshow layout" />
           <h3>Optimize your trade show space</h3>
           <p>

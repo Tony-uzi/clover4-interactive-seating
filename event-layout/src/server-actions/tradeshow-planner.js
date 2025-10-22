@@ -1,8 +1,8 @@
 // Tradeshow Planner API Actions - Connected to Real Backend
-// 展会规划器 - 已连接真实后端
+// Tradeshow planner - wired to the production backend
 
 // ========================================
-// 工具函数
+// Utility functions
 // ========================================
 
 function getAuthToken() {
@@ -43,7 +43,7 @@ async function handleResponse(response) {
 }
 
 // ========================================
-// 展会事件 API
+// Tradeshow event API
 // ========================================
 
 /**
@@ -150,7 +150,7 @@ export async function deleteEvent(eventId) {
 }
 
 // ========================================
-// 展商管理 API
+// Vendor management API
 // ========================================
 
 /**
@@ -329,7 +329,7 @@ export async function bulkImportVendors(eventId, file) {
 }
 
 // ========================================
-// 展位管理 API
+// Booth management API
 // ========================================
 
 /**
@@ -355,15 +355,11 @@ export async function saveLayout(eventId, booths) {
   try {
     // Map frontend booth types to backend types
     const mapBoothType = (type) => {
+      // Backend supports most types directly now, only booth_island needs mapping
       const typeMap = {
-        'booth_island': 'booth_premium',
-        'aisle': 'booth_standard',  // Map aisle to standard booth type
-        'tactile_paving': 'booth_standard',
-        'waiting_area': 'booth_standard',
-        'restroom': 'booth_standard',
-        'info_desk': 'booth_standard',
+        'booth_island': 'booth_island',  // Backend now supports booth_island
       };
-      return typeMap[type] || type;
+      return typeMap[type] || type;  // Pass through all other types (door1, door2, power_outlet, etc.)
     };
 
     // Map frontend booth types to backend categories
@@ -379,6 +375,9 @@ export async function saveLayout(eventId, booths) {
         'waiting_area': 'facility',
         'restroom': 'facility',
         'info_desk': 'facility',
+        'door1': 'facility',  // Doors are facilities
+        'door2': 'facility',
+        'power_outlet': 'facility',  // Outlets are facilities
         'structure': 'structure',
       };
       return categoryMap[type] || 'booth';
@@ -451,7 +450,7 @@ export async function loadLayout(eventId) {
 }
 
 // ========================================
-// 展位分配 API
+// Booth assignment API
 // ========================================
 
 /**
@@ -526,7 +525,7 @@ export async function getBoothAssignments(eventId) {
 }
 
 // ========================================
-// 路线管理 API
+// Route management API
 // ========================================
 
 /**
@@ -573,9 +572,9 @@ export async function createRoute(routeData) {
 /**
  * Update an existing route
  */
-export async function updateRoute(routeId, updates) {
+export async function updateRoute(eventId, routeId, updates) {
   try {
-    const response = await fetch(`/api/tradeshow/routes/${routeId}/`, {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/routes/${routeId}/`, {
       method: 'PATCH',
       headers: authHeaders(),
       body: JSON.stringify({
@@ -596,9 +595,9 @@ export async function updateRoute(routeId, updates) {
 /**
  * Delete a route
  */
-export async function deleteRoute(routeId) {
+export async function deleteRoute(eventId, routeId) {
   try {
-    const response = await fetch(`/api/tradeshow/routes/${routeId}/`, {
+    const response = await fetch(`/api/tradeshow/events/${eventId}/routes/${routeId}/`, {
       method: 'DELETE',
       headers: authHeaders()
     });
@@ -613,7 +612,7 @@ export async function deleteRoute(routeId) {
 }
 
 // ========================================
-// 预设和分享功能 API
+// Preset and sharing API
 // ========================================
 
 /**

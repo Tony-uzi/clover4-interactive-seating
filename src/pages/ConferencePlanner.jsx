@@ -428,7 +428,7 @@ export default function ConferencePlanner() {
           try {
             // ask for name to create/get design consistently
             let desiredName = (event?.name || '').trim();
-            const input = prompt('请输入要保存的文件名', desiredName || 'Untitled Conference');
+            const input = prompt('Enter a filename to save', desiredName || 'Untitled Conference');
             if (!input) return;
             desiredName = input.trim();
             if (desiredName && desiredName !== event.name) {

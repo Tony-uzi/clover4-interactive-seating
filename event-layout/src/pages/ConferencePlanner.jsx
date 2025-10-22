@@ -467,7 +467,7 @@ export default function ConferencePlanner() {
           });
         }
 
-        alert(`Successfully imported ${importedCount} guest(s)!${syncedWithBackend ? '' : '（仅保存在本地，尚未同步至后台）'}`);
+        alert(`Successfully imported ${importedCount} guest(s)!${syncedWithBackend ? '' : ' (saved locally only, not yet synced to the backend)'}`);
       }
     } catch (error) {
       console.error('CSV import error:', error);

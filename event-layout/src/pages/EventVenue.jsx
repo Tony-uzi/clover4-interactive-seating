@@ -1,4 +1,4 @@
-// EventVenue.jsx（片段）
+// EventVenue.jsx (excerpt)
 export default function EventVenue() {
   return (
     <section className="page">
@@ -33,7 +33,7 @@ export default function EventVenue() {
             </p>
           </div>
         </div>
-        {/* 其余 5 个 feature 卡片同样结构 */}
+        {/* The remaining five feature cards follow the same structure */}
       </div>
 
       <div className="container" style={{ marginTop: 24 }}>

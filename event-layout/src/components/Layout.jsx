@@ -5,10 +5,10 @@ import Footer from "./Footer.jsx";
 
 export default function Layout() {
   return (
-    // 新增 page-shell：flex 列布局，撑满视口高度
+    // Added page-shell: flex column layout covering full viewport height
     <div className="page-shell">
       <Header />
-      {/* main 占据剩余高度 */}
+      {/* main takes up the remaining height */}
       <main className="page container" style={{ marginTop: 22 }}>
         <Outlet />
       </main>

@@ -370,10 +370,25 @@ export default function TradeshowCanvas({
 
   // Render route arrows
   const renderRoutes = () => {
-    if (!activeRouteId || routes.length === 0) return null;
+    if (!activeRouteId || routes.length === 0) {
+      console.log('No active route or routes empty:', { activeRouteId, routesCount: routes.length });
+      return null;
+    }
 
     const route = routes.find(r => r.id === activeRouteId);
-    if (!route || !route.boothOrder || route.boothOrder.length < 2) return null;
+    if (!route || !route.boothOrder || route.boothOrder.length < 2) {
+      console.warn('Route not renderable:', {
+        route: route?.name,
+        boothOrderLength: route?.boothOrder?.length,
+        boothOrder: route?.boothOrder,
+        activeRouteId,
+        routesCount: routes.length
+      });
+      return null;
+    }
+
+    console.log('Rendering route:', route.name, 'boothOrder:', route.boothOrder);
+    console.log('Available booths:', booths.map(b => ({ id: b.id, label: b.label, type: b.type })));
 
     const arrows = [];
 
@@ -381,15 +396,66 @@ export default function TradeshowCanvas({
       const startBoothId = route.boothOrder[i];
       const endBoothId = route.boothOrder[i + 1];
 
-      const startBooth = booths.find(b => b.id === startBoothId);
-      const endBooth = booths.find(b => b.id === endBoothId);
+      const startBooth = booths.find(b => String(b.id) === String(startBoothId));
+      const endBooth = booths.find(b => String(b.id) === String(endBoothId));
 
-      if (!startBooth || !endBooth) continue;
+      if (!startBooth || !endBooth) {
+        console.error('❌ Booth not found for route segment:', {
+          startBoothId,
+          endBoothId,
+          startBooth: startBooth?.label || 'NOT FOUND',
+          endBooth: endBooth?.label || 'NOT FOUND',
+          allBoothIds: booths.map(b => b.id)
+        });
+        continue;
+      }
+
+      // Validate booth coordinates before rendering
+      const isValidNumber = (val) => typeof val === 'number' && !isNaN(val) && isFinite(val);
+
+      if (!isValidNumber(startBooth.x) || !isValidNumber(startBooth.y) ||
+          !isValidNumber(startBooth.width) || !isValidNumber(startBooth.height)) {
+        console.error('❌ Start booth has invalid coordinates:', {
+          boothId: startBoothId,
+          label: startBooth.label,
+          x: startBooth.x,
+          y: startBooth.y,
+          width: startBooth.width,
+          height: startBooth.height
+        });
+        continue;
+      }
+
+      if (!isValidNumber(endBooth.x) || !isValidNumber(endBooth.y) ||
+          !isValidNumber(endBooth.width) || !isValidNumber(endBooth.height)) {
+        console.error('❌ End booth has invalid coordinates:', {
+          boothId: endBoothId,
+          label: endBooth.label,
+          x: endBooth.x,
+          y: endBooth.y,
+          width: endBooth.width,
+          height: endBooth.height
+        });
+        continue;
+      }
 
       const startX = (startBooth.x + startBooth.width / 2) * PIXELS_PER_METER;
       const startY = (startBooth.y + startBooth.height / 2) * PIXELS_PER_METER;
       const endX = (endBooth.x + endBooth.width / 2) * PIXELS_PER_METER;
       const endY = (endBooth.y + endBooth.height / 2) * PIXELS_PER_METER;
+
+      // Final validation of calculated coordinates
+      if (!isValidNumber(startX) || !isValidNumber(startY) ||
+          !isValidNumber(endX) || !isValidNumber(endY)) {
+        console.error('❌ Calculated coordinates are invalid:', {
+          startX, startY, endX, endY,
+          startBooth: { id: startBoothId, x: startBooth.x, y: startBooth.y },
+          endBooth: { id: endBoothId, x: endBooth.x, y: endBooth.y }
+        });
+        continue;
+      }
+
+      console.log(`✓ Rendering arrow ${i}: (${startX.toFixed(1)}, ${startY.toFixed(1)}) -> (${endX.toFixed(1)}, ${endY.toFixed(1)})`);
 
       arrows.push(
         <Arrow
@@ -405,6 +471,7 @@ export default function TradeshowCanvas({
       );
     }
 
+    console.log(`✓ Total arrows rendered: ${arrows.length} out of ${route.boothOrder.length - 1} segments`);
     return arrows;
   };
 
@@ -426,7 +493,7 @@ export default function TradeshowCanvas({
     // Check if booth is in active route
     const isInRoute =
       activeRouteId &&
-      routes.find(r => r.id === activeRouteId)?.boothOrder?.includes(booth.id);
+      routes.find(r => r.id === activeRouteId)?.boothOrder?.some(id => String(id) === String(booth.id));
 
     const fillColor = isInRoute ? '#FFF9C4' : config.color;
     const strokeColor = isSelected ? '#2196F3' : isDropTarget ? '#FF9800' : isInRoute ? '#FF9800' : config.stroke;

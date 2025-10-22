@@ -417,7 +417,7 @@ export default function TradeshowPlanner() {
         onSave={async () => {
           try {
             let desiredName = (event?.name || '').trim();
-            const input = prompt('请输入要保存的文件名', desiredName || 'Untitled Tradeshow');
+            const input = prompt('Enter a filename to save', desiredName || 'Untitled Tradeshow');
             if (!input) return;
             desiredName = input.trim();
             if (desiredName && desiredName !== event.name) {

@@ -9,6 +9,7 @@ export default function ShareModal({
   eventId,
   onGenerateToken,
   guests = [], // Pass guests from parent to determine available dietary preferences
+  mode = 'conference', // 'conference' or 'tradeshow'
 }) {
   const [shareToken, setShareToken] = useState('');
   const [loading, setLoading] = useState(false);
@@ -97,7 +98,10 @@ export default function ShareModal({
   const getShareUrl = () => {
     if (!shareToken) return '';
     
-    const baseUrl = `${window.location.origin}/conference/share/${shareToken}`;
+    // Use different base URL for tradeshow vs conference
+    const basePath = mode === 'tradeshow' ? 'tradeshow/share' : 'conference/share';
+    const baseUrl = `${window.location.origin}/${basePath}/${shareToken}`;
+    
     const activeFilters = Object.entries(selectedFilters)
       .filter(([key, value]) => value && key !== 'all')
       .map(([key]) => key);
@@ -161,10 +165,12 @@ export default function ShareModal({
               {/* Filter Options */}
               <div>
                 <h3 className="text-lg font-semibold text-gray-800 mb-3">
-                  Dietary Preference Filters
+                  {mode === 'tradeshow' ? 'Vendor Category Filters' : 'Dietary Preference Filters'}
                 </h3>
                 <p className="text-sm text-gray-600 mb-4">
-                  Select which dietary preferences to show in the shared view. This is useful for catering services and food vendors.
+                  {mode === 'tradeshow' 
+                    ? 'Select which vendor categories to show in the shared view.'
+                    : 'Select which dietary preferences to show in the shared view. This is useful for catering services and food vendors.'}
                 </p>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -177,7 +183,7 @@ export default function ShareModal({
                       disabled={loading}
                       className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 disabled:opacity-50 cursor-pointer"
                     />
-                    <span className="font-medium text-gray-700">Show All Guests</span>
+                    <span className="font-medium text-gray-700">{mode === 'tradeshow' ? 'Show All Vendors' : 'Show All Guests'}</span>
                   </label>
 
                   {/* Dynamic dietary preferences from guests */}
@@ -283,18 +289,18 @@ export default function ShareModal({
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <h4 className="font-semibold text-blue-900 mb-2">What recipients will see:</h4>
                 <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• Read-only view of the conference layout</li>
+                  <li>• Read-only view of the {mode === 'tradeshow' ? 'tradeshow' : 'conference'} layout</li>
                   <li>
                     • {selectedFilters.all 
-                      ? 'All tables with assigned guests'
-                      : `Only tables with guests matching: ${Object.entries(selectedFilters)
+                      ? mode === 'tradeshow' ? 'All booths with assigned vendors' : 'All tables with assigned guests'
+                      : `Only ${mode === 'tradeshow' ? 'booths with vendors' : 'tables with guests'} matching: ${Object.entries(selectedFilters)
                           .filter(([key, value]) => value && key !== 'all')
                           .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1))
                           .join(', ')}`
                     }
                   </li>
-                  <li>• Room layout and dimensions</li>
-                  <li>• No editing or guest management capabilities</li>
+                  <li>• {mode === 'tradeshow' ? 'Hall' : 'Room'} layout and dimensions</li>
+                  <li>• No editing or {mode === 'tradeshow' ? 'vendor' : 'guest'} management capabilities</li>
                 </ul>
               </div>
             </>

@@ -23,12 +23,12 @@ export default function Login() {
       const result = await AuthAPI.login(form.email, form.password);
       
       if (result.success) {
-        // 登录成功后跳转到首页（或 redirect 优先）
+        // On successful login, redirect to the home page (or honor redirect param)
         const params = new URLSearchParams(window.location.search);
         const redirect = params.get("redirect");
         navigate(redirect || "/");
       } else {
-        // 登录失败
+        // Login failed
         setError(result.error || "Invalid credentials");
         setLoading(false);
       }

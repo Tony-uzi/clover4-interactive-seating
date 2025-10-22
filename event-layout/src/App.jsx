@@ -3,7 +3,7 @@ import { Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout.jsx";
 import RequireAuth from "./components/RequireAuth.jsx";
 
-// 页面
+// Application pages
 import Home from "./pages/Home.jsx";
 import EventVenue from "./pages/EventVenue.jsx";
 import About from "./pages/About.jsx";
@@ -18,6 +18,7 @@ import TradeshowPlanner from "./pages/TradeshowPlanner.jsx";
 
 // Shared view pages (public)
 import ConferenceSharedView from "./pages/ConferenceSharedView.jsx";
+import TradeshowSharedView from "./pages/TradeshowSharedView.jsx";
 
 // Kiosk pages
 import Kiosk from "./pages/Kiosk.jsx";
@@ -26,7 +27,7 @@ import KioskTradeshow from "./pages/KioskTradeshow.jsx";
 import KioskDirectory from "./pages/KioskDirectory.jsx";
 import KioskSchedule from "./pages/KioskSchedule.jsx";
 
-// 404 组件
+// 404 component
 function NotFound() {
   return (
     <div className="page container">
@@ -41,6 +42,7 @@ export default function App() {
     <Routes>
       {/* Public shared view routes (no auth, no layout/header) */}
       <Route path="/conference/share/:shareToken" element={<ConferenceSharedView />} />
+      <Route path="/tradeshow/share/:shareToken" element={<TradeshowSharedView />} />
 
       {/* Kiosk routes (no auth, no layout/header) */}
       <Route path="/kiosk" element={<Kiosk />} />
@@ -51,7 +53,7 @@ export default function App() {
 
       {/* Protected routes with Layout (requires auth) */}
       <Route element={<RequireAuth><Layout /></RequireAuth>}>
-        <Route path="/" element={<Home />} />
+        
         <Route path="/event" element={<EventVenue />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/qrcode" element={<QRCode />} />
@@ -62,6 +64,7 @@ export default function App() {
 
       {/* Public auth routes with Layout (no auth required) */}
       <Route element={<Layout />}>
+        <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
       </Route>

@@ -3,7 +3,7 @@ import { Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout.jsx";
 import RequireAuth from "./components/RequireAuth.jsx";
 
-// 页面
+// Application pages
 import Home from "./pages/Home.jsx";
 import EventVenue from "./pages/EventVenue.jsx";
 import About from "./pages/About.jsx";
@@ -22,7 +22,7 @@ import TradeshowPlanner from "./pages/TradeshowPlanner.jsx";
 import KioskConference from "./pages/KioskConference.jsx";
 import KioskTradeshow from "./pages/KioskTradeshow.jsx";
 
-// 404 组件
+// 404 component
 function NotFound() {
   return (
     <div className="page container">

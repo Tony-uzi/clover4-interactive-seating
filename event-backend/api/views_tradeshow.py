@@ -1,5 +1,5 @@
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
@@ -350,3 +350,41 @@ def tradeshow_route_detail(request, event_id, route_id):
     elif request.method == 'DELETE':
         route.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ========================================== Public Share Views ==========================================
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def tradeshow_shared_view(request, share_token):
+    """Public endpoint to view shared tradeshow event data (no authentication required)"""
+    event = get_object_or_404(TradeshowEvent, share_token=share_token)
+    
+    # Get event details
+    event_data = {
+        'id': str(event.id),
+        'name': event.name,
+        'description': event.description,
+        'event_date_start': event.event_date_start,
+        'event_date_end': event.event_date_end,
+        'hall_width': float(event.hall_width),
+        'hall_height': float(event.hall_height),
+    }
+    
+    # Get booths
+    booths = TradeshowBooth.objects.filter(event=event).order_by('created_at')
+    booths_data = TradeshowBoothSerializer(booths, many=True).data
+    
+    # Get vendors with booth assignments
+    vendors = TradeshowVendor.objects.filter(event=event).prefetch_related('booth_assignments')
+    vendors_data = TradeshowVendorSerializer(vendors, many=True).data
+    
+    # Get routes
+    routes = TradeshowRoute.objects.filter(event=event).order_by('created_at')
+    routes_data = TradeshowRouteSerializer(routes, many=True).data
+    
+    return Response({
+        'event': event_data,
+        'booths': booths_data,
+        'vendors': vendors_data,
+        'routes': routes_data,
+    })

@@ -1,18 +1,18 @@
 import { useMemo, useState } from "react";
 
 /**
- * 说明：
- * 1) 这里不引第三方库，先用 <img> 引用在线二维码 API 的方式演示，
- *    生产环境建议改为本地生成（如 qrcode、qrcode.react），避免外网依赖。
- * 2) 也可以把图片换成活动现场的入口链接、桌号信息等。
+ * Notes:
+ * 1) This demo skips third-party libraries and uses an <img> pointing to an online QR code API.
+ *    For production, generate codes locally (e.g., qrcode or qrcode.react) to avoid external dependencies.
+ * 2) Feel free to replace the rendered image with entry links, table information, or other event details.
  */
 export default function QRCodePage() {
   const [text, setText] = useState("https://clover4.example.com/event/123");
 
-  // 这里仅作演示：生成一个简单的二维码图片地址
+  // Demo-only: build a simple QR code image URL
   const qrSrc = useMemo(() => {
     const encoded = encodeURIComponent(text);
-    // 你也可以换成自己后端的 /qrcode?text=... 接口
+    // Swap this for your own backend endpoint such as /qrcode?text=...
     return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encoded}`;
   }, [text]);
 

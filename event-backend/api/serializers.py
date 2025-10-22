@@ -197,10 +197,10 @@ class TradeshowRouteSerializer(serializers.ModelSerializer):
     class Meta:
         model = TradeshowRoute
         fields = [
-            'id', 'event', 'name', 'route_type', 'booth_order',
+            'id', 'event', 'name', 'description', 'route_type', 'booth_order', 'color',
             'created_by', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'event', 'created_by', 'created_at', 'updated_at']
 
 
 # ========================================== Bulk Import Serializers ==========================================

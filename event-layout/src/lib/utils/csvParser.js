@@ -59,10 +59,10 @@ export function parseGuestCSV(file) {
                   ? value.trim().toLowerCase()
                   : String(value).toLowerCase();
 
-              if (['false', '0', '否', 'no', 'n'].includes(normalized)) {
+              if (['false', '0', 'no', 'n'].includes(normalized)) {
                 return false;
               }
-              if (['true', '1', '是', 'yes', 'y'].includes(normalized)) {
+              if (['true', '1', 'yes', 'y'].includes(normalized)) {
                 return true;
               }
               return true;
@@ -73,11 +73,11 @@ export function parseGuestCSV(file) {
               return typeof value === 'string' ? value.trim() : String(value).trim();
             };
 
-            const name = formatString(getField('name', '姓名', 'Name'));
-            const group = formatString(getField('group', '分组', 'Group'));
-            const dietaryPreference = formatString(getField('dietaryPreference', '饮食偏好', 'Dietary Preference'));
-            const notes = formatString(getField('notes', '备注', 'Notes'));
-            const attendanceValue = getField('attendance', '参加', 'Attendance');
+            const name = formatString(getField('name', 'Name'));
+            const group = formatString(getField('group', 'Group'));
+            const dietaryPreference = formatString(getField('dietaryPreference', 'Dietary Preference'));
+            const notes = formatString(getField('notes', 'Notes'));
+            const attendanceValue = getField('attendance', 'Attendance');
 
             if (!name) {
               return null;
@@ -160,7 +160,6 @@ export function parseVendorCSV(file) {
               'company',
               'vendorname',
               'name',
-              '公司名称',
               'company name'
             );
             if (!companyName) {
@@ -170,25 +169,20 @@ export function parseVendorCSV(file) {
             const contactName = getField(
               'contact_name',
               'contactperson',
-              '联系人',
               'contactname',
               'contact'
             );
             const contactEmail = getField(
               'contact_email',
               'email',
-              '邮箱',
               'contactemail'
             );
             const contactPhone = getField(
               'contact_phone',
               'phone',
-              '联系电话',
-              '联系人电话',
-              'contactphone',
-              '电话'
+              'contactphone'
             );
-            const category = getField('category', '类别') || 'Other';
+            const category = getField('category') || 'Other';
             const boothPreference = getField(
               'booth_size_preference',
               'boothpreference',
@@ -197,9 +191,9 @@ export function parseVendorCSV(file) {
               'booth preference',
               'boothsizepreference'
             );
-            const website = getField('website', '网址', 'site');
-            const description = getField('description', '备注', 'notes', '简介');
-            const notes = getField('notes', '备注', 'description');
+            const website = getField('website', 'site');
+            const description = getField('description', 'notes');
+            const notes = getField('notes', 'description');
 
             return {
               id: `vendor-${timestamp}-${index}-${Math.random().toString(36).slice(2, 8)}`,

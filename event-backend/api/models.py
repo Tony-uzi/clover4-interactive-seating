@@ -224,6 +224,15 @@ class TradeshowBooth(TimeStamped):
         ('booth_standard', 'Standard Booth'),
         ('booth_large', 'Large Booth'),
         ('booth_premium', 'Premium Booth'),
+        ('booth_island', 'Island Booth'),
+        ('aisle', 'Aisle'),
+        ('tactile_paving', 'Tactile Paving'),
+        ('waiting_area', 'Waiting Area'),
+        ('restroom', 'Restroom'),
+        ('info_desk', 'Info Desk'),
+        ('door1', 'Door (Style 1)'),
+        ('door2', 'Door (Style 2)'),
+        ('power_outlet', 'Power Outlet'),
     ]
 
     CATEGORY_CHOICES = [
@@ -309,8 +318,10 @@ class TradeshowRoute(TimeStamped):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     event = models.ForeignKey(TradeshowEvent, on_delete=models.CASCADE, related_name="routes")
     name = models.CharField(max_length=255, default="Default Route")
+    description = models.TextField(blank=True, default="")
     route_type = models.CharField(max_length=50, default="auto")
     booth_order = models.JSONField()
+    color = models.CharField(max_length=20, default="#3B82F6")
     created_by = models.UUIDField(null=True, blank=True)
 
     class Meta:

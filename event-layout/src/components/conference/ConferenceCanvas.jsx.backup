@@ -407,12 +407,12 @@ export default function ConferenceCanvas({
 
       {/* Scale indicator */}
       <div className="absolute top-4 left-4 bg-white px-3 py-2 rounded shadow text-sm">
-        缩放: {Math.round(scale * 100)}%
+        Scale: {Math.round(scale * 100)}%
       </div>
 
       {/* Room dimensions */}
       <div className="absolute top-4 right-4 bg-white px-3 py-2 rounded shadow text-sm">
-        房间尺寸: {roomWidth.toFixed(1)}m × {roomHeight.toFixed(1)}m
+        Room size: {roomWidth.toFixed(1)}m × {roomHeight.toFixed(1)}m
       </div>
 
       {/* Zoom controls */}

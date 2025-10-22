@@ -1,5 +1,5 @@
 // Authentication API Actions - Connected to Real Backend
-// 认证API - 已连接真实后端
+// Authentication API - wired to the live backend
 
 /**
  * Get stored auth token
@@ -153,6 +153,6 @@ export async function verifyToken() {
     return { success: false, error: 'No token found' };
   }
 
-  // Token存在即视为有效（实际验证由后端处理）
+  // Consider the token valid if it exists; backend handles real validation
   return { success: true, data: { valid: true } };
 }

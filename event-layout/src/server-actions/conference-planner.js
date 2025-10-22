@@ -1,5 +1,5 @@
 // Conference Planner API Actions - Connected to Real Backend
-// 会议规划器 - 已连接后端
+// Conference planner - connected to the backend
 
 
 
@@ -24,7 +24,7 @@ async function handleResponse(response) {
 }
 
 // ========================================
-// 事件管理 API
+// Event management API
 // ========================================
 
 /**
@@ -131,7 +131,7 @@ export async function deleteEvent(eventId) {
 }
 
 // ========================================
-// 嘉宾管理 API
+// Guest management API
 // ========================================
 
 /**
@@ -357,7 +357,7 @@ export async function exportGuestsFiltered(eventId, filters = {}) {
 }
 
 // ========================================
-// 元素管理 API
+// Element management API
 // ========================================
 
 /**
@@ -458,7 +458,7 @@ export async function loadLayout(eventId) {
 }
 
 // ========================================
-// 座位分配 API
+// Seating assignment API
 // ========================================
 
 /**
@@ -537,7 +537,7 @@ export async function getSeatAssignments(eventId) {
 }
 
 // ========================================
-// 分享功能 API
+// Sharing API
 // ========================================
 
 /**
@@ -561,7 +561,7 @@ export async function generateShareToken(eventId) {
 }
 
 // ========================================
-// 会议日程/议程 API
+// Conference schedule/agenda API
 // ========================================
 
 /**

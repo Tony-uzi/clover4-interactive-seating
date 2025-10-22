@@ -17,13 +17,13 @@ body {
   color: #0f172a; /* slate-900 */
 }
 
-/* 让页面成为 头-体-脚 的列布局，内容不足时页脚仍贴底 */
+/* Structure the page as header-body-footer so the footer stays anchored even with short content */
 .page-shell {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
-/* main 占据剩余空间 */
+/* Let main take the remaining space */
 main {
   flex: 1;
 }
@@ -33,7 +33,7 @@ main {
   width: min(1120px, 92vw);
   margin: 0 auto;
 }
-/* 原先 24px 0 48px 会把 footer 顶起来，这里收紧底部间距 */
+/* Tighten the bottom spacing to keep the footer from being pushed up by 24px 0 48px */
 .page {
   padding: 24px 0 12px;
 }
@@ -128,7 +128,7 @@ main {
   place-items: center;
 }
 
-/* ========= Feature Grid (六宫格) ========= */
+/* ========= Feature grid (six panels) ========= */
 .features {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -159,7 +159,7 @@ main {
   line-height: 1.5;
 }
 
-/* Cards 底部的两个卡片*/
+/* Cards section with two items at the bottom */
 .card {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
@@ -239,7 +239,7 @@ main {
   }
 }
 /* ========= Editor pages (Conference / Tradeshow) ========= */
-/* 页面上半部分标题 + 说明 */
+/* Page header title and description */
 .editor-head {
   margin: 8px 0 6px;
 }
@@ -248,7 +248,7 @@ main {
   color: #475569;
 }
 
-/* 工具栏：左右分组，垂直居中，自动换行 */
+/* Toolbar: groups split left/right, vertically centered, wraps automatically */
 .editor-toolbar {
   display: flex;
   align-items: center;
@@ -260,29 +260,29 @@ main {
   margin-bottom: 10px;
 }
 
-/* 画布外框（跟容器左右对齐） */
+/* Canvas outer frame aligned with the container */
 .editor-canvas {
   border: 1px solid #e5e7eb;
   height: 70px;
   border-radius: 12px;
   background: #fafafa;
-  padding: 12px; /* 让 Konva 画布与边框有内边距 */
+  padding: 12px; /* Give the Konva canvas breathing room from the border */
 }
 
-/* 在全局 css 或 App.css 里加两段即可 */
+/* Add these two blocks in global CSS or App.css */
 .editor-topbar {
   height: 48px;
-  /* 固定高度 */
+  /* Fixed height */
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 16px;
   border-bottom: 1px solid #e5e7eb;
-  flex-wrap: wrap; /* 按钮太多就换行 */
-  overflow: visible; /* 保证下拉菜单不被裁剪 */
+  flex-wrap: wrap; /* wrap if there are too many buttons */
+  overflow: visible; /* ensure dropdowns are not clipped */
 }
 
-/* Konva 画布下的网格背景（如果你用 div 包裹 Stage，可给它这个类） */
+/* Grid background beneath the Konva canvas (apply to the div wrapping Stage) */
 .grid-bg {
   background-image: linear-gradient(
       to right,
@@ -290,7 +290,7 @@ main {
       transparent 1px
     ),
     linear-gradient(to bottom, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
-  background-size: 40px 40px; /* 你的网格步长 */
+  background-size: 40px 40px; /* grid spacing */
   border-radius: 8px;
 }
 /* === Editor Layout tidy === */
@@ -311,13 +311,13 @@ main {
   text-decoration: underline;
 }
 
-/* 画布容器（右侧） */
+/* Canvas container (right side) */
 .editor-stagewrap {
   background: #fafafa;
 }
 
-/* 如果你之前给 .editor-canvas 设过固定 height（比如 70px），
-   建议改成： */
+/* If you previously gave .editor-canvas a fixed height (for example 70px),
+   switch to: */
 .editor-canvas {
   min-height: 560px;
   height: auto;

@@ -106,9 +106,10 @@ export default function TradeshowPlanner() {
       try {
         if (ensuredEvent?.id) {
           // ALWAYS load from backend
+          let normalized = [];
           const layoutResp = await TradeshowAPI.loadLayout(ensuredEvent.id);
           if (layoutResp.success) {
-            const normalized = layoutResp.data
+            normalized = layoutResp.data
               .map(normalizeTradeshowBooth)
               .filter(Boolean);
             setBooths(normalized);
@@ -124,6 +125,35 @@ export default function TradeshowPlanner() {
             const backendVendors = vendorsResp.data.map(mapBackendVendor);
             setVendors(backendVendors);
             console.log(`✓ Loaded ${backendVendors.length} vendors from backend`);
+          }
+
+          // Load routes from backend
+          const routesResp = await TradeshowAPI.getRoutes(ensuredEvent.id);
+          if (routesResp.success) {
+            // Create a Set of valid booth IDs for filtering
+            const validBoothIds = new Set(normalized.map(b => b.id));
+
+            const backendRoutes = routesResp.data.map(route => {
+              // Filter booth_order to only include valid booth IDs that exist in the layout
+              const filteredBoothOrder = (route.booth_order || []).filter(boothId => {
+                const isValid = validBoothIds.has(boothId);
+                if (!isValid) {
+                  console.warn(`Route "${route.name}" contains invalid booth ID: ${boothId}, removing it`);
+                }
+                return isValid;
+              });
+
+              return {
+                id: route.id,
+                name: route.name,
+                description: route.description || '',
+                color: route.color || '#3B82F6',
+                boothOrder: filteredBoothOrder,
+                routeType: route.route_type || 'custom',
+              };
+            });
+            setRoutes(backendRoutes);
+            console.log(`✓ Loaded ${backendRoutes.length} routes from backend`);
           }
         }
       } catch (e) {
@@ -390,18 +420,102 @@ export default function TradeshowPlanner() {
   };
 
   // Route operations
-  const handleAddRoute = (route) => {
-    setRoutes([...routes, route]);
+  const handleAddRoute = async (route) => {
+    if (!event?.id) {
+      alert('No event selected. Please save the event first.');
+      return;
+    }
+
+    try {
+      const response = await TradeshowAPI.createRoute({
+        eventId: event.id,
+        name: route.name,
+        description: route.description || '',
+        routeType: route.routeType || 'custom',
+        boothOrder: route.boothOrder || [],
+        color: route.color || '#3B82F6',
+      });
+
+      if (response.success) {
+        const newRoute = {
+          id: response.data.id,
+          name: response.data.name,
+          description: response.data.description || '',
+          color: response.data.color || '#3B82F6',
+          boothOrder: response.data.booth_order || [],
+          routeType: response.data.route_type || 'custom',
+        };
+        setRoutes([...routes, newRoute]);
+        console.log('✓ Route created successfully');
+      } else {
+        throw new Error(response.error || 'Failed to create route');
+      }
+    } catch (error) {
+      console.error('Failed to create route:', error);
+      alert(`Failed to create route: ${error.message}`);
+    }
   };
 
-  const handleUpdateRoute = (routeId, updates) => {
-    setRoutes(routes.map(r => (r.id === routeId ? { ...r, ...updates } : r)));
+  const handleUpdateRoute = async (routeId, updates) => {
+    if (!event?.id) {
+      alert('No event selected.');
+      return;
+    }
+
+    try {
+      const response = await TradeshowAPI.updateRoute(event.id, routeId, {
+        name: updates.name,
+        description: updates.description || '',
+        routeType: updates.routeType || 'custom',
+        boothOrder: updates.boothOrder || [],
+        color: updates.color || '#3B82F6',
+      });
+
+      if (response.success) {
+        const updatedRoute = {
+          id: response.data.id,
+          name: response.data.name,
+          description: response.data.description || '',
+          color: response.data.color || '#3B82F6',
+          boothOrder: response.data.booth_order || [],
+          routeType: response.data.route_type || 'custom',
+        };
+        setRoutes(routes.map(r => (r.id === routeId ? updatedRoute : r)));
+        console.log('✓ Route updated successfully');
+      } else {
+        throw new Error(response.error || 'Failed to update route');
+      }
+    } catch (error) {
+      console.error('Failed to update route:', error);
+      alert(`Failed to update route: ${error.message}`);
+    }
   };
 
-  const handleDeleteRoute = (routeId) => {
-    setRoutes(routes.filter(r => r.id !== routeId));
-    if (activeRouteId === routeId) {
-      setActiveRouteId(null);
+  const handleDeleteRoute = async (routeId) => {
+    if (!event?.id) {
+      alert('No event selected.');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to delete this route?')) {
+      return;
+    }
+
+    try {
+      const response = await TradeshowAPI.deleteRoute(event.id, routeId);
+
+      if (response.success) {
+        setRoutes(routes.filter(r => r.id !== routeId));
+        if (activeRouteId === routeId) {
+          setActiveRouteId(null);
+        }
+        console.log('✓ Route deleted successfully');
+      } else {
+        throw new Error(response.error || 'Failed to delete route');
+      }
+    } catch (error) {
+      console.error('Failed to delete route:', error);
+      alert(`Failed to delete route: ${error.message}`);
     }
   };
 
@@ -571,10 +685,82 @@ export default function TradeshowPlanner() {
               return;
             }
 
+            // Create a mapping of old (temp) IDs to booth data for later matching
+            const oldBoothsMap = new Map();
+            booths.forEach(booth => {
+              // Use position and type as matching key
+              const key = `${booth.type}_${booth.x}_${booth.y}_${booth.width}_${booth.height}`;
+              oldBoothsMap.set(booth.id, { booth, matchKey: key });
+            });
+
             // Save booths to backend
             const saveResult = await TradeshowAPI.saveLayout(event.id, booths);
             if (saveResult.success) {
-              alert(`✓ Saved ${saveResult.data.saved} booths to event`);
+              // Reload booths from backend to get UUIDs
+              const layoutResp = await TradeshowAPI.loadLayout(event.id);
+              if (layoutResp.success) {
+                const backendBooths = layoutResp.data
+                  .map(normalizeTradeshowBooth)
+                  .filter(Boolean);
+                
+                // Create ID mapping: oldID -> newID
+                const idMapping = new Map();
+                backendBooths.forEach(newBooth => {
+                  const newKey = `${newBooth.type}_${newBooth.x}_${newBooth.y}_${newBooth.width}_${newBooth.height}`;
+                  // Find the old booth with matching key
+                  for (const [oldId, { matchKey }] of oldBoothsMap.entries()) {
+                    if (matchKey === newKey && !idMapping.has(oldId)) {
+                      idMapping.set(oldId, newBooth.id);
+                      break;
+                    }
+                  }
+                });
+
+                // Update routes with new booth IDs
+                // Create a Set of valid booth IDs for quick lookup
+                const validBoothIds = new Set(backendBooths.map(b => b.id));
+
+                const updatedRoutes = routes.map(route => {
+                  const updatedBoothOrder = route.boothOrder
+                    .map(oldBoothId => {
+                      // Try to get the mapped ID first
+                      const newId = idMapping.get(oldBoothId);
+                      if (newId) return newId;
+                      // If no mapping exists, check if the ID is valid (exists in current booths)
+                      return validBoothIds.has(oldBoothId) ? oldBoothId : null;
+                    })
+                    .filter(Boolean);  // Remove null/undefined values (invalid booth IDs)
+
+                  // Always save if booth order is different OR if it contains invalid IDs
+                  const needsUpdate = JSON.stringify(updatedBoothOrder) !== JSON.stringify(route.boothOrder);
+                  if (needsUpdate) {
+                    // Update route in backend asynchronously
+                    TradeshowAPI.updateRoute(event.id, route.id, {
+                      name: route.name,
+                      description: route.description,
+                      routeType: route.routeType,
+                      boothOrder: updatedBoothOrder,
+                      color: route.color,
+                    }).then(response => {
+                      if (response.success) {
+                        console.log(`✓ Updated route "${route.name}" - cleaned ${route.boothOrder.length - updatedBoothOrder.length} invalid booth IDs`);
+                      }
+                    }).catch(err => {
+                      console.error(`Failed to update route ${route.name}:`, err);
+                    });
+                  }
+
+                  return {
+                    ...route,
+                    boothOrder: updatedBoothOrder,
+                  };
+                });
+
+                setBooths(backendBooths);
+                setRoutes(updatedRoutes);
+                console.log(`✓ Saved ${saveResult.data.saved} booths and updated routes`);
+                alert(`✓ Saved ${saveResult.data.saved} booths to event`);
+              }
             } else {
               throw new Error(saveResult.error || 'Failed to save layout');
             }
@@ -649,9 +835,9 @@ export default function TradeshowPlanner() {
         </div>
 
         {/* Right: Properties, Routes, and Vendor panels - improved layout */}
-        <div className="w-96 flex flex-col overflow-hidden border-l border-gray-200 bg-white">
+        <div className="w-[480px] flex flex-col overflow-hidden border-l border-gray-200 bg-white">
           {selectedBooth && (
-            <div className="flex-shrink-0 border-b border-gray-200" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+            <div className="flex-shrink-0 border-b border-gray-200" style={{ maxHeight: '180px', overflowY: 'auto' }}>
               <PropertiesPanel
                 selectedElement={selectedBooth}
                 onUpdateElement={handleUpdateBooth}
@@ -660,7 +846,7 @@ export default function TradeshowPlanner() {
               />
             </div>
           )}
-          <div className="flex-shrink-0 border-b border-gray-200" style={{ maxHeight: '350px', overflowY: 'auto' }}>
+          <div className="flex-shrink-0 border-b border-gray-200" style={{ maxHeight: '450px', overflowY: 'auto' }}>
             <RouteManager
               routes={routes}
               booths={booths}

@@ -282,9 +282,9 @@ export function ConferenceKiosk() {
   const checkInGuest = async (guest, options = {}) => {
     if (!guest || guest.checkedIn || !hasGuestBackendIds(guest)) {
       if (!guest?.id) {
-        showNotice('error', '此嘉宾尚未同步到后台，无法签到。请先保存并同步。');
+        showNotice('error', 'This guest has not been synced to the backend yet. Please save and sync before checking in.');
       } else if (!event?.id) {
-        showNotice('error', '未找到活动编号，无法签到。请刷新页面或重新同步。');
+        showNotice('error', 'No event ID found. Please refresh the page or sync again before checking in.');
       }
       return;
     }
@@ -303,7 +303,7 @@ export function ConferenceKiosk() {
 
       if (!response.success) {
         if (!silent) {
-          const fallbackMessage = response.data?.message || response.error || '签到失败，请稍后重试。';
+          const fallbackMessage = response.data?.message || response.error || 'Check-in failed. Please try again later.';
           showNotice('error', fallbackMessage);
         }
         return;
@@ -319,14 +319,14 @@ export function ConferenceKiosk() {
       if (!silent) {
         const wasAlreadyChecked = usedPublicEndpoint && response.data?.success === false;
         const message = usedPublicEndpoint
-          ? response.data?.message || (wasAlreadyChecked ? `${guest.name} 已经签到。` : `${guest.name} 签到成功！`)
-          : `${guest.name} 签到成功！`;
+          ? response.data?.message || (wasAlreadyChecked ? `${guest.name} is already checked in.` : `${guest.name} checked in successfully!`)
+          : `${guest.name} checked in successfully!`;
         showNotice(wasAlreadyChecked ? 'info' : 'success', message);
       }
     } catch (error) {
       console.error('Guest check-in update failed:', error);
       if (!silent) {
-        showNotice('error', '签到更新失败，请稍后再试。');
+        showNotice('error', 'Failed to update check-in status. Please try again later.');
       }
     }
   };
@@ -364,7 +364,7 @@ export function ConferenceKiosk() {
   const handleCheckIn = () => {
     if (!selectedGuest) return;
     if (selectedGuest.checkedIn) {
-      showNotice('info', `${selectedGuest.name} 已经签到。`);
+      showNotice('info', `${selectedGuest.name} is already checked in.`);
       return;
     }
     checkInGuest(selectedGuest);
@@ -373,7 +373,7 @@ export function ConferenceKiosk() {
   const handleQuickGuestCheckIn = (guest) => {
     if (!guest) return;
     if (guest.checkedIn) {
-      showNotice('info', `${guest.name} 已经签到。`);
+      showNotice('info', `${guest.name} is already checked in.`);
       return;
     }
     checkInGuest(guest);
@@ -502,7 +502,7 @@ export function ConferenceKiosk() {
                   </button>
                   {!(hasGuestBackendIds(guest)) && (
                     <div className="px-3 py-2 text-xs text-red-600 bg-red-50 rounded-lg">
-                      需先同步到后台
+                      Sync with backend required
                     </div>
                   )}
                   <button
@@ -518,7 +518,7 @@ export function ConferenceKiosk() {
                     }`}
                     disabled={guest.checkedIn || !hasGuestBackendIds(guest)}
                   >
-                    {guest.checkedIn ? '已签到' : 'Check In'}
+                    {guest.checkedIn ? 'Checked In' : 'Check In'}
                   </button>
                 </div>
               ))}
@@ -691,10 +691,10 @@ export function ConferenceKiosk() {
             <div className="flex-1">
               <h4 className="font-semibold mb-1">
                 {checkInNotice.type === 'success'
-                  ? '签到成功'
+                  ? 'Check-in Successful'
                   : checkInNotice.type === 'error'
-                  ? '签到失败'
-                  : '提示'}
+                  ? 'Check-in Failed'
+                  : 'Notice'}
               </h4>
               <p className="text-sm">{checkInNotice.message}</p>
             </div>
@@ -815,8 +815,8 @@ export function TradeshowKiosk() {
         const updatedRoutes = routesResponse.success ? routesResponse.data.map(route => ({
           id: route.id,
           name: route.name,
-          color: route.color,
-          boothIds: route.booth_ids || [],
+          color: route.color || '#3B82F6',
+          boothOrder: route.booth_order || [],
         })) : [];
 
         setEvent(updatedEvent);
@@ -960,9 +960,9 @@ export function TradeshowKiosk() {
   const checkInVendor = async (vendor, options = {}) => {
     if (!vendor || vendor.checkedIn || !hasVendorBackendIds(vendor)) {
       if (!vendor?.id) {
-        showNotice('error', '此展商尚未同步到后台，无法签到。');
+        showNotice('error', 'This vendor has not been synced to the backend yet. Please save and sync before checking in.');
       } else if (!event?.id) {
-        showNotice('error', '未找到展会编号，无法签到。');
+        showNotice('error', 'No tradeshow ID found. Please refresh the page or sync again before checking in.');
       }
       return;
     }
@@ -981,7 +981,7 @@ export function TradeshowKiosk() {
 
       if (!response.success) {
         if (!silent) {
-          const fallbackMessage = response.data?.message || response.error || '签到失败，请稍后重试。';
+          const fallbackMessage = response.data?.message || response.error || 'Check-in failed. Please try again later.';
           showNotice('error', fallbackMessage);
         }
         return;
@@ -997,14 +997,14 @@ export function TradeshowKiosk() {
       if (!silent) {
         const wasAlreadyChecked = usedPublicEndpoint && response.data?.success === false;
         const message = usedPublicEndpoint
-          ? response.data?.message || (wasAlreadyChecked ? `${vendor.name} 已经签到。` : `${vendor.name} 签到成功！`)
-          : `${vendor.name} 签到成功！`;
+          ? response.data?.message || (wasAlreadyChecked ? `${vendor.name} is already checked in.` : `${vendor.name} checked in successfully!`)
+          : `${vendor.name} checked in successfully!`;
         showNotice(wasAlreadyChecked ? 'info' : 'success', message);
       }
     } catch (error) {
       console.error('Vendor check-in update failed:', error);
       if (!silent) {
-        showNotice('error', '签到更新失败，请稍后再试。');
+        showNotice('error', 'Failed to update check-in status. Please try again later.');
       }
     }
   };
@@ -1042,7 +1042,7 @@ export function TradeshowKiosk() {
   const handleVendorCheckIn = () => {
     if (!selectedVendor) return;
     if (selectedVendor.checkedIn) {
-      showNotice('info', `${selectedVendor.name} 已经签到。`);
+      showNotice('info', `${selectedVendor.name} is already checked in.`);
       return;
     }
     checkInVendor(selectedVendor);
@@ -1051,7 +1051,7 @@ export function TradeshowKiosk() {
   const handleQuickVendorCheckIn = (vendor) => {
     if (!vendor) return;
     if (vendor.checkedIn) {
-      showNotice('info', `${vendor.name} 已经签到。`);
+      showNotice('info', `${vendor.name} is already checked in.`);
       return;
     }
     checkInVendor(vendor);
@@ -1166,7 +1166,7 @@ export function TradeshowKiosk() {
             {routes.length > 0 && (
               <select
                 value={activeRouteId || ''}
-                onChange={(e) => setActiveRouteId(e.target.value ? parseInt(e.target.value, 10) : null)}
+                onChange={(e) => setActiveRouteId(e.target.value || null)}
                 className="px-4 py-3 border-2 border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
               >
                 <option value="">Select Visit Route</option>
@@ -1217,7 +1217,7 @@ export function TradeshowKiosk() {
                   </button>
                   {!(hasVendorBackendIds(vendor)) && (
                     <div className="px-3 py-2 text-xs text-red-600 bg-red-50 rounded-lg">
-                      需先同步到后台
+                      Sync with backend required
                     </div>
                   )}
                   <button
@@ -1233,7 +1233,7 @@ export function TradeshowKiosk() {
                     }`}
                     disabled={vendor.checkedIn || !hasVendorBackendIds(vendor)}
                   >
-                    {vendor.checkedIn ? '已签到' : 'Check In'}
+                    {vendor.checkedIn ? 'Checked In' : 'Check In'}
                   </button>
                 </div>
               ))}
@@ -1454,8 +1454,9 @@ export function TradeshowKiosk() {
         isOpen={showShareModal}
         onClose={() => setShowShareModal(false)}
         eventId={event?.id}
-        onGenerateToken={TradeshowAPI.generateShareToken || ConferenceAPI.generateShareToken}
+        onGenerateToken={TradeshowAPI.generateShareToken}
         guests={vendors}
+        mode="tradeshow"
       />
     </div>
   );
