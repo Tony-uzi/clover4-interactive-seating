@@ -84,6 +84,15 @@ export async function getDesignVersions(designId) {
   return res.json(); // [{version, note, created_at}]
 }
 
+export async function getDesignVersionDetail(designId, version) {
+  const res = await fetch(`/api/designs/${designId}/versions/${version}/`, {
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  });
+  const out = await res.json();
+  if (!res.ok) throw new Error(out.detail || 'Failed to get version detail');
+  return out; // {version, data, note, created_at}
+}
+
 export async function getLatestByToken(designId, token) {
   const res = await fetch(`/api/designs/${designId}/latest/?token=${encodeURIComponent(token)}`, {
     headers: { Authorization: `Bearer ${getAuthToken()}` },

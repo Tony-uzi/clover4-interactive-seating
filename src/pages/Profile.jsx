@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { listDesigns, getLatestDesign, listSharedDesigns } from "../lib/api.js";
 import { deleteDesign } from "../lib/api.js";
@@ -8,6 +8,7 @@ export default function Profile() {
   const navigate = useNavigate();
   const [shares, setShares] = useState([]);
   const [cloud, setCloud] = useState({ loading: false, designs: [], error: "" });
+  const [openingDesignId, setOpeningDesignId] = useState(null);
   const [shared, setShared] = useState({ loading: false, designs: [], error: "" });
   useEffect(() => {
     try {
@@ -45,6 +46,34 @@ export default function Profile() {
     })();
     return () => (mounted = false);
   }, []);
+
+  const openDesignInPlanner = async (design) => {
+    if (!design) return;
+    setOpeningDesignId(design.id);
+    try {
+      const route = design.kind === 'tradeshow' ? '/tradeshow' : '/conference';
+      let target = `${route}?designId=${design.id}`;
+
+      try {
+        const latest = await getLatestDesign(design.id);
+        const data = latest?.data;
+        const metaSource = Array.isArray(data) ? {} : data || {};
+        const meta = metaSource.meta || metaSource.metadata || {};
+        const eventId = meta.eventId || meta.event_id;
+        if (eventId) {
+          target += `&eventId=${eventId}`;
+        }
+      } catch (metaError) {
+        console.warn('Failed to load design metadata for navigation', metaError);
+      }
+
+      navigate(target);
+    } catch (error) {
+      alert(error.message || "Open failed");
+    } finally {
+      setOpeningDesignId(null);
+    }
+  };
 
   const total = shares.length;
 
@@ -100,17 +129,10 @@ export default function Profile() {
                   <span style={{ color: "#64748b", marginLeft: 8 }}>role: {d.role}</span>
                   <button
                     style={{ marginLeft: 12 }}
-                    onClick={async () => {
-                      try {
-                        // Open in correct planner route
-                        const route = d.kind === 'tradeshow' ? '/tradeshow' : '/conference';
-                        navigate(`${route}?designId=${d.id}`);
-                      } catch (e) {
-                        alert(e.message || "Open failed");
-                      }
-                    }}
+                    disabled={openingDesignId === d.id}
+                    onClick={() => openDesignInPlanner(d)}
                   >
-                    Open
+                    {openingDesignId === d.id ? 'Opening...' : 'Open'}
                   </button>
                 </li>
               ))}
@@ -177,16 +199,10 @@ export default function Profile() {
                   <span style={{ color: "#64748b", marginLeft: 8 }}>v{d.latest_version || 0}</span>
                   <button
                     style={{ marginLeft: 12 }}
-                    onClick={async () => {
-                      try {
-                        const route = d.kind === 'tradeshow' ? '/tradeshow' : '/conference';
-                        navigate(`${route}?designId=${d.id}`);
-                      } catch (e) {
-                        alert(e.message || "Open failed");
-                      }
-                    }}
+                    disabled={openingDesignId === d.id}
+                    onClick={() => openDesignInPlanner(d)}
                   >
-                    Edit Latest
+                    {openingDesignId === d.id ? 'Opening...' : 'Edit Latest'}
                   </button>
                   <button
                     style={{ marginLeft: 8, color: '#b91c1c' }}
@@ -211,5 +227,3 @@ export default function Profile() {
     </section>
   );
 }
-
-

@@ -1,14 +1,21 @@
 import { useEffect, useState } from "react";
-import { listDesigns, deleteDesign } from "../lib/api.js";
+import { listDesigns, deleteDesign, getDesignVersions } from "../lib/api.js";
 import { useNavigate } from "react-router-dom";
-import { 
-  FiUser, FiCalendar, FiGrid, FiEdit3, FiTrash2, 
-  FiFolder, FiLayers, FiAlertCircle, FiLoader 
+import {
+  FiUser, FiCalendar, FiGrid, FiEdit3, FiTrash2,
+  FiFolder, FiLayers, FiAlertCircle, FiLoader, FiClock, FiX
 } from 'react-icons/fi';
 
 export default function Profile() {
   const navigate = useNavigate();
   const [cloud, setCloud] = useState({ loading: false, designs: [], error: "" });
+  const [versionModal, setVersionModal] = useState({
+    open: false,
+    design: null,
+    versions: [],
+    loading: false,
+    error: ""
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -23,6 +30,46 @@ export default function Profile() {
     })();
     return () => (mounted = false);
   }, []);
+
+  const openVersionHistory = async (design) => {
+    setVersionModal({
+      open: true,
+      design,
+      versions: [],
+      loading: true,
+      error: ""
+    });
+
+    try {
+      const versions = await getDesignVersions(design.id);
+      setVersionModal(prev => ({
+        ...prev,
+        versions,
+        loading: false
+      }));
+    } catch (e) {
+      setVersionModal(prev => ({
+        ...prev,
+        loading: false,
+        error: e.message || "Failed to load versions"
+      }));
+    }
+  };
+
+  const closeVersionModal = () => {
+    setVersionModal({
+      open: false,
+      design: null,
+      versions: [],
+      loading: false,
+      error: ""
+    });
+  };
+
+  const openVersion = (version) => {
+    const route = versionModal.design.kind === 'tradeshow' ? '/tradeshow' : '/conference';
+    navigate(`${route}?designId=${versionModal.design.id}&version=${version}`);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
@@ -197,6 +244,13 @@ export default function Profile() {
                         <span>Edit</span>
                       </button>
                       <button
+                        onClick={() => openVersionHistory(d)}
+                        className="px-3 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg transition-colors"
+                        title="View version history"
+                      >
+                        <FiClock className="w-4 h-4" />
+                      </button>
+                      <button
                         onClick={async () => {
                           if (!window.confirm(`Delete design "${d.name}"? This cannot be undone.`)) return;
                           try {
@@ -218,6 +272,117 @@ export default function Profile() {
             )}
           </div>
         </div>
+
+        {/* Version History Modal */}
+        {versionModal.open && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
+              {/* Modal Header */}
+              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <FiClock className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">Version History</h2>
+                    {versionModal.design && (
+                      <p className="text-sm text-gray-600">{versionModal.design.name}</p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={closeVersionModal}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <FiX className="w-5 h-5 text-gray-600" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+                {/* Loading State */}
+                {versionModal.loading && (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <FiLoader className="w-8 h-8 text-purple-600 animate-spin mb-4" />
+                    <p className="text-gray-600">Loading versions...</p>
+                  </div>
+                )}
+
+                {/* Error State */}
+                {versionModal.error && (
+                  <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+                    <FiAlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-red-800">{versionModal.error}</p>
+                  </div>
+                )}
+
+                {/* Empty State */}
+                {!versionModal.loading && !versionModal.error && versionModal.versions.length === 0 && (
+                  <div className="text-center py-12">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-2xl mb-4">
+                      <FiClock className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">No versions yet</h3>
+                    <p className="text-gray-600">Save your first version to see it here</p>
+                  </div>
+                )}
+
+                {/* Versions List */}
+                {!versionModal.loading && versionModal.versions.length > 0 && (
+                  <div className="space-y-3">
+                    {versionModal.versions.map((v, idx) => (
+                      <div
+                        key={v.version}
+                        className="bg-gray-50 rounded-xl p-4 border-2 border-gray-200 hover:border-purple-300 hover:bg-purple-50 transition-all"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <div className="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg font-bold text-sm">
+                                v{v.version}
+                              </div>
+                              {idx === 0 && (
+                                <div className="px-2 py-1 bg-green-100 text-green-700 rounded-md text-xs font-medium">
+                                  Latest
+                                </div>
+                              )}
+                            </div>
+
+                            {v.note && (
+                              <p className="text-sm text-gray-700 mb-2">
+                                {v.note}
+                              </p>
+                            )}
+
+                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                              <FiClock className="w-3 h-3" />
+                              <span>
+                                {new Date(v.created_at).toLocaleString('en-US', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={() => openVersion(v.version)}
+                            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors text-sm"
+                          >
+                            Open
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -86,38 +86,6 @@ def designs_detail(request, design_id):
     design.delete()
     return Response(status=204)
 
-@api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def designs_detail(request, design_id):
-    """Update metadata (rename/kind) or delete a design (owner only)."""
-    design = get_object_or_404(Design, id=design_id, user=request.user)
-    if request.method == "PATCH":
-        name = (request.data.get("name") or "").strip()
-        kind = (request.data.get("kind") or "").strip()
-        changed = False
-        if name and name != design.name:
-            # ensure unique per user
-            if Design.objects.filter(user=request.user, name=name).exclude(id=design.id).exists():
-                return Response({"detail": "name already exists"}, status=400)
-            design.name = name
-            changed = True
-        if kind and kind != design.kind:
-            design.kind = kind
-            changed = True
-        if changed:
-            design.save(update_fields=["name", "kind", "updated_at"])
-        return Response({
-            "id": design.id,
-            "name": design.name,
-            "kind": design.kind,
-            "updated_at": design.updated_at,
-            "latest_version": design.versions.aggregate(Max("version")).get("version__max") or 0,
-        })
-
-    # DELETE
-    design.delete()
-    return Response(status=204)
-
 
 
 @api_view(["GET", "POST"])

@@ -58,10 +58,26 @@ export default function ConferencePlanner() {
       };
 
       let ensuredEvent = defaultEvent;
-      
+
       // Get event ID from URL parameter
       const params = new URLSearchParams(location.search);
-      const urlEventId = params.get('eventId');
+      let urlEventId = params.get('eventId');
+      const providedDesignId = params.get('designId');
+
+      // If designId is provided but no eventId, try to get eventId from design metadata
+      if (providedDesignId && !urlEventId) {
+        try {
+          const { getLatestDesign } = await import('../lib/api');
+          const latest = await getLatestDesign(providedDesignId);
+          const meta = latest.data?.meta || {};
+          if (meta.eventId) {
+            urlEventId = meta.eventId;
+            console.log('✓ Found eventId in design metadata:', urlEventId);
+          }
+        } catch (e) {
+          console.warn('Failed to load design metadata:', e);
+        }
+      }
 
       try {
         if (urlEventId) {
@@ -76,6 +92,10 @@ export default function ConferencePlanner() {
               roomWidth: eventResp.data.room_width ?? defaultEvent.roomWidth,
               roomHeight: eventResp.data.room_height ?? defaultEvent.roomHeight,
             };
+            // Update URL to include both eventId and designId if available
+            if (providedDesignId && !params.get('eventId')) {
+              navigate(`/conference?eventId=${ensuredEvent.id}&designId=${providedDesignId}`, { replace: true });
+            }
             console.log('✓ Loaded existing event from URL:', ensuredEvent.id);
           } else {
             // Event doesn't exist, create new one and update URL
@@ -88,8 +108,11 @@ export default function ConferencePlanner() {
                 roomWidth: resp.data.room_width ?? defaultEvent.roomWidth,
                 roomHeight: resp.data.room_height ?? defaultEvent.roomHeight,
               };
-              // Update URL with new event ID
-              navigate(`/conference?eventId=${resp.data.id}`, { replace: true });
+              // Update URL with new event ID (preserve designId if present)
+              const newUrl = providedDesignId
+                ? `/conference?eventId=${resp.data.id}&designId=${providedDesignId}`
+                : `/conference?eventId=${resp.data.id}`;
+              navigate(newUrl, { replace: true });
               console.log('✓ Created new event and updated URL:', resp.data.id);
             }
           }
@@ -103,8 +126,11 @@ export default function ConferencePlanner() {
               roomWidth: resp.data.room_width ?? defaultEvent.roomWidth,
               roomHeight: resp.data.room_height ?? defaultEvent.roomHeight,
             };
-            // Add event ID to URL
-            navigate(`/conference?eventId=${resp.data.id}`, { replace: true });
+            // Add event ID to URL (preserve designId if present)
+            const newUrl = providedDesignId
+              ? `/conference?eventId=${resp.data.id}&designId=${providedDesignId}`
+              : `/conference?eventId=${resp.data.id}`;
+            navigate(newUrl, { replace: true });
             console.log('✓ Created new event and added to URL:', resp.data.id);
           }
         }
@@ -151,14 +177,54 @@ export default function ConferencePlanner() {
       try {
         const params = new URLSearchParams(location.search);
         const providedDesignId = params.get('designId');
+        const providedVersion = params.get('version');
+
         if (providedDesignId) {
           // load from cloud design system
-          const { getLatestDesign } = await import('../lib/api');
-          const latest = await getLatestDesign(providedDesignId);
-          const items = Array.isArray(latest.data) ? latest.data : latest.data.items || [];
-          if (Array.isArray(items) && items.length) {
-            setElements(items);
-            setDesignId(parseInt(providedDesignId, 10));
+          if (providedVersion) {
+            // Load specific version
+            const { getDesignVersionDetail } = await import('../lib/api');
+            const versionData = await getDesignVersionDetail(providedDesignId, providedVersion);
+            const data = versionData.data || {};
+            const items = Array.isArray(data) ? data : data.items || [];
+            const meta = data.meta || {};
+
+            if (Array.isArray(items) && items.length) {
+              setElements(items);
+              setDesignId(parseInt(providedDesignId, 10));
+
+              // Restore event metadata if available
+              if (meta.name || meta.roomWidth || meta.roomHeight) {
+                setEvent(prev => ({
+                  ...prev,
+                  name: meta.name || prev?.name || 'Conference Event',
+                  roomWidth: meta.roomWidth || prev?.roomWidth || 40,
+                  roomHeight: meta.roomHeight || prev?.roomHeight || 30,
+                }));
+              }
+            }
+          } else {
+            // Load latest version
+            const { getLatestDesign } = await import('../lib/api');
+            const latest = await getLatestDesign(providedDesignId);
+            const data = latest.data || {};
+            const items = Array.isArray(data) ? data : data.items || [];
+            const meta = data.meta || {};
+
+            if (Array.isArray(items) && items.length) {
+              setElements(items);
+              setDesignId(parseInt(providedDesignId, 10));
+
+              // Restore event metadata if available
+              if (meta.name || meta.roomWidth || meta.roomHeight) {
+                setEvent(prev => ({
+                  ...prev,
+                  name: meta.name || prev?.name || 'Conference Event',
+                  roomWidth: meta.roomWidth || prev?.roomWidth || 40,
+                  roomHeight: meta.roomHeight || prev?.roomHeight || 30,
+                }));
+              }
+            }
           }
         }
       } catch (e) {
@@ -675,23 +741,38 @@ export default function ConferencePlanner() {
         }}
         onSave={async () => {
           try {
-            // ask for name to create/get design consistently
+            // ask for name
             let desiredName = (event?.name || '').trim();
             const input = prompt('请输入要保存的文件名', desiredName || 'Untitled Conference');
             if (!input) return;
             desiredName = input.trim();
+
+            // Update event name immediately
             if (desiredName && desiredName !== event.name) {
               const next = { ...event, name: desiredName };
               setEvent(next);
             }
+
             let did = designId;
             if (!did) {
+              // Create new design
               const d = await createOrGetDesign(desiredName || event.name, 'conference');
               did = d.id;
               setDesignId(did);
               try { localStorage.setItem('designId.conference', String(did)); } catch {}
             }
-            const payload = { items: elements, meta: { name: desiredName || event.name, kind: 'conference', roomWidth: event.roomWidth, roomHeight: event.roomHeight } };
+
+            const payload = {
+              items: elements,
+              meta: {
+                name: desiredName || event.name,
+                kind: 'conference',
+                roomWidth: event.roomWidth,
+                roomHeight: event.roomHeight,
+                eventId: event.id  // Save eventId to link design with event
+              }
+            };
+
             await saveDesignVersion(did, payload, 'manual save');
             setDirty(false);
             alert('Saved to cloud');

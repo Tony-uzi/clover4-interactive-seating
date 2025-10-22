@@ -20,7 +20,24 @@ function authHeaders() {
 async function handleResponse(response) {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `HTTP Error ${response.status}`);
+    // Handle different error formats
+    if (error.detail) {
+      throw new Error(error.detail);
+    } else if (error.error) {
+      throw new Error(error.error);
+    } else if (typeof error === 'object') {
+      // Serializer validation errors
+      const errorMessages = Object.entries(error)
+        .map(([field, messages]) => {
+          if (Array.isArray(messages)) {
+            return `${field}: ${messages.join(', ')}`;
+          }
+          return `${field}: ${messages}`;
+        })
+        .join('; ');
+      throw new Error(errorMessages || `HTTP Error ${response.status}`);
+    }
+    throw new Error(`HTTP Error ${response.status}`);
   }
   return response.json();
 }
@@ -340,8 +357,31 @@ export async function saveLayout(eventId, booths) {
     const mapBoothType = (type) => {
       const typeMap = {
         'booth_island': 'booth_premium',
+        'aisle': 'booth_standard',  // Map aisle to standard booth type
+        'tactile_paving': 'booth_standard',
+        'waiting_area': 'booth_standard',
+        'restroom': 'booth_standard',
+        'info_desk': 'booth_standard',
       };
       return typeMap[type] || type;
+    };
+
+    // Map frontend booth types to backend categories
+    const mapCategory = (type) => {
+      // Backend only accepts: 'booth', 'facility', 'structure'
+      const categoryMap = {
+        'booth_standard': 'booth',
+        'booth_large': 'booth',
+        'booth_premium': 'booth',
+        'booth_island': 'booth',
+        'aisle': 'facility',
+        'tactile_paving': 'facility',
+        'waiting_area': 'facility',
+        'restroom': 'facility',
+        'info_desk': 'facility',
+        'structure': 'structure',
+      };
+      return categoryMap[type] || 'booth';
     };
 
     // Round to 2 decimal places
@@ -357,6 +397,11 @@ export async function saveLayout(eventId, booths) {
         'booth_large': 'Large Booth',
         'booth_premium': 'Premium Booth',
         'booth_island': 'Premium Booth',
+        'aisle': 'Aisle',
+        'tactile_paving': 'Tactile Paving',
+        'waiting_area': 'Waiting Area',
+        'restroom': 'Restroom',
+        'info_desk': 'Info Desk',
       };
       const baseLabel = typeLabels[type] || 'Booth';
       return `${baseLabel} ${index + 1}`;
@@ -367,11 +412,12 @@ export async function saveLayout(eventId, booths) {
       headers: authHeaders(),
       body: JSON.stringify({
         booths: booths.map((b, index) => {
+          const originalType = b.type || b.booth_type;
           const mapped = {
             event: eventId,
-            booth_type: mapBoothType(b.type || b.booth_type),
-            category: b.category || 'booth',
-            label: b.label || generateLabel(b.type || b.booth_type, index),
+            booth_type: mapBoothType(originalType),
+            category: mapCategory(originalType),  // Use mapCategory based on original type
+            label: b.label || generateLabel(originalType, index),
             position_x: roundTo2(b.x !== undefined ? b.x : b.position_x),
             position_y: roundTo2(b.y !== undefined ? b.y : b.position_y),
             width: roundTo2(b.width),

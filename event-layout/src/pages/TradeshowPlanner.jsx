@@ -50,10 +50,26 @@ export default function TradeshowPlanner() {
       };
 
       let ensuredEvent = defaultEvent;
-      
+
       // Get event ID from URL parameter
       const params = new URLSearchParams(location.search);
-      const urlEventId = params.get('eventId');
+      let urlEventId = params.get('eventId');
+      const providedDesignId = params.get('designId');
+
+      // If designId is provided but no eventId, try to get eventId from design metadata
+      if (providedDesignId && !urlEventId) {
+        try {
+          const { getLatestDesign } = await import('../lib/api');
+          const latest = await getLatestDesign(providedDesignId);
+          const meta = latest.data?.meta || {};
+          if (meta.eventId) {
+            urlEventId = meta.eventId;
+            console.log('✓ Found eventId in design metadata:', urlEventId);
+          }
+        } catch (e) {
+          console.warn('Failed to load design metadata:', e);
+        }
+      }
 
       try {
         if (urlEventId) {
@@ -68,6 +84,10 @@ export default function TradeshowPlanner() {
               hallWidth: eventResp.data.hall_width ?? defaultEvent.hallWidth,
               hallHeight: eventResp.data.hall_height ?? defaultEvent.hallHeight,
             };
+            // Update URL to include both eventId and designId if available
+            if (providedDesignId && !params.get('eventId')) {
+              navigate(`/tradeshow?eventId=${ensuredEvent.id}&designId=${providedDesignId}`, { replace: true });
+            }
             console.log('✓ Loaded existing event from URL:', ensuredEvent.id);
           } else {
             // Event doesn't exist, create new one and update URL
@@ -80,8 +100,11 @@ export default function TradeshowPlanner() {
                 hallWidth: resp.data.hall_width ?? defaultEvent.hallWidth,
                 hallHeight: resp.data.hall_height ?? defaultEvent.hallHeight,
               };
-              // Update URL with new event ID
-              navigate(`/tradeshow?eventId=${resp.data.id}`, { replace: true });
+              // Update URL with new event ID (preserve designId if present)
+              const newUrl = providedDesignId
+                ? `/tradeshow?eventId=${resp.data.id}&designId=${providedDesignId}`
+                : `/tradeshow?eventId=${resp.data.id}`;
+              navigate(newUrl, { replace: true });
               console.log('✓ Created new event and updated URL:', resp.data.id);
             }
           }
@@ -95,8 +118,11 @@ export default function TradeshowPlanner() {
               hallWidth: resp.data.hall_width ?? defaultEvent.hallWidth,
               hallHeight: resp.data.hall_height ?? defaultEvent.hallHeight,
             };
-            // Add event ID to URL
-            navigate(`/tradeshow?eventId=${resp.data.id}`, { replace: true });
+            // Add event ID to URL (preserve designId if present)
+            const newUrl = providedDesignId
+              ? `/tradeshow?eventId=${resp.data.id}&designId=${providedDesignId}`
+              : `/tradeshow?eventId=${resp.data.id}`;
+            navigate(newUrl, { replace: true });
             console.log('✓ Created new event and added to URL:', resp.data.id);
           }
         }
@@ -111,13 +137,53 @@ export default function TradeshowPlanner() {
       try {
         const params = new URLSearchParams(location.search);
         const providedDesignId = params.get('designId');
+        const providedVersion = params.get('version');
+
         if (providedDesignId) {
-          const { getLatestDesign } = await import('../lib/api');
-          const latest = await getLatestDesign(providedDesignId);
-          const items = Array.isArray(latest.data) ? latest.data : latest.data.items || [];
-          if (Array.isArray(items) && items.length) {
-            setBooths(items);
-            setDesignId(parseInt(providedDesignId, 10));
+          if (providedVersion) {
+            // Load specific version
+            const { getDesignVersionDetail } = await import('../lib/api');
+            const versionData = await getDesignVersionDetail(providedDesignId, providedVersion);
+            const data = versionData.data || {};
+            const items = Array.isArray(data) ? data : data.items || [];
+            const meta = data.meta || {};
+
+            if (Array.isArray(items) && items.length) {
+              setBooths(items);
+              setDesignId(parseInt(providedDesignId, 10));
+
+              // Restore event metadata if available
+              if (meta.name || meta.hallWidth || meta.hallHeight) {
+                setEvent(prev => ({
+                  ...prev,
+                  name: meta.name || prev?.name || 'Tradeshow Event',
+                  hallWidth: meta.hallWidth || prev?.hallWidth || 40,
+                  hallHeight: meta.hallHeight || prev?.hallHeight || 30,
+                }));
+              }
+            }
+          } else {
+            // Load latest version
+            const { getLatestDesign } = await import('../lib/api');
+            const latest = await getLatestDesign(providedDesignId);
+            const data = latest.data || {};
+            const items = Array.isArray(data) ? data : data.items || [];
+            const meta = data.meta || {};
+
+            if (Array.isArray(items) && items.length) {
+              setBooths(items);
+              setDesignId(parseInt(providedDesignId, 10));
+
+              // Restore event metadata if available
+              if (meta.name || meta.hallWidth || meta.hallHeight) {
+                setEvent(prev => ({
+                  ...prev,
+                  name: meta.name || prev?.name || 'Tradeshow Event',
+                  hallWidth: meta.hallWidth || prev?.hallWidth || 40,
+                  hallHeight: meta.hallHeight || prev?.hallHeight || 30,
+                }));
+              }
+            }
           }
         } else if (ensuredEvent?.id) {
           // ALWAYS load from backend
@@ -255,7 +321,7 @@ export default function TradeshowPlanner() {
           setVendors(prevVendors => {
             const updated = prevVendors.map(v =>
               v.id === tempVendor.id ? backendVendor : v
-            ).map(normalizeTradeshowVendor).filter(Boolean);
+            );
             return updated;
           });
           console.log('✓ Vendor created in backend with ID:', result.data.id);
@@ -272,7 +338,7 @@ export default function TradeshowPlanner() {
   const handleUpdateVendor = (vendorId, updates) => {
     setVendors(prevVendors => {
       const updated = prevVendors.map(v =>
-        v.id === vendorId ? normalizeTradeshowVendor({ ...v, ...updates }) : v
+        v.id === vendorId ? { ...v, ...updates } : v
       );
       return updated;
     });
@@ -307,17 +373,16 @@ export default function TradeshowPlanner() {
     };
 
     setVendors(prevVendors => {
-      const updated = prevVendors.map(vendor => {
-        if (String(vendor.id) === normalizedVendorId) {
-          return normalizeTradeshowVendor({
-            ...vendor,
-            boothAssignmentId: vendor.boothAssignmentId || null,
-            boothId: booth.id,
-            boothNumber: booth.label || null,
-          });
-        }
-        return normalizeTradeshowVendor(vendor);
-      }).filter(Boolean);
+      const updated = prevVendors.map(vendor =>
+        String(vendor.id) === normalizedVendorId
+          ? {
+              ...vendor,
+              boothAssignmentId: vendor.boothAssignmentId || null,
+              boothId: booth.id,
+              boothNumber: booth.label || null,
+            }
+          : vendor
+      );
       return updated;
     });
     setDraggingVendorId(null);
@@ -342,8 +407,8 @@ export default function TradeshowPlanner() {
           // Update vendor state with backend UUID
           setVendors(prevVendors => {
             const updated = prevVendors.map(v =>
-              v.id === normalizedVendorId ? backendVendor : normalizeTradeshowVendor(v)
-            ).filter(Boolean);
+              v.id === normalizedVendorId ? backendVendor : v
+            );
             return updated;
           });
           console.log('✓ Vendor saved to backend with UUID:', validVendorId);
@@ -422,17 +487,18 @@ export default function TradeshowPlanner() {
           setVendors(prevVendors => {
             const updated = prevVendors.map(vendor => {
               const vendorIdStr = String(vendor.id);
+              // Match by either the original temp ID or the new valid ID
               if (vendorIdStr === normalizedVendorId || vendorIdStr === validVendorId) {
-                return normalizeTradeshowVendor({
+                return {
                   ...vendor,
-                  id: validVendorId,
+                  id: validVendorId,  // Ensure we use the valid UUID
                   boothAssignmentId: assignmentResp.data.id,
                   boothId: validBoothId,
                   boothNumber: booth.label || null,
-                });
+                };
               }
-              return normalizeTradeshowVendor(vendor);
-            }).filter(Boolean);
+              return vendor;
+            });
             return updated;
           });
           console.log(`✓ Saved vendor booth assignment to backend`);
@@ -480,6 +546,12 @@ export default function TradeshowPlanner() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Check if event exists
+    if (!event?.id) {
+      alert('Please wait for the event to be created before importing vendors');
+      return;
+    }
+
     try {
       const importedVendors = await parseVendorCSV(file);
       const normalizedImported = importedVendors
@@ -488,47 +560,33 @@ export default function TradeshowPlanner() {
 
       if (normalizedImported.length === 0) {
         alert('No valid vendor information found, please check CSV content');
-      } else {
-        let importedCount = normalizedImported.length;
-        let syncedWithBackend = false;
+        return;
+      }
 
-        if (event?.id) {
-          try {
-            const result = await TradeshowAPI.bulkImportVendors(event.id, file);
-            if (result.success) {
-              importedCount = result.data?.imported || result.data?.count || importedCount;
-              syncedWithBackend = true;
+      try {
+        // Always use backend API
+        const result = await TradeshowAPI.bulkImportVendors(event.id, file);
+        if (result.success) {
+          const importedCount = result.data?.imported || result.data?.count || normalizedImported.length;
 
-              try {
-                const refreshedVendorsResp = await TradeshowAPI.getVendors(event.id);
-                if (refreshedVendorsResp.success) {
-                  const backendVendors = refreshedVendorsResp.data
-                    .map(mapBackendVendor)
-                    .filter(Boolean);
-                  setVendors(backendVendors);
-                  console.log(`✓ Synced ${backendVendors.length} vendors from backend after import`);
-                } else {
-                  console.warn('Failed to refresh vendors: backend response unsuccessful');
-                }
-              } catch (refreshError) {
-                console.warn('Failed to refresh vendors from backend after import:', refreshError);
-              }
-            } else {
-              console.warn('Bulk vendor import API reported failure, using local storage only:', result.error);
-            }
-          } catch (backendError) {
-            console.warn('Failed to save vendors to backend, saved to localStorage only:', backendError);
+          // Refresh vendors from backend to get UUIDs
+          const refreshedVendorsResp = await TradeshowAPI.getVendors(event.id);
+          if (refreshedVendorsResp.success) {
+            const backendVendors = refreshedVendorsResp.data
+              .map(mapBackendVendor)
+              .filter(Boolean);
+            setVendors(backendVendors);
+            console.log(`✓ Successfully imported and synced ${backendVendors.length} vendors from backend`);
+            alert(`Successfully imported ${importedCount} vendor(s)!`);
+          } else {
+            throw new Error('Failed to refresh vendors after import');
           }
+        } else {
+          throw new Error(result.error || 'Import API failed');
         }
-
-        if (!syncedWithBackend) {
-          setVendors(prevVendors => {
-            const updated = [...prevVendors, ...normalizedImported];
-            return updated;
-          });
-        }
-
-        alert(`Successfully imported ${importedCount} vendor(s)!${syncedWithBackend ? '' : '（仅保存在本地，尚未同步至后台）'}`);
+      } catch (backendError) {
+        console.error('Failed to import vendors to backend:', backendError);
+        alert(`Import failed: ${backendError.message || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('CSV import error:', error);
@@ -579,9 +637,9 @@ export default function TradeshowPlanner() {
     pdf.save(`tradeshow-layout-${Date.now()}.pdf`);
   };
 
-  // Clear - clears both backend and localStorage
+  // Clear - clears backend layout
   const handleClear = async () => {
-    if (!confirm('Are you sure you want to clear ALL layout elements? This will delete all booths and other elements from both the canvas and the backend. This action cannot be undone!')) {
+    if (!confirm('Are you sure you want to clear ALL layout elements? This will delete all booths and other elements from the canvas and the backend. This action cannot be undone!')) {
       return;
     }
     
@@ -641,22 +699,38 @@ export default function TradeshowPlanner() {
         }}
         onSave={async () => {
           try {
+            // ask for name
             let desiredName = (event?.name || '').trim();
             const input = prompt('请输入要保存的文件名', desiredName || 'Untitled Tradeshow');
             if (!input) return;
             desiredName = input.trim();
+
+            // Update event name immediately
             if (desiredName && desiredName !== event.name) {
               const next = { ...event, name: desiredName };
               setEvent(next);
             }
+
             let did = designId;
             if (!did) {
+              // Create new design
               const d = await createOrGetDesign(desiredName || event.name, 'tradeshow');
               did = d.id;
               setDesignId(did);
               try { localStorage.setItem('designId.tradeshow', String(did)); } catch {}
             }
-            const payload = { items: booths, meta: { name: desiredName || event.name, kind: 'tradeshow', hallWidth: event.hallWidth, hallHeight: event.hallHeight } };
+
+            const payload = {
+              items: booths,
+              meta: {
+                name: desiredName || event.name,
+                kind: 'tradeshow',
+                hallWidth: event.hallWidth,
+                hallHeight: event.hallHeight,
+                eventId: event.id  // Save eventId to link design with event
+              }
+            };
+
             await saveDesignVersion(did, payload, 'manual save');
             setDirty(false);
             alert('Saved to cloud');

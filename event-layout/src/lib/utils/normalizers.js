@@ -174,9 +174,12 @@ export function normalizeTradeshowBooth(raw) {
     null;
   if (!resolvedId) return null;
   
-  // Validate booth type - only accept known tradeshow booth types
+  // Validate booth type - accept both booth and facility types
   const boothType = raw.type || raw.booth_type;
-  const validTypes = ['booth_standard', 'booth_large', 'booth_premium', 'booth_island'];
+  const validTypes = [
+    'booth_standard', 'booth_large', 'booth_premium', 'booth_island',
+    'aisle', 'tactile_paving', 'waiting_area', 'restroom', 'info_desk'
+  ];
   if (!boothType || !validTypes.includes(boothType)) {
     console.warn('Invalid booth type, skipping:', boothType, raw);
     return null;

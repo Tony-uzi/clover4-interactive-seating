@@ -75,16 +75,64 @@ export default function ConferencePlanner() {
       try {
         const params = new URLSearchParams(location.search);
         const providedDesignId = params.get('designId');
-        if (providedDesignId) {
-          // load from cloud design system
-          const { getLatestDesign } = await import('../lib/api');
-          const latest = await getLatestDesign(providedDesignId);
-          const items = Array.isArray(latest.data) ? latest.data : latest.data.items || [];
-          if (Array.isArray(items) && items.length) {
+        const providedVersion = params.get('version');
+
+        const applyDesignPayload = (rawData, designIdValue) => {
+          if (!rawData) return;
+          const data = Array.isArray(rawData) ? { items: rawData } : rawData || {};
+
+          const items = Array.isArray(data.items)
+            ? data.items
+            : Array.isArray(data.elements)
+              ? data.elements
+              : [];
+          if (items) {
             setElements(items);
             saveConferenceLayout(items);
-            setDesignId(parseInt(providedDesignId, 10));
-            try { localStorage.setItem('designId.conference', String(providedDesignId)); } catch {}
+          }
+
+          if (Array.isArray(data.guests)) {
+            setGuests(data.guests);
+            saveConferenceGuests(data.guests);
+          }
+
+          if (Array.isArray(data.groups)) {
+            setGroups(data.groups);
+            saveConferenceGroups(data.groups);
+          }
+
+          const meta = data.meta || data.metadata || {};
+          if (meta && Object.keys(meta).length > 0) {
+            setEvent(prevEvent => {
+              if (!prevEvent) return prevEvent;
+              const nextEvent = {
+                ...prevEvent,
+                id: meta.eventId || meta.event_id || prevEvent.id,
+                name: meta.name || prevEvent.name,
+                roomWidth: meta.roomWidth || meta.room_width || prevEvent.roomWidth,
+                roomHeight: meta.roomHeight || meta.room_height || prevEvent.roomHeight,
+              };
+              saveConferenceEvent(nextEvent);
+              return nextEvent;
+            });
+          }
+
+          if (designIdValue) {
+            const numericId = Number(designIdValue);
+            setDesignId(Number.isNaN(numericId) ? designIdValue : numericId);
+            try { localStorage.setItem('designId.conference', String(designIdValue)); } catch {}
+          }
+        };
+
+        if (providedDesignId) {
+          if (providedVersion) {
+            const { getDesignVersionDetail } = await import('../lib/api');
+            const versionData = await getDesignVersionDetail(providedDesignId, providedVersion);
+            applyDesignPayload(versionData.data, providedDesignId);
+          } else {
+            const { getLatestDesign } = await import('../lib/api');
+            const latest = await getLatestDesign(providedDesignId);
+            applyDesignPayload(latest.data, providedDesignId);
           }
         }
       } catch (e) {
@@ -394,7 +442,18 @@ export default function ConferencePlanner() {
               setDesignId(did);
               try { localStorage.setItem('designId.conference', String(did)); } catch {}
             }
-            const payload = { items: elements, meta: { name: desiredName || event.name, kind: 'conference', roomWidth: event.roomWidth, roomHeight: event.roomHeight } };
+            const payload = {
+              items: elements,
+              guests,
+              groups,
+              meta: {
+                name: desiredName || event.name,
+                kind: 'conference',
+                roomWidth: event.roomWidth,
+                roomHeight: event.roomHeight,
+                eventId: event.id || null,
+              },
+            };
             await saveDesignVersion(did, payload, 'manual save');
             setDirty(false);
             alert('Saved to cloud');

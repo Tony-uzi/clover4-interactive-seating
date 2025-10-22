@@ -161,22 +161,6 @@ export default function PropertiesPanel({
             </div>
           )}
 
-          {/* Rotation */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Rotation (deg)
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="360"
-              value={formData.rotation || 0}
-              onChange={(e) => handleChange('rotation', parseInt(e.target.value))}
-              onMouseUp={handleApply}
-              className="w-full"
-            />
-            <div className="text-center text-sm text-gray-600">{formData.rotation || 0}°</div>
-          </div>
 
           {/* Element info */}
           <div className="pt-4 border-t border-gray-200">

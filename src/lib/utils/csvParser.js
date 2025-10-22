@@ -123,18 +123,104 @@ export function parseVendorCSV(file) {
           return;
         }
 
+        const normalizeKey = (key) =>
+          typeof key === 'string'
+            ? key.replace(/\uFEFF/g, '').trim().toLowerCase().replace(/[\s_-]+/g, '')
+            : '';
+
+        const formatValue = (value) => {
+          if (value === null || value === undefined) return '';
+          return typeof value === 'string' ? value.trim() : String(value).trim();
+        };
+
+        const timestamp = Date.now();
+
         const vendors = results.data
-          .map((row, index) => ({
-            id: Date.now() + index,
-            name: row.name || row['公司名称'] || row['Company Name'] || '',
-            contactName: row.contactName || row['联系人'] || row['Contact Person'] || '',
-            email: row.email || row['邮箱'] || row['Email'] || '',
-            phone: row.phone || row['电话'] || row['Phone'] || '',
-            category: row.category || row['类别'] || row['Category'] || 'Other',
-            notes: row.notes || row['备注'] || row['Notes'] || '',
-            boothNumber: null,
-          }))
-          .filter(vendor => vendor.name.trim() !== ''); // Filter out vendors without names
+          .map((rawRow, index) => {
+            if (!rawRow || typeof rawRow !== 'object') return null;
+
+            const normalizedRow = {};
+            Object.entries(rawRow).forEach(([rawKey, rawValue]) => {
+              const normKey = normalizeKey(rawKey);
+              if (!normKey) return;
+              normalizedRow[normKey] = formatValue(rawValue);
+            });
+
+            const getField = (...keys) => {
+              for (const key of keys) {
+                const normKey = normalizeKey(key);
+                if (normKey && normalizedRow[normKey]) {
+                  return normalizedRow[normKey];
+                }
+              }
+              return '';
+            };
+
+            const companyName = getField(
+              'company_name',
+              'companyname',
+              'company',
+              'vendorname',
+              'name',
+              '公司名称',
+              'company name'
+            );
+            if (!companyName) {
+              return null;
+            }
+
+            const contactName = getField(
+              'contact_name',
+              'contactperson',
+              '联系人',
+              'contactname',
+              'contact'
+            );
+            const contactEmail = getField(
+              'contact_email',
+              'email',
+              '邮箱',
+              'contactemail'
+            );
+            const contactPhone = getField(
+              'contact_phone',
+              'phone',
+              '联系电话',
+              '联系人电话',
+              'contactphone',
+              '电话'
+            );
+            const category = getField('category', '类别') || 'Other';
+            const boothPreference = getField(
+              'booth_size_preference',
+              'boothpreference',
+              'boothsize',
+              'booth_size',
+              'booth preference',
+              'boothsizepreference'
+            );
+            const website = getField('website', '网址', 'site');
+            const description = getField('description', '备注', 'notes', '简介');
+            const notes = getField('notes', '备注', 'description');
+
+            return {
+              id: `vendor-${timestamp}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+              name: companyName,
+              companyName,
+              contactName,
+              contactEmail,
+              email: contactEmail,
+              contactPhone,
+              phone: contactPhone,
+              category,
+              boothPreference,
+              website,
+              description,
+              notes,
+              boothNumber: null,
+            };
+          })
+          .filter(Boolean); // Filter out invalid rows
 
         resolve(vendors);
       },

@@ -75,15 +75,64 @@ export default function TradeshowPlanner() {
       try {
         const params = new URLSearchParams(location.search);
         const providedDesignId = params.get('designId');
-        if (providedDesignId) {
-          const { getLatestDesign } = await import('../lib/api');
-          const latest = await getLatestDesign(providedDesignId);
-          const items = Array.isArray(latest.data) ? latest.data : latest.data.items || [];
-          if (Array.isArray(items) && items.length) {
+        const providedVersion = params.get('version');
+
+        const applyDesignPayload = (rawData, designIdValue) => {
+          if (!rawData) return;
+          const data = Array.isArray(rawData) ? { items: rawData } : rawData || {};
+
+          const items = Array.isArray(data.items)
+            ? data.items
+            : Array.isArray(data.booths)
+              ? data.booths
+              : [];
+          if (items) {
             setBooths(items);
             saveTradeshowLayout(items);
-            setDesignId(parseInt(providedDesignId, 10));
-            try { localStorage.setItem('designId.tradeshow', String(providedDesignId)); } catch {}
+          }
+
+          if (Array.isArray(data.vendors)) {
+            setVendors(data.vendors);
+            saveTradeshowVendors(data.vendors);
+          }
+
+          if (Array.isArray(data.routes)) {
+            setRoutes(data.routes);
+            saveTradeshowRoutes(data.routes);
+          }
+
+          const meta = data.meta || data.metadata || {};
+          if (meta && Object.keys(meta).length > 0) {
+            setEvent(prevEvent => {
+              if (!prevEvent) return prevEvent;
+              const nextEvent = {
+                ...prevEvent,
+                id: meta.eventId || meta.event_id || prevEvent.id,
+                name: meta.name || prevEvent.name,
+                hallWidth: meta.hallWidth || meta.hall_width || prevEvent.hallWidth,
+                hallHeight: meta.hallHeight || meta.hall_height || prevEvent.hallHeight,
+              };
+              saveTradeshowEvent(nextEvent);
+              return nextEvent;
+            });
+          }
+
+          if (designIdValue) {
+            const numericId = Number(designIdValue);
+            setDesignId(Number.isNaN(numericId) ? designIdValue : numericId);
+            try { localStorage.setItem('designId.tradeshow', String(designIdValue)); } catch {}
+          }
+        };
+
+        if (providedDesignId) {
+          if (providedVersion) {
+            const { getDesignVersionDetail } = await import('../lib/api');
+            const versionData = await getDesignVersionDetail(providedDesignId, providedVersion);
+            applyDesignPayload(versionData.data, providedDesignId);
+          } else {
+            const { getLatestDesign } = await import('../lib/api');
+            const latest = await getLatestDesign(providedDesignId);
+            applyDesignPayload(latest.data, providedDesignId);
           }
         } else if (ensuredEvent?.id) {
           const layoutResp = await TradeshowAPI.loadLayout(ensuredEvent.id);
@@ -382,7 +431,18 @@ export default function TradeshowPlanner() {
               setDesignId(did);
               try { localStorage.setItem('designId.tradeshow', String(did)); } catch {}
             }
-            const payload = { items: booths, meta: { name: desiredName || event.name, kind: 'tradeshow', hallWidth: event.hallWidth, hallHeight: event.hallHeight } };
+            const payload = {
+              items: booths,
+              vendors,
+              routes,
+              meta: {
+                name: desiredName || event.name,
+                kind: 'tradeshow',
+                hallWidth: event.hallWidth,
+                hallHeight: event.hallHeight,
+                eventId: event.id || null,
+              },
+            };
             await saveDesignVersion(did, payload, 'manual save');
             setDirty(false);
             alert('Saved to cloud');
