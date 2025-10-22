@@ -51,16 +51,10 @@ export default function Header() {
           <NavLink to="/tradeshow" className={link} onClick={guardNavigate("/tradeshow")}>
             Trade Show
           </NavLink>
-          {/* <NavLink to="/kiosk-conference" className={link} onClick={guardNavigate("/kiosk-conference")}>
-            Conference Kiosk
-          </NavLink>
-          <NavLink to="/kiosk-tradeshow" className={link} onClick={guardNavigate("/kiosk-tradeshow")}>
-            Trade Show Kiosk
-          </NavLink> */}
-          {/* {!authed ? (
+          {!authed ? (
             <>
               <NavLink to="/login" className={link}>
-                Log In
+                Admin Login
               </NavLink>
               <NavLink to="/signup" className={link}>
                 Sign Up
@@ -83,7 +77,7 @@ export default function Header() {
                 Log Out
               </button>
             </>
-          )} */}
+          )}
         </nav>
       </div>
     </header>
