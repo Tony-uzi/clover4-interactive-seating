@@ -686,7 +686,7 @@ export default function TradeshowPlanner() {
   return (
     <div className="flex flex-col bg-gray-100" style={{
       // height: 'calc(100vh - 20px)',
-      height: '120vh',
+      height: '200vh',
       margin: '0 calc(-50vw + 50%)',
       width: '100vw'
     }}>
@@ -939,7 +939,7 @@ export default function TradeshowPlanner() {
               onSetActiveRoute={setActiveRouteId}
             />
           </div>
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-scroll" style={{ minHeight: '300px', overflowY: 'auto' }}>
             <VendorPanel
               vendors={vendors}
               onAddVendor={handleAddVendor}
