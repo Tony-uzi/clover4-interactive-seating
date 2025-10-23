@@ -92,8 +92,12 @@ class ConferenceElement(TimeStamped):
         ('table_rectangle', 'Rectangle Table'),
         ('chair', 'Chair'),
         ('podium', 'Podium'),
+        ('stage', 'Stage'),
         ('door', 'Door'),
         ('outlet', 'Outlet'),
+        ('window', 'Window'),
+        ('tactile_paving', 'Tactile Paving'),
+        ('custom', 'Custom Element'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

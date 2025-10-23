@@ -419,16 +419,50 @@ export default function ConferencePlanner() {
       } else {
         let importedCount = normalizedImported.length;
         let syncedWithBackend = false;
+        let currentEventId = event?.id;
 
-        if (event?.id) {
+        // If event doesn't exist yet, create it first
+        if (!currentEventId) {
           try {
-            const result = await ConferenceAPI.bulkImportGuests(event.id, file);
+            const createResp = await ConferenceAPI.createEvent({
+              name: event?.name || 'New Conference Event',
+              description: event?.description || '',
+              roomWidth: event?.roomWidth || 24,
+              roomHeight: event?.roomHeight || 16,
+              eventDate: event?.date || new Date().toISOString().split('T')[0],
+            });
+            if (createResp.success && createResp.data?.id) {
+              const created = createResp.data;
+              currentEventId = created.id;
+              const normalized = {
+                id: created.id,
+                name: created.name || event?.name || 'New Conference Event',
+                description: created.description || event?.description || '',
+                date: created.event_date || event?.date || new Date().toISOString().split('T')[0],
+                roomWidth: created.room_width ?? event?.roomWidth ?? 24,
+                roomHeight: created.room_height ?? event?.roomHeight ?? 16,
+              };
+              setEvent(normalized);
+              navigate(`/conference?eventId=${created.id}`, { replace: true });
+              console.log('✓ Created event before importing guests:', created.id);
+            } else {
+              throw new Error('Failed to create event for guest import');
+            }
+          } catch (createError) {
+            console.error('Failed to create event:', createError);
+            alert('Failed to create event. Guests saved locally only.');
+          }
+        }
+
+        if (currentEventId) {
+          try {
+            const result = await ConferenceAPI.bulkImportGuests(currentEventId, file);
             if (result.success) {
               importedCount = result.data?.imported || result.data?.count || importedCount;
               syncedWithBackend = true;
 
               try {
-                const refreshedGuestsResp = await ConferenceAPI.getGuests(event.id);
+                const refreshedGuestsResp = await ConferenceAPI.getGuests(currentEventId);
                 if (refreshedGuestsResp.success) {
                   const backendGuests = refreshedGuestsResp.data.map(mapBackendGuest);
                   setGuests(backendGuests);
@@ -454,7 +488,7 @@ export default function ConferencePlanner() {
           });
         }
 
-        alert(`Successfully imported ${importedCount} guest(s)!${syncedWithBackend ? '' : ' (saved locally only, not yet synced to the backend)'}`);
+        alert(`Successfully imported ${importedCount} guest(s)!${syncedWithBackend ? '' : ' (Warning: saved locally only, please click Save to sync to backend)'}`);
       }
     } catch (error) {
       console.error('CSV import error:', error);
@@ -644,6 +678,44 @@ export default function ConferencePlanner() {
                 roomHeight: Number(updated.room_height ?? prev?.roomHeight ?? 16),
                 date: updated.event_date ?? prev?.date,
               }));
+            }
+
+            // Check for unsaved guests (those with temporary IDs)
+            const isValidUUID = (str) => {
+              return str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+            };
+            const unsavedGuests = guests.filter(g => !isValidUUID(g.id));
+            
+            if (unsavedGuests.length > 0) {
+              console.log(`Found ${unsavedGuests.length} unsaved guests, syncing to backend...`);
+              let syncedCount = 0;
+              const guestIdMapping = {};
+              
+              for (const guest of unsavedGuests) {
+                try {
+                  const result = await ConferenceAPI.createGuest(currentEventId, guest);
+                  if (result.success && result.data) {
+                    guestIdMapping[guest.id] = result.data.id;
+                    syncedCount++;
+                  }
+                } catch (err) {
+                  console.warn('Failed to sync guest:', guest.name, err);
+                }
+              }
+              
+              // Refresh guests from backend to get all with proper UUIDs
+              if (syncedCount > 0) {
+                try {
+                  const refreshedGuestsResp = await ConferenceAPI.getGuests(currentEventId);
+                  if (refreshedGuestsResp.success) {
+                    const backendGuests = refreshedGuestsResp.data.map(mapBackendGuest);
+                    setGuests(backendGuests);
+                    console.log(`✓ Synced ${syncedCount} guests to backend`);
+                  }
+                } catch (refreshError) {
+                  console.warn('Failed to refresh guests after sync:', refreshError);
+                }
+              }
             }
 
             // Save elements to backend

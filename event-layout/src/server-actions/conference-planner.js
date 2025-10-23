@@ -386,6 +386,9 @@ export async function saveLayout(eventId, elements) {
       const typeMap = {
         'table_rect': 'table_rectangle',
         'table_square': 'table_rectangle',
+        'door1': 'door',
+        'door2': 'door',
+        'power_outlet': 'outlet',
       };
       return typeMap[type] || type;
     };
