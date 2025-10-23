@@ -554,10 +554,39 @@ export default function TradeshowPlanner() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check if event exists
-    if (!event?.id) {
-      alert('Please wait for the event to be created before importing vendors');
-      return;
+    // Ensure event is created before importing
+    let currentEventId = event?.id;
+    if (!currentEventId) {
+      try {
+        // Auto-create event if not yet created
+        const createResp = await TradeshowAPI.createEvent({
+          name: event?.name || 'New Tradeshow Event',
+          description: event?.description || '',
+          hallWidth: event?.hallWidth || 40,
+          hallHeight: event?.hallHeight || 30,
+          date: event?.date || new Date().toISOString().split('T')[0],
+        });
+        if (!createResp.success || !createResp.data?.id) {
+          alert('Failed to create event. Please try again.');
+          return;
+        }
+        const created = createResp.data;
+        currentEventId = created.id;
+        const normalized = {
+          id: created.id,
+          name: created.name || event?.name || 'New Tradeshow Event',
+          description: created.description || event?.description || '',
+          date: created.date || event?.date || new Date().toISOString().split('T')[0],
+          hallWidth: created.hall_width ?? event?.hallWidth ?? 40,
+          hallHeight: created.hall_height ?? event?.hallHeight ?? 30,
+        };
+        setEvent(normalized);
+        navigate(`/tradeshow?eventId=${created.id}`, { replace: true });
+      } catch (error) {
+        console.error('Failed to create event:', error);
+        alert('Failed to create event before importing. Please try again.');
+        return;
+      }
     }
 
     try {
@@ -573,12 +602,12 @@ export default function TradeshowPlanner() {
 
       try {
         // Always use backend API
-        const result = await TradeshowAPI.bulkImportVendors(event.id, file);
+        const result = await TradeshowAPI.bulkImportVendors(currentEventId, file);
         if (result.success) {
           const importedCount = result.data?.imported || result.data?.count || normalizedImported.length;
 
           // Refresh vendors from backend to get UUIDs
-          const refreshedVendorsResp = await TradeshowAPI.getVendors(event.id);
+          const refreshedVendorsResp = await TradeshowAPI.getVendors(currentEventId);
           if (refreshedVendorsResp.success) {
             const backendVendors = refreshedVendorsResp.data
               .map(mapBackendVendor)
