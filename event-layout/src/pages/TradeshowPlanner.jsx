@@ -1,6 +1,6 @@
 // Tradeshow Planner main page
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Toolbar from '../components/shared/Toolbar';
 import BoothToolbar from '../components/tradeshow/BoothToolbar';
@@ -34,6 +34,40 @@ export default function TradeshowPlanner() {
 
   const mapBackendVendor = normalizeTradeshowVendor;
 
+  const routeStepsForCanvas = useMemo(() => {
+    if (!activeRouteId || !routes?.length) return [];
+    const activeRoute = routes.find(route => String(route.id) === String(activeRouteId));
+    if (!activeRoute || !activeRoute.boothOrder?.length) return [];
+
+    const getBooth = (boothId) =>
+      booths.find(booth => String(booth.id) === String(boothId)) || null;
+
+    const getVendorForBooth = (booth) => {
+      if (!booth) return null;
+      const boothLabel = booth.label ? String(booth.label) : null;
+      return (
+        vendors.find(v => String(v.boothId) === String(booth.id)) ||
+        (boothLabel
+          ? vendors.find(v => String(v.boothNumber) === boothLabel)
+          : null)
+      );
+    };
+
+    return activeRoute.boothOrder
+      .map((boothId, index) => {
+        const booth = getBooth(boothId);
+        if (!booth) return null;
+        const vendor = getVendorForBooth(booth);
+        return {
+          boothId: String(boothId),
+          booth,
+          vendorName: vendor?.name || '',
+          step: index + 1,
+        };
+      })
+      .filter(Boolean);
+  }, [activeRouteId, routes, booths, vendors]);
+
   // Load data on mount - BACKEND ONLY, use URL parameter for event ID
   useEffect(() => {
     (async () => {
@@ -46,57 +80,49 @@ export default function TradeshowPlanner() {
         hallHeight: 30,
       };
 
-      let ensuredEvent = defaultEvent;
-
-      // Get event ID from URL parameter
       const params = new URLSearchParams(location.search);
       const urlEventId = params.get('eventId');
 
+      if (!urlEventId) {
+        setEvent(defaultEvent);
+        setBooths([]);
+        setVendors([]);
+        setRoutes([]);
+        setIsInitialLoad(false);
+        return;
+      }
+
+      let ensuredEvent = defaultEvent;
+
       try {
-        if (urlEventId) {
-          // Try to load existing event from backend using URL event ID
-          const eventResp = await TradeshowAPI.getEvent(urlEventId);
-          if (eventResp.success && eventResp.data) {
-            ensuredEvent = {
-              id: eventResp.data.id,
-              name: eventResp.data.name || defaultEvent.name,
-              description: eventResp.data.description || defaultEvent.description,
-              date: eventResp.data.date || defaultEvent.date,
-              hallWidth: eventResp.data.hall_width ?? defaultEvent.hallWidth,
-              hallHeight: eventResp.data.hall_height ?? defaultEvent.hallHeight,
-            };
-            console.log('✓ Loaded existing event from URL:', ensuredEvent.id);
-          } else {
-            // Event doesn't exist, create new one and update URL
-            console.warn('Event ID in URL not found, creating new event');
-            const resp = await TradeshowAPI.createEvent(defaultEvent);
-            if (resp.success) {
-              ensuredEvent = {
-                ...defaultEvent,
-                id: resp.data.id,
-                hallWidth: resp.data.hall_width ?? defaultEvent.hallWidth,
-                hallHeight: resp.data.hall_height ?? defaultEvent.hallHeight,
-              };
-              navigate(`/tradeshow?eventId=${resp.data.id}`, { replace: true });
-              console.log('✓ Created new event and updated URL:', resp.data.id);
-            }
-          }
+        const eventResp = await TradeshowAPI.getEvent(urlEventId);
+        if (eventResp.success && eventResp.data) {
+          ensuredEvent = {
+            id: eventResp.data.id,
+            name: eventResp.data.name || defaultEvent.name,
+            description: eventResp.data.description || defaultEvent.description,
+            date: eventResp.data.date || defaultEvent.date,
+            hallWidth: eventResp.data.hall_width ?? defaultEvent.hallWidth,
+            hallHeight: eventResp.data.hall_height ?? defaultEvent.hallHeight,
+          };
+          console.log('✓ Loaded existing event from URL:', ensuredEvent.id);
         } else {
-          // No event ID in URL, create new event and add to URL
-          const resp = await TradeshowAPI.createEvent(defaultEvent);
-          if (resp.success) {
-            ensuredEvent = {
-              ...defaultEvent,
-              id: resp.data.id,
-              hallWidth: resp.data.hall_width ?? defaultEvent.hallWidth,
-              hallHeight: resp.data.hall_height ?? defaultEvent.hallHeight,
-            };
-            navigate(`/tradeshow?eventId=${resp.data.id}`, { replace: true });
-            console.log('✓ Created new event and added to URL:', resp.data.id);
-          }
+          console.warn('Event ID in URL not found or inaccessible');
+          setEvent(defaultEvent);
+          setBooths([]);
+          setVendors([]);
+          setRoutes([]);
+          setIsInitialLoad(false);
+          return;
         }
       } catch (e) {
         console.warn('Ensure tradeshow event failed:', e);
+        setEvent(defaultEvent);
+        setBooths([]);
+        setVendors([]);
+        setRoutes([]);
+        setIsInitialLoad(false);
+        return;
       }
 
       setEvent(ensuredEvent);
@@ -655,6 +681,7 @@ export default function TradeshowPlanner() {
   if (!event) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
   }
+  // console.log("active route id::", activeRouteId)
 
   return (
     <div className="flex flex-col bg-gray-100" style={{
@@ -680,9 +707,52 @@ export default function TradeshowPlanner() {
         }}
         onSave={async () => {
           try {
-            if (!event?.id) {
-              alert('Please create an event first');
-              return;
+            const currentValues = event || {};
+            let currentEventId = currentValues.id || null;
+
+            if (!currentEventId) {
+              const createResp = await TradeshowAPI.createEvent({
+                name: currentValues.name || 'New Tradeshow Event',
+                description: currentValues.description || '',
+                hallWidth: currentValues.hallWidth,
+                hallHeight: currentValues.hallHeight,
+                date: currentValues.date,
+              });
+              if (!createResp.success || !createResp.data?.id) {
+                throw new Error(createResp.error || 'Failed to create event');
+              }
+              const created = createResp.data;
+              currentEventId = created.id;
+              const normalized = {
+                id: created.id,
+                name: created.name || currentValues.name || 'New Tradeshow Event',
+                description: created.description || currentValues.description || '',
+                date: created.date || currentValues.date || new Date().toISOString().split('T')[0],
+                hallWidth: created.hall_width ?? currentValues.hallWidth ?? 40,
+                hallHeight: created.hall_height ?? currentValues.hallHeight ?? 30,
+              };
+              setEvent(normalized);
+              navigate(`/tradeshow?eventId=${created.id}`, { replace: true });
+            }
+
+            const updateResult = await TradeshowAPI.updateEvent(currentEventId, {
+              name: currentValues.name,
+              description: currentValues.description,
+              hallWidth: currentValues.hallWidth,
+              hallHeight: currentValues.hallHeight,
+            });
+            if (!updateResult.success) {
+              throw new Error(updateResult.error || 'Failed to update event details');
+            }
+            if (updateResult.data) {
+              const updated = updateResult.data;
+              setEvent(prev => ({
+                ...prev,
+                name: updated.name ?? prev?.name,
+                description: updated.description ?? prev?.description,
+                hallWidth: Number(updated.hall_width ?? prev?.hallWidth ?? 40),
+                hallHeight: Number(updated.hall_height ?? prev?.hallHeight ?? 30),
+              }));
             }
 
             // Create a mapping of old (temp) IDs to booth data for later matching
@@ -694,10 +764,10 @@ export default function TradeshowPlanner() {
             });
 
             // Save booths to backend
-            const saveResult = await TradeshowAPI.saveLayout(event.id, booths);
+            const saveResult = await TradeshowAPI.saveLayout(currentEventId, booths);
             if (saveResult.success) {
               // Reload booths from backend to get UUIDs
-              const layoutResp = await TradeshowAPI.loadLayout(event.id);
+              const layoutResp = await TradeshowAPI.loadLayout(currentEventId);
               if (layoutResp.success) {
                 const backendBooths = layoutResp.data
                   .map(normalizeTradeshowBooth)
@@ -735,7 +805,7 @@ export default function TradeshowPlanner() {
                   const needsUpdate = JSON.stringify(updatedBoothOrder) !== JSON.stringify(route.boothOrder);
                   if (needsUpdate) {
                     // Update route in backend asynchronously
-                    TradeshowAPI.updateRoute(event.id, route.id, {
+                    TradeshowAPI.updateRoute(currentEventId, route.id, {
                       name: route.name,
                       description: route.description,
                       routeType: route.routeType,
@@ -775,7 +845,18 @@ export default function TradeshowPlanner() {
       />
 
       {/* Canvas Size Input */}
-      <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center gap-4">
+      <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-700">Event Name:</label>
+          <input
+            type="text"
+            value={event.name}
+            onChange={(e) => setEvent({ ...event, name: e.target.value })}
+            className="w-64 px-3 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            placeholder="Enter event name"
+          />
+        </div>
+        <div className="h-6 w-px bg-gray-200 hidden md:block" />
         <label className="text-sm font-medium text-gray-700">Hall Size:</label>
         <div className="flex items-center gap-2">
           <label className="text-xs text-gray-600">Width(m):</label>
@@ -827,6 +908,7 @@ export default function TradeshowPlanner() {
             onSelectBooth={setSelectedBoothId}
             vendors={vendors}
             routes={routes}
+            routeSteps={routeStepsForCanvas}
             activeRouteId={activeRouteId}
             draggingVendorId={draggingVendorId}
             onAssignVendor={handleAssignVendorToBooth}

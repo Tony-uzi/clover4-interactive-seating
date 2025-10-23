@@ -1,9 +1,15 @@
 // Group management component for organizing guests
 
 import React, { useState } from 'react';
-import { FiPlus, FiEdit2, FiTrash2, FiX, FiUsers } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiUsers, FiInfo } from 'react-icons/fi';
 
-export default function GroupManager({ groups, onAddGroup, onUpdateGroup, onDeleteGroup }) {
+export default function GroupManager({
+  groups,
+  systemGroups = [],
+  onAddGroup,
+  onUpdateGroup,
+  onDeleteGroup,
+}) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingGroup, setEditingGroup] = useState(null);
 
@@ -93,11 +99,11 @@ export default function GroupManager({ groups, onAddGroup, onUpdateGroup, onDele
   const customGroups = groups.filter(g => !g.isSystem);
 
   return (
-    <div className="p-4 bg-white border-b border-gray-200">
+    <div className="px-4 py-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <FiUsers className="w-5 h-5 text-gray-600" />
-          <h3 className="text-sm font-bold text-gray-800">Custom Groups</h3>
+          <FiUsers className="w-4 h-4 text-gray-600" />
+          <h3 className="text-sm font-semibold text-gray-800">Custom Groups</h3>
           <span className="text-xs text-gray-500">({customGroups.length})</span>
         </div>
         <button
@@ -179,7 +185,11 @@ export default function GroupManager({ groups, onAddGroup, onUpdateGroup, onDele
         </div>
       ) : (
         <div className="text-center py-4 text-sm text-gray-500">
-          No custom groups yet. Click "New Group" to create one.
+          <p>No custom groups yet.</p>
+          <p className="mt-1 flex items-center justify-center gap-1 text-xs text-gray-400">
+            <FiInfo className="w-3 h-3" />
+            System groups ({systemGroups.map(g => g.name).join(', ') || 'None'}) remain available for every guest.
+          </p>
         </div>
       )}
     </div>

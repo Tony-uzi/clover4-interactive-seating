@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { FiUserPlus, FiEdit2, FiTrash2, FiSearch, FiFilter } from 'react-icons/fi';
+import SystemCategories from './SystemCategories';
 
 export default function VendorPanel({
   vendors,
@@ -21,16 +22,23 @@ export default function VendorPanel({
 
   // Filter vendors
   const filteredVendors = vendors.filter(vendor => {
-    // Safe string check
     const vendorName = vendor.name || '';
     const vendorContact = vendor.contactName || '';
     const vendorCategory = vendor.category || '';
+    const vendorNotes = vendor.notes || '';
 
+    const search = searchTerm.trim().toLowerCase();
     const matchesSearch =
-      vendorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vendorContact.toLowerCase().includes(searchTerm.toLowerCase());
+      search.length === 0 ||
+      vendorName.toLowerCase().includes(search) ||
+      vendorContact.toLowerCase().includes(search) ||
+      vendorCategory.toLowerCase().includes(search) ||
+      vendorNotes.toLowerCase().includes(search);
 
-    const matchesCategory = filterCategory === 'all' || vendorCategory === filterCategory;
+    const matchesCategory =
+      filterCategory === 'all' ||
+      vendorCategory === filterCategory ||
+      vendorCategory.toLowerCase() === filterCategory.toLowerCase();
 
     return matchesSearch && matchesCategory;
   });
@@ -204,6 +212,19 @@ export default function VendorPanel({
               </option>
             ))}
           </select>
+        </div>
+      </div>
+
+      {/* Category overview */}
+      <div className="px-0">
+        <div className="mx-4 mb-4 overflow-hidden rounded-lg border border-gray-200 bg-white">
+          <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+            <h3 className="text-sm font-semibold text-gray-800">Category Overview</h3>
+            <p className="text-xs text-gray-500">
+              Default categories are always available. Use them for filtering or extend vendors with your own tags.
+            </p>
+          </div>
+          <SystemCategories vendors={vendors} />
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 // Unified Kiosk Mode - Combines Conference and Tradeshow kiosks with mode toggle
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   FiCalendar,
@@ -11,6 +11,11 @@ import {
   FiCheckCircle,
   FiRepeat,
   FiShare2,
+  FiPlayCircle,
+  FiArrowRightCircle,
+  FiRotateCcw,
+  FiSkipForward,
+  FiCornerUpLeft,
 } from 'react-icons/fi';
 import ConferenceCanvas from '../components/conference/ConferenceCanvas';
 import TradeshowCanvas from '../components/tradeshow/TradeshowCanvas';
@@ -24,6 +29,60 @@ import { getLastKioskEventId, setLastKioskEventId } from '../lib/utils/storage';
 
 const REFRESH_INTERVAL = 60000; // 60 seconds
 const UUID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+const directionFromAngle = (angle) => {
+  const normalized = angle < 0 ? angle + 360 : angle;
+  const ranges = [
+    { limit: 22.5, label: 'East' },
+    { limit: 67.5, label: 'South-East' },
+    { limit: 112.5, label: 'South' },
+    { limit: 157.5, label: 'South-West' },
+    { limit: 202.5, label: 'West' },
+    { limit: 247.5, label: 'North-West' },
+    { limit: 292.5, label: 'North' },
+    { limit: 337.5, label: 'North-East' },
+    { limit: 360, label: 'East' },
+  ];
+  return ranges.find(r => normalized <= r.limit)?.label || 'East';
+};
+
+const toNumber = (value) => {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const getBoothCenter = (booth) => {
+  if (!booth) return null;
+  const x = toNumber(booth.x);
+  const y = toNumber(booth.y);
+  const width = toNumber(booth.width);
+  const height = toNumber(booth.height);
+  if ([x, y, width, height].some(val => val === null)) return null;
+  return {
+    x: x + (width || 0) / 2,
+    y: y + (height || 0) / 2,
+  };
+};
+
+const buildGuidanceForStep = (fromBooth, toBooth) => {
+  const fromCenter = getBoothCenter(fromBooth);
+  const toCenter = getBoothCenter(toBooth);
+  if (!fromCenter || !toCenter) return null;
+
+  const dx = toCenter.x - fromCenter.x;
+  const dy = toCenter.y - fromCenter.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+  return {
+    distance,
+    direction: directionFromAngle(angle),
+  };
+};
 
 const isUuid = (value) => typeof value === 'string' && UUID_PATTERN.test(value);
 
@@ -752,6 +811,11 @@ export function TradeshowKiosk() {
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [highlightedBoothId, setHighlightedBoothId] = useState(null);
   const [activeRouteId, setActiveRouteId] = useState(null);
+  const [routeStarted, setRouteStarted] = useState(false);
+  const [routeCompleted, setRouteCompleted] = useState(false);
+  const [currentRouteIndex, setCurrentRouteIndex] = useState(0);
+  const [visitedBoothIds, setVisitedBoothIds] = useState([]);
+  const [skippedBoothIds, setSkippedBoothIds] = useState([]);
   const [checkInNotice, setCheckInNotice] = useState(null);
   const [isOnline, setIsOnline] = useState(true);
 
@@ -906,6 +970,11 @@ export function TradeshowKiosk() {
     setSelectedVendor(null);
     setHighlightedBoothId(null);
     setActiveRouteId(null);
+    setRouteStarted(false);
+    setRouteCompleted(false);
+    setCurrentRouteIndex(0);
+    setVisitedBoothIds([]);
+    setSkippedBoothIds([]);
 
     // Update event ID
     setCurrentEventId(eventId);
@@ -926,6 +995,148 @@ export function TradeshowKiosk() {
     vendor.contactName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     vendor.category?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const activeRoute = useMemo(
+    () => routes.find(route => String(route.id) === String(activeRouteId)),
+    [routes, activeRouteId]
+  );
+
+  const routeStops = useMemo(() => {
+    if (!activeRoute?.boothOrder?.length || booths.length === 0) return [];
+
+    const stops = [];
+    activeRoute.boothOrder.forEach((boothId) => {
+      const booth = booths.find(b => String(b.id) === String(boothId));
+      if (!booth) return;
+
+      const boothIdStr = String(booth.id);
+      const boothLabel = booth.label ? String(booth.label) : null;
+      const vendor = vendors.find(vendorCandidate => {
+        if (!vendorCandidate) return false;
+        if (vendorCandidate.boothId && String(vendorCandidate.boothId) === boothIdStr) {
+          return true;
+        }
+        if (boothLabel) {
+          const vendorLabel = vendorCandidate.boothNumber ? String(vendorCandidate.boothNumber) : null;
+          return vendorLabel === boothLabel;
+        }
+        return false;
+      });
+
+      stops.push({
+        booth,
+        boothId: boothIdStr,
+        vendor,
+        step: stops.length + 1,
+      });
+    });
+
+    return stops;
+  }, [activeRoute, booths, vendors]);
+
+  const totalRouteStops = routeStops.length;
+  const safeRouteIndex = totalRouteStops === 0 ? 0 : Math.min(currentRouteIndex, totalRouteStops - 1);
+  const currentStop = totalRouteStops === 0
+    ? null
+    : (routeStarted || routeCompleted ? routeStops[safeRouteIndex] : routeStops[0]);
+  const nextStop = (() => {
+    if (totalRouteStops === 0) return null;
+    if (routeStarted) {
+      return routeStops[safeRouteIndex + 1] || null;
+    }
+    if (routeCompleted) {
+      return null;
+    }
+    return routeStops[1] || null;
+  })();
+  const previousStop = routeStarted && safeRouteIndex > 0 ? routeStops[safeRouteIndex - 1] : null;
+
+  const visitedSet = useMemo(
+    () => new Set((visitedBoothIds || []).map(id => String(id))),
+    [visitedBoothIds]
+  );
+  const skippedSet = useMemo(
+    () => new Set((skippedBoothIds || []).map(id => String(id))),
+    [skippedBoothIds]
+  );
+
+  const visitedCount = useMemo(() => {
+    if (routeStops.length === 0) return 0;
+    let count = 0;
+    routeStops.forEach(stop => {
+      if (visitedSet.has(stop.boothId)) count += 1;
+    });
+    return count;
+  }, [routeStops, visitedSet]);
+
+  const routeProgressCount = routeCompleted ? totalRouteStops : visitedCount;
+  const progressPercent = totalRouteStops === 0
+    ? 0
+    : Math.min(100, Math.round((routeProgressCount / totalRouteStops) * 100));
+
+  const routeStatusLabel = (() => {
+    if (!activeRoute) return 'Select a visit route to begin';
+    if (routeCompleted) return 'Route completed';
+    if (!routeStarted) return 'Ready to start';
+    return `Stop ${safeRouteIndex + 1} of ${totalRouteStops}`;
+  })();
+
+  const activeSegmentInfo = routeStarted && currentStop && nextStop
+    ? buildGuidanceForStep(currentStop.booth, nextStop.booth)
+    : null;
+  const activeSegmentSummary = activeSegmentInfo
+    ? `${activeSegmentInfo.direction} • ${Math.round(activeSegmentInfo.distance)}m`
+    : null;
+
+  const currentStopVendor = currentStop?.vendor || null;
+  const upcomingStop = routeStarted ? nextStop : routeStops[0];
+  const upcomingVendor = upcomingStop?.vendor || null;
+
+  const formatBoothLabel = (booth) => {
+    if (!booth) return 'Unknown Booth';
+    return booth.label || `Booth ${booth.id}`;
+  };
+
+  useEffect(() => {
+    setRouteStarted(false);
+    setRouteCompleted(false);
+    setCurrentRouteIndex(0);
+    setVisitedBoothIds([]);
+    setSkippedBoothIds([]);
+  }, [activeRouteId]);
+
+  useEffect(() => {
+    if (totalRouteStops === 0) {
+      if (routeStarted) setRouteStarted(false);
+      if (routeCompleted) setRouteCompleted(false);
+      if (currentRouteIndex !== 0) setCurrentRouteIndex(0);
+      if (visitedBoothIds.length) setVisitedBoothIds([]);
+      if (skippedBoothIds.length) setSkippedBoothIds([]);
+      return;
+    }
+
+    if (currentRouteIndex >= totalRouteStops) {
+      setCurrentRouteIndex(totalRouteStops - 1);
+    }
+
+    const validIds = new Set(routeStops.map(stop => stop.boothId));
+    setVisitedBoothIds(prev => {
+      const filtered = prev.filter(id => validIds.has(String(id)));
+      return filtered.length === prev.length ? prev : filtered;
+    });
+    setSkippedBoothIds(prev => {
+      const filtered = prev.filter(id => validIds.has(String(id)));
+      return filtered.length === prev.length ? prev : filtered;
+    });
+  }, [
+    totalRouteStops,
+    routeStops,
+    routeStarted,
+    routeCompleted,
+    currentRouteIndex,
+    visitedBoothIds.length,
+    skippedBoothIds.length,
+  ]);
 
   const showNotice = (type, message) => {
     setCheckInNotice({ type, message });
@@ -1039,6 +1250,94 @@ export function TradeshowKiosk() {
     setSearchTerm('');
   };
 
+  const handleStartRoute = () => {
+    if (!totalRouteStops) return;
+    setRouteStarted(true);
+    setRouteCompleted(false);
+    setCurrentRouteIndex(0);
+    setVisitedBoothIds([]);
+    setSkippedBoothIds([]);
+    const firstStop = routeStops[0];
+    if (firstStop?.booth?.id) {
+      setHighlightedBoothId(firstStop.booth.id);
+    }
+    if (firstStop?.vendor) {
+      setSelectedVendor(firstStop.vendor);
+    }
+  };
+
+  const handleRestartRoute = () => {
+    handleStartRoute();
+  };
+
+  const handleAdvanceRoute = () => {
+    if (!routeStarted || !currentStop) return;
+    const boothId = currentStop.boothId;
+    setVisitedBoothIds(prev => (prev.includes(boothId) ? prev : [...prev, boothId]));
+
+    if (currentRouteIndex < totalRouteStops - 1) {
+      const nextIndex = currentRouteIndex + 1;
+      setCurrentRouteIndex(nextIndex);
+      const nextBooth = routeStops[nextIndex]?.booth;
+      if (nextBooth?.id) {
+        setHighlightedBoothId(nextBooth.id);
+      }
+      const nextVendor = routeStops[nextIndex]?.vendor;
+      if (nextVendor) {
+        setSelectedVendor(nextVendor);
+      } else {
+        setSelectedVendor(null);
+      }
+    } else {
+      setRouteStarted(false);
+      setRouteCompleted(true);
+      setHighlightedBoothId(null);
+      setSelectedVendor(null);
+    }
+  };
+
+  const handleGoBack = () => {
+    if (!routeStarted || currentRouteIndex === 0) return;
+    const previousIndex = currentRouteIndex - 1;
+    setCurrentRouteIndex(previousIndex);
+    const previousBooth = routeStops[previousIndex]?.booth;
+    if (previousBooth?.id) {
+      setHighlightedBoothId(previousBooth.id);
+    }
+    const previousVendor = routeStops[previousIndex]?.vendor;
+    if (previousVendor) {
+      setSelectedVendor(previousVendor);
+    } else {
+      setSelectedVendor(null);
+    }
+  };
+
+  const handleSkipCurrent = () => {
+    if (!routeStarted || !currentStop) return;
+    const boothId = currentStop.boothId;
+    setSkippedBoothIds(prev => (prev.includes(boothId) ? prev : [...prev, boothId]));
+
+    if (currentRouteIndex < totalRouteStops - 1) {
+      const nextIndex = currentRouteIndex + 1;
+      setCurrentRouteIndex(nextIndex);
+      const nextBooth = routeStops[nextIndex]?.booth;
+      if (nextBooth?.id) {
+        setHighlightedBoothId(nextBooth.id);
+      }
+      const nextVendor = routeStops[nextIndex]?.vendor;
+      if (nextVendor) {
+        setSelectedVendor(nextVendor);
+      } else {
+        setSelectedVendor(null);
+      }
+    } else {
+      setRouteStarted(false);
+      setRouteCompleted(true);
+      setHighlightedBoothId(null);
+      setSelectedVendor(null);
+    }
+  };
+
   const handleVendorCheckIn = () => {
     if (!selectedVendor) return;
     if (selectedVendor.checkedIn) {
@@ -1066,6 +1365,62 @@ export function TradeshowKiosk() {
     }
     return parsed.toLocaleString();
   };
+
+  const vendorIdEquals = (a, b) => a && b && String(a.id) === String(b.id);
+
+  const vendorCards = [];
+  const addVendorCard = (card) => {
+    if (!card?.vendor) return;
+    if (vendorCards.some(existing => vendorIdEquals(existing.vendor, card.vendor))) return;
+    vendorCards.push(card);
+  };
+
+  if (routeStarted) {
+    addVendorCard({
+      key: currentStop ? `current-${currentStop.boothId}` : 'current',
+      title: currentStop ? `Current Stop • ${formatBoothLabel(currentStop.booth)}` : 'Current Stop',
+      vendor: currentStopVendor,
+      step: currentStop?.step,
+      boothLabel: currentStop ? formatBoothLabel(currentStop.booth) : null,
+    });
+
+    addVendorCard({
+      key: nextStop ? `next-${nextStop.boothId}` : 'next',
+      title: nextStop ? `Next Stop • ${formatBoothLabel(nextStop.booth)}` : 'Next Stop',
+      vendor: nextStop?.vendor,
+      step: nextStop?.step,
+      boothLabel: nextStop ? formatBoothLabel(nextStop.booth) : null,
+    });
+  }
+
+  if (!routeStarted && !routeCompleted) {
+    addVendorCard({
+      key: upcomingStop ? `first-${upcomingStop.boothId}` : 'first',
+      title: upcomingStop ? `First Stop • ${formatBoothLabel(upcomingStop.booth)}` : 'First Stop',
+      vendor: upcomingVendor,
+      step: upcomingStop?.step || 1,
+      boothLabel: upcomingStop ? formatBoothLabel(upcomingStop.booth) : null,
+    });
+  }
+
+  const validRouteIds = useMemo(() => new Set(routeStops.map(stop => stop.boothId)), [routeStops]);
+  const routeStepsForCanvas = useMemo(
+    () =>
+      routeStops.map(stop => ({
+        boothId: stop.boothId,
+        step: stop.step,
+        booth: stop.booth,
+        vendorName: stop.vendor?.name || '',
+      })),
+    [routeStops]
+  );
+
+  const currentRouteBoothIdForCanvas = routeStarted ? currentStop?.boothId || null : null;
+  const nextRouteBoothIdForCanvas = routeStarted
+    ? nextStop?.boothId || null
+    : (!routeStarted && !routeCompleted ? upcomingStop?.boothId || null : null);
+  const visitedBoothIdsForCanvas = Array.from(visitedSet).filter(id => validRouteIds.has(id));
+  const skippedBoothIdsForCanvas = Array.from(skippedSet).filter(id => validRouteIds.has(id));
 
   const checkedInCount = vendors.filter(v => v.checkedIn).length;
   const vendorCheckInLabel = selectedVendor ? formatDateTime(selectedVendor.checkInTime) : null;
@@ -1261,145 +1616,375 @@ export function TradeshowKiosk() {
             vendors={vendors}
             routes={routes}
             activeRouteId={activeRouteId}
+            routeSteps={routeStepsForCanvas}
+            currentRouteBoothId={currentRouteBoothIdForCanvas}
+            nextRouteBoothId={nextRouteBoothIdForCanvas}
+            visitedBoothIds={visitedBoothIdsForCanvas}
+            skippedBoothIds={skippedBoothIdsForCanvas}
             readOnly={true}
           />
         </div>
 
-        {selectedVendor && (
-          <div className="w-96 bg-white border-l border-gray-200 p-6">
-            <div className="flex items-start justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-800">Vendor Information</h2>
-              <button
-                onClick={handleClearSelection}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <FiX className="w-5 h-5" />
-              </button>
+        <div className="w-96 bg-white border-l border-gray-200 p-6 overflow-y-auto">
+          <div className="space-y-6">
+            <div>
+              <div className="space-y-3">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-800">Route Guidance</h2>
+                  <div className="text-sm text-gray-500">{routeStatusLabel}</div>
+                </div>
+
+                {activeRoute ? (
+                  <div className="space-y-4">
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between text-sm text-orange-800 mb-3">
+                        <span>{activeRoute.name}</span>
+                        <span>{totalRouteStops} stops</span>
+                      </div>
+                      <div className="w-full h-2 bg-orange-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-orange-500 transition-all"
+                          style={{ width: `${progressPercent}%` }}
+                        />
+                      </div>
+                      <div className="text-xs text-orange-700 mt-2">{progressPercent}% complete</div>
+                    </div>
+
+                    {routeStarted && currentStop ? (
+                      <div className="space-y-3">
+                        <div className="p-4 border border-gray-200 rounded-lg">
+                          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                            Current Stop
+                          </div>
+                          <div className="text-lg font-bold text-gray-800">
+                            Stop {currentStop.step}: {formatBoothLabel(currentStop.booth)}
+                          </div>
+                          {currentStopVendor && (
+                            <div className="text-sm text-gray-600 mt-1">{currentStopVendor.name}</div>
+                          )}
+                          {previousStop && (
+                            <div className="text-xs text-gray-500 mt-2">
+                              Previous: {formatBoothLabel(previousStop.booth)}
+                            </div>
+                          )}
+                        </div>
+
+                        {nextStop ? (
+                          <div className="p-4 border border-dashed border-green-300 rounded-lg bg-green-50">
+                            <div className="text-xs font-semibold text-green-600 uppercase tracking-wide mb-1">
+                              Next Stop
+                            </div>
+                            <div className="text-base font-semibold text-green-700">
+                              Stop {nextStop.step}: {formatBoothLabel(nextStop.booth)}
+                            </div>
+                            {nextStop.vendor && (
+                              <div className="text-sm text-green-700 mt-1">{nextStop.vendor.name}</div>
+                            )}
+                            {activeSegmentSummary && (
+                              <div className="text-xs text-green-600 mt-2">
+                                Direction: {activeSegmentSummary}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="p-4 border border-dashed border-blue-300 rounded-lg bg-blue-50 text-blue-700">
+                            <div className="text-sm font-semibold">This is the final stop.</div>
+                            <div className="text-xs mt-1">Tap Complete to finish the route.</div>
+                          </div>
+                        )}
+                      </div>
+                    ) : routeCompleted ? (
+                      <div className="p-4 border border-green-300 rounded-lg bg-green-50 text-green-700 space-y-2">
+                        <div className="flex items-center gap-2 text-lg font-semibold">
+                          <FiCheckCircle className="w-5 h-5" />
+                          Route complete!
+                        </div>
+                        <div className="text-sm">
+                          You visited {visitedBoothIdsForCanvas.length} of {totalRouteStops} planned stops
+                          {skippedBoothIdsForCanvas.length
+                            ? ` and skipped ${skippedBoothIdsForCanvas.length}.`
+                            : '.'}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-4 border border-dashed border-gray-300 rounded-lg">
+                        <div className="text-sm font-semibold text-gray-700">
+                          Ready to guide visitors
+                        </div>
+                        {routeStops[0] ? (
+                          <div className="text-xs text-gray-500 mt-2">
+                            First stop: {formatBoothLabel(routeStops[0].booth)}
+                            {routeStops[0].vendor ? ` • ${routeStops[0].vendor.name}` : ''}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-gray-500 mt-2">
+                            No booths assigned to this route yet.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2">
+                      {!routeStarted && !routeCompleted && (
+                        <button
+                          onClick={handleStartRoute}
+                          className="flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                        >
+                          <FiPlayCircle className="w-5 h-5" />
+                          Start Route
+                        </button>
+                      )}
+                      {routeStarted && (
+                        <>
+                          <button
+                            onClick={handleGoBack}
+                            disabled={currentRouteIndex === 0}
+                            className="flex-1 min-w-[120px] flex items-center justify-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <FiCornerUpLeft className="w-4 h-4" />
+                            Back
+                          </button>
+                          <button
+                            onClick={handleSkipCurrent}
+                            className="flex-1 min-w-[120px] flex items-center justify-center gap-2 px-3 py-2 border border-yellow-400 bg-yellow-100 rounded-lg text-yellow-800 hover:bg-yellow-200"
+                          >
+                            <FiSkipForward className="w-4 h-4" />
+                            Skip
+                          </button>
+                          <button
+                            onClick={handleAdvanceRoute}
+                            className="flex-1 min-w-[140px] flex items-center justify-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                          >
+                            <FiArrowRightCircle className="w-5 h-5" />
+                            {nextStop ? 'Next Stop' : 'Complete Route'}
+                          </button>
+                        </>
+                      )}
+                      {routeCompleted && (
+                        <button
+                          onClick={handleRestartRoute}
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-orange-400 text-orange-600 rounded-lg hover:bg-orange-50 transition-colors"
+                        >
+                          <FiRotateCcw className="w-5 h-5" />
+                          Restart Route
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 border border-dashed border-gray-300 rounded-lg text-sm text-gray-600">
+                    Select a predefined route from the dropdown to unlock full guidance.
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">
-                  Company Name
-                </label>
-                <div className="text-lg font-semibold text-gray-800">
-                  {selectedVendor.name}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div
-                  className={`p-4 rounded-lg border-2 ${
-                    selectedVendor.checkedIn
-                      ? 'bg-green-50 border-green-300'
-                      : 'bg-gray-50 border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <FiCheckCircle
-                        className={`w-6 h-6 ${
-                          selectedVendor.checkedIn ? 'text-green-600' : 'text-gray-400'
-                        }`}
-                      />
-                      <div>
-                        <div
-                          className={`text-lg font-semibold ${
-                            selectedVendor.checkedIn ? 'text-green-700' : 'text-gray-600'
-                          }`}
-                        >
-                          {selectedVendor.checkedIn ? 'Checked In' : 'Not Checked In'}
+            {vendorCards.length > 0 && (
+              <div className="space-y-4">
+                {vendorCards.map(card => {
+                  const canCheckIn = hasVendorBackendIds(card.vendor) && !card.vendor.checkedIn;
+                  return (
+                    <div key={card.key} className="border border-gray-200 rounded-lg p-4">
+                      <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                        {card.title}
+                      </div>
+                      <div className="text-lg font-bold text-gray-800">{card.vendor.name}</div>
+                      {card.step && (
+                        <div className="text-xs text-gray-500 mt-1">Stop {card.step}</div>
+                      )}
+                      {card.boothLabel && (
+                        <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700">
+                          <FiMapPin className="w-5 h-5" />
+                          <span className="text-sm font-semibold">{card.boothLabel}</span>
                         </div>
-                        <div className="text-xs text-gray-500">
-                          {selectedVendor.checkedIn && vendorCheckInLabel
-                            ? `Checked at ${vendorCheckInLabel}`
-                            : selectedVendor.checkedIn
-                            ? 'Checked in earlier'
-                            : 'Awaiting check-in'}
+                      )}
+                      {card.vendor.checkedIn && (
+                        <div className="mt-2 inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-semibold">
+                          <span>✓</span>
+                          <span>Checked In</span>
+                        </div>
+                      )}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectVendor(card.vendor)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                      View Details
+                    </button>
+                    <button
+                      type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleQuickVendorCheckIn(card.vendor);
+                          }}
+                          disabled={!canCheckIn}
+                          className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                            canCheckIn
+                              ? 'bg-green-600 hover:bg-green-700 text-white'
+                          : 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                      }`}
+                    >
+                      {card.vendor.checkedIn ? 'Checked In' : 'Check In'}
+                    </button>
+                  </div>
+                  {!hasVendorBackendIds(card.vendor) && (
+                    <div className="mt-2 text-xs text-red-600">
+                      Sync with backend required before check-in.
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+            {selectedVendor ? (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-start justify-between mb-4">
+                  <h2 className="text-lg font-bold text-gray-800">Vendor Information</h2>
+                  <button
+                    onClick={handleClearSelection}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <FiX className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1">
+                      Company Name
+                    </label>
+                    <div className="text-lg font-semibold text-gray-800">
+                      {selectedVendor.name}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div
+                      className={`p-4 rounded-lg border-2 ${
+                        selectedVendor.checkedIn
+                          ? 'bg-green-50 border-green-300'
+                          : 'bg-gray-50 border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <FiCheckCircle
+                            className={`w-6 h-6 ${
+                              selectedVendor.checkedIn ? 'text-green-600' : 'text-gray-400'
+                            }`}
+                          />
+                          <div>
+                            <div
+                              className={`text-lg font-semibold ${
+                                selectedVendor.checkedIn ? 'text-green-700' : 'text-gray-600'
+                              }`}
+                            >
+                              {selectedVendor.checkedIn ? 'Checked In' : 'Not Checked In'}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {selectedVendor.checkedIn && vendorCheckInLabel
+                                ? `Checked at ${vendorCheckInLabel}`
+                                : selectedVendor.checkedIn
+                                ? 'Checked in earlier'
+                                : 'Awaiting check-in'}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
 
-                <button
-                  onClick={handleVendorCheckIn}
-                  disabled={selectedVendor.checkedIn}
-                  className={`w-full py-3 rounded-lg font-semibold text-lg transition-colors ${
-                    selectedVendor.checkedIn
-                      ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
-                      : 'bg-green-600 hover:bg-green-700 text-white'
-                  }`}
-                >
-                  {selectedVendor.checkedIn ? 'Checked In' : 'Check In'}
-                </button>
-              </div>
-
-              {selectedVendor.boothNumber && (
-                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <div className="text-sm font-medium text-green-800 mb-2">
-                    Booth Location
+                    <button
+                      onClick={handleVendorCheckIn}
+                      disabled={selectedVendor.checkedIn || !hasVendorBackendIds(selectedVendor)}
+                      className={`w-full py-3 rounded-lg font-semibold text-lg transition-colors ${
+                        selectedVendor.checkedIn || !hasVendorBackendIds(selectedVendor)
+                          ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                          : 'bg-green-600 hover:bg-green-700 text-white'
+                      }`}
+                    >
+                      {selectedVendor.checkedIn ? 'Checked In' : 'Check In'}
+                    </button>
+                    {!hasVendorBackendIds(selectedVendor) && (
+                      <div className="text-xs text-red-600 mt-2">
+                        Sync with backend required before check-in.
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <FiMapPin className="w-6 h-6 text-green-600" />
-                    <div className="text-2xl font-bold text-green-600">
-                      {selectedVendor.boothNumber}
+
+                  {selectedVendor.boothNumber && (
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="text-sm font-medium text-green-800 mb-2">
+                        Booth Location
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <FiMapPin className="w-6 h-6 text-green-600" />
+                        <div className="text-2xl font-bold text-green-600">
+                          {selectedVendor.boothNumber}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              )}
+                  )}
 
-              {selectedVendor.contactName && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">
-                    Contact Person
-                  </label>
-                  <div className="text-gray-800">{selectedVendor.contactName}</div>
-                </div>
-              )}
+                  {selectedVendor.contactName && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">
+                        Contact Person
+                      </label>
+                      <div className="text-gray-800">{selectedVendor.contactName}</div>
+                    </div>
+                  )}
 
-              {selectedVendor.email && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">
-                    Email
-                  </label>
-                  <div className="text-gray-800">{selectedVendor.email}</div>
-                </div>
-              )}
+                  {selectedVendor.email && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">
+                        Email
+                      </label>
+                      <div className="text-gray-800">{selectedVendor.email}</div>
+                    </div>
+                  )}
 
-              {selectedVendor.phone && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">
-                    Phone
-                  </label>
-                  <div className="text-gray-800">📞 {selectedVendor.phone}</div>
-                </div>
-              )}
+                  {selectedVendor.phone && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">
+                        Phone
+                      </label>
+                      <div className="text-gray-800">📞 {selectedVendor.phone}</div>
+                    </div>
+                  )}
 
-              {selectedVendor.category && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">
-                    Category
-                  </label>
-                  <div className="inline-block px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
-                    {selectedVendor.category}
-                  </div>
-                </div>
-              )}
+                  {selectedVendor.category && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">
+                        Category
+                      </label>
+                      <div className="inline-block px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
+                        {selectedVendor.category}
+                      </div>
+                    </div>
+                  )}
 
-              {selectedVendor.notes && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">
-                    Notes
-                  </label>
-                  <div className="text-gray-700 bg-gray-50 p-3 rounded-lg">
-                    {selectedVendor.notes}
-                  </div>
+                  {selectedVendor.notes && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600 mb-1">
+                        Notes
+                      </label>
+                      <div className="text-gray-700 bg-gray-50 p-3 rounded-lg">
+                        {selectedVendor.notes}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="p-4 border border-dashed border-gray-300 rounded-lg text-sm text-gray-500">
+                Select a vendor to view full details and check-in controls.
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {checkInNotice && (

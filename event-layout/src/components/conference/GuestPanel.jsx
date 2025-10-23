@@ -1,8 +1,9 @@
 // Guest management panel for conference planner
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { FiUserPlus, FiEdit2, FiTrash2, FiSearch, FiFilter } from 'react-icons/fi';
 import GroupManager from './GroupManager';
+import SystemGroups from './SystemGroups';
 
 export default function GuestPanel({
   guests,
@@ -21,8 +22,14 @@ export default function GuestPanel({
   const [editingGuest, setEditingGuest] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
 
-  // Get all group names for filtering (including 'all' option)
-  const groupFilterOptions = ['all', ...groups.map(g => g.name)];
+  const systemGroups = useMemo(
+    () => groups.filter(group => group.isSystem),
+    [groups]
+  );
+  const customGroups = useMemo(
+    () => groups.filter(group => !group.isSystem),
+    [groups]
+  );
 
   const normalizeString = (value) => (value ?? '').toString().trim();
   const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -30,11 +37,21 @@ export default function GuestPanel({
   // Filter guests (guard against missing fields from imports)
   const filteredGuests = guests.filter(guest => {
     const name = normalizeString(guest?.name).toLowerCase();
+    const email = normalizeString(guest?.email).toLowerCase();
+    const company = normalizeString(guest?.company).toLowerCase();
     const groupName = normalizeString(guest?.group);
 
-    const matchesSearch = name.includes(normalizedSearch);
+    const matchesSearch =
+      normalizedSearch.length === 0 ||
+      name.includes(normalizedSearch) ||
+      email.includes(normalizedSearch) ||
+      company.includes(normalizedSearch) ||
+      groupName.toLowerCase().includes(normalizedSearch);
 
-    const matchesGroup = filterGroup === 'all' || groupName === filterGroup;
+    const matchesGroup =
+      filterGroup === 'all' ||
+      groupName === filterGroup ||
+      groupName.toLowerCase() === filterGroup.toLowerCase();
 
     return matchesSearch && matchesGroup;
   });
@@ -209,22 +226,50 @@ export default function GuestPanel({
             onChange={(e) => setFilterGroup(e.target.value)}
             className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
-            {groupFilterOptions.map(groupName => (
-              <option key={groupName} value={groupName}>
-                {groupName === 'all' ? 'All Groups' : groupName}
-              </option>
-            ))}
+            <option value="all">All Guests</option>
+            {systemGroups.length > 0 && (
+              <optgroup label="System Groups">
+                {systemGroups.map(group => (
+                  <option key={group.id} value={group.name}>
+                    {group.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {customGroups.length > 0 && (
+              <optgroup label="Custom Groups">
+                {customGroups.map(group => (
+                  <option key={group.id} value={group.name}>
+                    {group.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </div>
       </div>
 
-      {/* Group Manager */}
-      <GroupManager
-        groups={groups}
-        onAddGroup={onAddGroup}
-        onUpdateGroup={onUpdateGroup}
-        onDeleteGroup={onDeleteGroup}
-      />
+      {/* Group overview */}
+      <div className="px-0">
+        <div className="mx-4 mb-4 overflow-hidden rounded-lg border border-gray-200 bg-white">
+          <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+            <h3 className="text-sm font-semibold text-gray-800">Group Overview</h3>
+            <p className="text-xs text-gray-500">
+              Use system groups for quick filtering, or create custom groups tailored to your event.
+            </p>
+          </div>
+          <SystemGroups groups={groups} guests={guests} />
+          <div className="border-t border-gray-200 bg-white">
+            <GroupManager
+              groups={groups}
+              systemGroups={systemGroups}
+              onAddGroup={onAddGroup}
+              onUpdateGroup={onUpdateGroup}
+              onDeleteGroup={onDeleteGroup}
+            />
+          </div>
+        </div>
+      </div>
 
       {/* Content area with scroll */}
       <div className="flex-1 overflow-hidden flex flex-col">

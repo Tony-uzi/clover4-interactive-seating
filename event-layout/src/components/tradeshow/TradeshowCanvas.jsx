@@ -1,6 +1,6 @@
 // Tradeshow canvas component with Konva
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Stage, Layer, Rect, Text, Group, Line, Arrow, Circle, Image, Transformer } from 'react-konva';
 import useImage from 'use-image';
 import { TRADESHOW_BOOTHS, getElementConfig } from '../../lib/canvas/shapes';
@@ -25,6 +25,11 @@ export default function TradeshowCanvas({
   vendors = [],
   routes = [],
   activeRouteId = null,
+  routeSteps = [],
+  currentRouteBoothId = null,
+  nextRouteBoothId = null,
+  visitedBoothIds = [],
+  skippedBoothIds = [],
   readOnly = false,
   draggingVendorId = null,
   onAssignVendor,
@@ -36,6 +41,32 @@ export default function TradeshowCanvas({
   const [stagePos, setStagePos] = useState({ x: 20, y: 20 });
   const [draggedBooth, setDraggedBooth] = useState(null);
   const [dropTargetId, setDropTargetId] = useState(null);
+  const routeStepMap = useMemo(() => {
+    const map = new Map();
+    (routeSteps || []).forEach(step => {
+      if (step?.boothId) {
+        map.set(String(step.boothId), step);
+      }
+    });
+    return map;
+  }, [routeSteps]);
+  const visitedBoothSet = useMemo(
+    () => new Set((visitedBoothIds || []).map(id => String(id))),
+    [visitedBoothIds]
+  );
+  const skippedBoothSet = useMemo(
+    () => new Set((skippedBoothIds || []).map(id => String(id))),
+    [skippedBoothIds]
+  );
+
+  const toNumber = (value) => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  };
 
   // Hall boundary points (vertices that can be dragged to create irregular shapes)
   const [hallVertices, setHallVertices] = useState(() => [
@@ -321,12 +352,30 @@ export default function TradeshowCanvas({
         {/* Individual edges with labels */}
         {hallVertices.map((v, i) => {
           const nextV = hallVertices[(i + 1) % hallVertices.length];
+          const vx = toNumber(v.x);
+          const vy = toNumber(v.y);
+          const nx = toNumber(nextV.x);
+          const ny = toNumber(nextV.y);
+
+          if (
+            vx === null ||
+            vy === null ||
+            nx === null ||
+            ny === null
+          ) {
+            return null;
+          }
+
           const length = Math.sqrt(
-            Math.pow(nextV.x - v.x, 2) + Math.pow(nextV.y - v.y, 2)
+            Math.pow(nx - vx, 2) + Math.pow(ny - vy, 2)
           );
 
-          const midX = (v.x + nextV.x) / 2 * PIXELS_PER_METER;
-          const midY = (v.y + nextV.y) / 2 * PIXELS_PER_METER;
+          const midX = ((vx + nx) / 2) * PIXELS_PER_METER;
+          const midY = ((vy + ny) / 2) * PIXELS_PER_METER;
+
+          if (!Number.isFinite(midX) || !Number.isFinite(midY) || !Number.isFinite(length)) {
+            return null;
+          }
 
           return (
             <Text
@@ -368,113 +417,125 @@ export default function TradeshowCanvas({
     );
   };
 
-  // Render route arrows
+  // Render route arrows and labels
   const renderRoutes = () => {
-    if (!activeRouteId || routes.length === 0) {
-      console.log('No active route or routes empty:', { activeRouteId, routesCount: routes.length });
-      return null;
-    }
+    if (!activeRouteId || !routeSteps.length) return null;
+    const route = routes.find(r => String(r.id) === String(activeRouteId));
+    if (!route || routeSteps.length < 1) return null;
 
-    const route = routes.find(r => r.id === activeRouteId);
-    if (!route || !route.boothOrder || route.boothOrder.length < 2) {
-      console.warn('Route not renderable:', {
-        route: route?.name,
-        boothOrderLength: route?.boothOrder?.length,
-        boothOrder: route?.boothOrder,
-        activeRouteId,
-        routesCount: routes.length
-      });
-      return null;
-    }
+    const segments = [];
+    
+    const routeColor = route.color || '#3B82F6';
+    for (let i = 0; i < routeSteps.length - 1; i += 1) {
+      const startStop = routeSteps[i];
+      const endStop = routeSteps[i + 1];
+      const startBooth = startStop.booth || booths.find(b => String(b.id) === String(startStop.boothId));
+      const endBooth = endStop.booth || booths.find(b => String(b.id) === String(endStop.boothId));
+      if (!startBooth || !endBooth) continue;
 
-    console.log('Rendering route:', route.name, 'boothOrder:', route.boothOrder);
-    console.log('Available booths:', booths.map(b => ({ id: b.id, label: b.label, type: b.type })));
+      const startX = toNumber(startBooth.x);
+      const startY = toNumber(startBooth.y);
+      const startWidth = toNumber(startBooth.width);
+      const startHeight = toNumber(startBooth.height);
+      const endX = toNumber(endBooth.x);
+      const endY = toNumber(endBooth.y);
+      const endWidth = toNumber(endBooth.width);
+      const endHeight = toNumber(endBooth.height);
 
-    const arrows = [];
-
-    for (let i = 0; i < route.boothOrder.length - 1; i++) {
-      const startBoothId = route.boothOrder[i];
-      const endBoothId = route.boothOrder[i + 1];
-
-      const startBooth = booths.find(b => String(b.id) === String(startBoothId));
-      const endBooth = booths.find(b => String(b.id) === String(endBoothId));
-
-      if (!startBooth || !endBooth) {
-        console.error('❌ Booth not found for route segment:', {
-          startBoothId,
-          endBoothId,
-          startBooth: startBooth?.label || 'NOT FOUND',
-          endBooth: endBooth?.label || 'NOT FOUND',
-          allBoothIds: booths.map(b => b.id)
-        });
+      if ([startX, startY, startWidth, startHeight, endX, endY, endWidth, endHeight].some(val => val === null)) {
         continue;
       }
 
-      // Convert string coordinates to numbers and validate
-      const toNumber = (val) => {
-        const num = typeof val === 'string' ? parseFloat(val) : val;
-        return (typeof num === 'number' && !isNaN(num) && isFinite(num)) ? num : null;
-      };
+      const startCenterX = (startX + (startWidth || 0) / 2) * PIXELS_PER_METER;
+      const startCenterY = (startY + (startHeight || 0) / 2) * PIXELS_PER_METER;
+      const endCenterX = (endX + (endWidth || 0) / 2) * PIXELS_PER_METER;
+      const endCenterY = (endY + (endHeight || 0) / 2) * PIXELS_PER_METER;
+      const isActiveSegment =
+        currentRouteBoothId && nextRouteBoothId &&
+        String(currentRouteBoothId) === String(startStop.boothId) &&
+        String(nextRouteBoothId) === String(endStop.boothId);
 
-      const startBoothX = toNumber(startBooth.x);
-      const startBoothY = toNumber(startBooth.y);
-      const startBoothWidth = toNumber(startBooth.width);
-      const startBoothHeight = toNumber(startBooth.height);
-
-      if (startBoothX === null || startBoothY === null ||
-          startBoothWidth === null || startBoothHeight === null) {
-        console.error('❌ Start booth has invalid coordinates:', {
-          boothId: startBoothId,
-          label: startBooth.label,
-          x: startBooth.x,
-          y: startBooth.y,
-          width: startBooth.width,
-          height: startBooth.height
-        });
-        continue;
-      }
-
-      const endBoothX = toNumber(endBooth.x);
-      const endBoothY = toNumber(endBooth.y);
-      const endBoothWidth = toNumber(endBooth.width);
-      const endBoothHeight = toNumber(endBooth.height);
-
-      if (endBoothX === null || endBoothY === null ||
-          endBoothWidth === null || endBoothHeight === null) {
-        console.error('❌ End booth has invalid coordinates:', {
-          boothId: endBoothId,
-          label: endBooth.label,
-          x: endBooth.x,
-          y: endBooth.y,
-          width: endBooth.width,
-          height: endBooth.height
-        });
-        continue;
-      }
-
-      const startX = (startBoothX + startBoothWidth / 2) * PIXELS_PER_METER;
-      const startY = (startBoothY + startBoothHeight / 2) * PIXELS_PER_METER;
-      const endX = (endBoothX + endBoothWidth / 2) * PIXELS_PER_METER;
-      const endY = (endBoothY + endBoothHeight / 2) * PIXELS_PER_METER;
-
-      console.log(`✓ Rendering arrow ${i}: ${startBooth.label} (${startX.toFixed(1)}, ${startY.toFixed(1)}) -> ${endBooth.label} (${endX.toFixed(1)}, ${endY.toFixed(1)})`);
-
-      arrows.push(
+      segments.push(
         <Arrow
-          key={`arrow-${i}`}
-          points={[startX, startY, endX, endY]}
-          stroke={route.color || '#3B82F6'}
-          strokeWidth={3}
-          fill={route.color || '#3B82F6'}
-          pointerLength={10}
-          pointerWidth={10}
-          dash={[10, 5]}
+          key={`arrow-${startStop.boothId}-${endStop.boothId}`}
+          points={[startCenterX, startCenterY, endCenterX, endCenterY]}
+          stroke={routeColor}
+          strokeWidth={isActiveSegment ? 5 : 3}
+          fill={routeColor}
+          pointerLength={12}
+          pointerWidth={12}
+          dash={isActiveSegment ? [] : [10, 5]}
+          opacity={isActiveSegment ? 1 : 0.85}
         />
       );
     }
 
-    console.log(`✓ Total arrows rendered: ${arrows.length} out of ${route.boothOrder.length - 1} segments`);
-    return arrows;
+    routeSteps.forEach((stop) => {
+      const booth = stop.booth || booths.find(b => String(b.id) === String(stop.boothId));
+      if (!booth) return;
+
+      const boothX = toNumber(booth.x);
+      const boothY = toNumber(booth.y);
+      const boothWidth = toNumber(booth.width);
+      const boothHeight = toNumber(booth.height);
+      if ([boothX, boothY, boothWidth, boothHeight].some(val => val === null)) return;
+
+      const centerX = (boothX + (boothWidth || 0) / 2) * PIXELS_PER_METER;
+      const centerY = (boothY + (boothHeight || 0) / 2) * PIXELS_PER_METER;
+      let labelY = centerY - (boothHeight * PIXELS_PER_METER) / 2 - 30;
+      labelY = Math.max(labelY, 30);
+      let vendorLabelY = labelY - 26;
+      vendorLabelY = Math.max(vendorLabelY, 6);
+
+      const boothIdStr = String(stop.boothId);
+      const isCurrent = currentRouteBoothId && String(currentRouteBoothId) === boothIdStr;
+      const isNext = !isCurrent && nextRouteBoothId && String(nextRouteBoothId) === boothIdStr;
+      const isVisited = visitedBoothSet.has(boothIdStr);
+      const isSkipped = skippedBoothSet.has(boothIdStr);
+
+      let circleFill = '#1F2937';
+      if (isCurrent) circleFill = '#F97316';
+      else if (isSkipped) circleFill = '#F87171';
+      else if (isVisited) circleFill = '#22C55E';
+      else if (isNext) circleFill = '#F59E0B';
+
+      segments.push(
+        <Group key={`route-label-${boothIdStr}`}>
+          <Circle
+            x={centerX}
+            y={labelY}
+            radius={14}
+            fill={circleFill}
+            stroke="#ffffff"
+            strokeWidth={2}
+            opacity={0.95}
+          />
+          <Text
+            x={centerX - 7}
+            y={labelY - 7}
+            width={14}
+            text={String(stop.step)}
+            align="center"
+            fontSize={12}
+            fontStyle="bold"
+            fill="#ffffff"
+          />
+          {stop.vendorName && (
+            <Text
+              x={centerX - 60}
+              y={vendorLabelY}
+              width={120}
+              align="center"
+              text={stop.vendorName}
+              fontSize={11}
+              fill="#374151"
+            />
+          )}
+        </Group>
+      );
+    });
+
+    return segments;
   };
 
   // Render booth
@@ -482,24 +543,88 @@ export default function TradeshowCanvas({
     const config = getElementConfig(booth.type);
     if (!config) return null;
 
-    const x = booth.x * PIXELS_PER_METER;
-    const y = booth.y * PIXELS_PER_METER;
-    const width = booth.width * PIXELS_PER_METER;
-    const height = booth.height * PIXELS_PER_METER;
+    const boothIdStr = String(booth.id);
+    const boothX = toNumber(booth.x) ?? 0;
+    const boothY = toNumber(booth.y) ?? 0;
+    const boothWidth = toNumber(booth.width) ?? 1;
+    const boothHeight = toNumber(booth.height) ?? 1;
+    const x = boothX * PIXELS_PER_METER;
+    const y = boothY * PIXELS_PER_METER;
+    const width = boothWidth * PIXELS_PER_METER;
+    const height = boothHeight * PIXELS_PER_METER;
     const isSelected = selectedBoothId === booth.id;
     const isDropTarget = dropTargetId === booth.id;
 
     // Find assigned vendor
-    const vendor = vendors.find(v => v.boothNumber === booth.label || v.boothId === booth.id);
+    const vendor = vendors.find(v =>
+      String(v.boothId) === boothIdStr ||
+      (booth.label && String(v.boothNumber) === String(booth.label))
+    );
 
-    // Check if booth is in active route
-    const isInRoute =
-      activeRouteId &&
-      routes.find(r => r.id === activeRouteId)?.boothOrder?.some(id => String(id) === String(booth.id));
+    // Route state
+    const stepInfo = routeStepMap.get(boothIdStr);
+    const isInRoute = Boolean(stepInfo);
+    const isCurrentRouteBooth =
+      currentRouteBoothId && String(currentRouteBoothId) === boothIdStr;
+    const isNextRouteBooth =
+      nextRouteBoothId && String(nextRouteBoothId) === boothIdStr && !isCurrentRouteBooth;
+    const isVisited = visitedBoothSet.has(boothIdStr);
+    const isSkipped = skippedBoothSet.has(boothIdStr);
 
-    const fillColor = isInRoute ? '#FFF9C4' : config.color;
-    const strokeColor = isSelected ? '#2196F3' : isDropTarget ? '#FF9800' : isInRoute ? '#FF9800' : config.stroke;
-    const strokeWidth = isSelected || isDropTarget ? 4 : isInRoute ? 3 : 2;
+    let fillColor = config.color;
+    if (isInRoute) {
+      fillColor = '#FFF9C4';
+    }
+    if (isVisited) {
+      fillColor = '#E6F4EA';
+    }
+    if (isSkipped) {
+      fillColor = '#FEE2E2';
+    }
+    if (isNextRouteBooth) {
+      fillColor = '#FFF7ED';
+    }
+    if (isCurrentRouteBooth) {
+      fillColor = '#FFEDD5';
+    }
+
+    let strokeColor = config.stroke;
+    let strokeWidth = 2;
+
+    if (isDropTarget) {
+      strokeColor = '#FF9800';
+      strokeWidth = 4;
+    }
+
+    if (isSelected) {
+      strokeColor = '#2196F3';
+      strokeWidth = 4;
+    }
+
+    if (isInRoute) {
+      strokeColor = '#FF9800';
+      strokeWidth = Math.max(strokeWidth, 3);
+    }
+
+    if (isVisited) {
+      strokeColor = '#22C55E';
+      strokeWidth = Math.max(strokeWidth, 3);
+    }
+
+    if (isSkipped) {
+      strokeColor = '#EF4444';
+      strokeWidth = Math.max(strokeWidth, 3);
+    }
+
+    if (isNextRouteBooth) {
+      strokeColor = '#F59E0B';
+      strokeWidth = Math.max(strokeWidth, 4);
+    }
+
+    if (isCurrentRouteBooth) {
+      strokeColor = '#F97316';
+      strokeWidth = Math.max(strokeWidth, 5);
+    }
 
     return (
       <Group
@@ -550,6 +675,28 @@ export default function TradeshowCanvas({
             strokeWidth={strokeWidth}
             cornerRadius={4}
           />
+        )}
+
+        {(isCurrentRouteBooth || isNextRouteBooth) && (
+          <Group x={width / 2 - 50} y={-28}>
+            <Rect
+              width={100}
+              height={22}
+              fill={isCurrentRouteBooth ? '#F97316' : '#F59E0B'}
+              cornerRadius={11}
+              opacity={0.9}
+            />
+            <Text
+              text={isCurrentRouteBooth ? 'You are here' : 'Next stop'}
+              width={100}
+              height={22}
+              align="center"
+              y={4}
+              fontSize={12}
+              fontStyle="bold"
+              fill="#ffffff"
+            />
+          </Group>
         )}
 
         {/* Booth number */}

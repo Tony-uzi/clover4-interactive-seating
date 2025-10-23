@@ -46,6 +46,9 @@ export async function login(email, password) {
     if (data.user) {
       localStorage.setItem('user', JSON.stringify(data.user));
     }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('authchange'));
+    }
 
     console.log('Login successful:', email);
     return {
@@ -72,6 +75,10 @@ export async function logout() {
   // Clear stored authentication
   localStorage.removeItem('token');
   localStorage.removeItem('user');
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('authchange'));
+  }
 
   console.log('Logout successful');
   return { success: true };

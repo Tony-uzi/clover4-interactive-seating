@@ -38,6 +38,9 @@ export default function ConferencePlanner() {
   // Load data on mount - BACKEND ONLY, use URL parameter for event ID
   useEffect(() => {
     (async () => {
+      const params = new URLSearchParams(location.search);
+      const urlEventId = params.get('eventId');
+
       // Default groups (hardcoded)
       const defaultGroups = [
         { id: 'vip', name: 'VIP', color: '#8B5CF6', isSystem: true },
@@ -56,17 +59,18 @@ export default function ConferencePlanner() {
         roomHeight: 16,
       };
 
+      if (!urlEventId) {
+        setEvent(defaultEvent);
+        setIsInitialLoad(false);
+        return;
+      }
+
       let ensuredEvent = defaultEvent;
 
-      // Get event ID from URL parameter
-      const params = new URLSearchParams(location.search);
-      const urlEventId = params.get('eventId');
-
       try {
-        if (urlEventId) {
-          // Try to load existing event from backend using URL event ID
-          const eventResp = await ConferenceAPI.getEvent(urlEventId);
-          if (eventResp.success && eventResp.data) {
+        // Try to load existing event from backend using URL event ID
+        const eventResp = await ConferenceAPI.getEvent(urlEventId);
+        if (eventResp.success && eventResp.data) {
             ensuredEvent = {
               id: eventResp.data.id,
               name: eventResp.data.name || defaultEvent.name,
@@ -76,39 +80,22 @@ export default function ConferencePlanner() {
               roomHeight: eventResp.data.room_height ?? defaultEvent.roomHeight,
             };
             console.log('✓ Loaded existing event from URL:', ensuredEvent.id);
-          } else {
-            // Event doesn't exist, create new one and update URL
-            console.warn('Event ID in URL not found, creating new event');
-            const resp = await ConferenceAPI.createEvent(defaultEvent);
-            if (resp.success) {
-              ensuredEvent = {
-                ...defaultEvent,
-                id: resp.data.id,
-                roomWidth: resp.data.room_width ?? defaultEvent.roomWidth,
-                roomHeight: resp.data.room_height ?? defaultEvent.roomHeight,
-              };
-              navigate(`/conference?eventId=${resp.data.id}`, { replace: true });
-              console.log('✓ Created new event and updated URL:', resp.data.id);
-            }
-          }
         } else {
-          // No event ID in URL, create new event and add to URL
-          const resp = await ConferenceAPI.createEvent(defaultEvent);
-          if (resp.success) {
-            ensuredEvent = {
-              ...defaultEvent,
-              id: resp.data.id,
-              roomWidth: resp.data.room_width ?? defaultEvent.roomWidth,
-              roomHeight: resp.data.room_height ?? defaultEvent.roomHeight,
-            };
-            navigate(`/conference?eventId=${resp.data.id}`, { replace: true });
-            console.log('✓ Created new event and added to URL:', resp.data.id);
-          }
+          console.warn('Event ID in URL not found or inaccessible');
+          setEvent(defaultEvent);
+          setGuests([]);
+          setElements([]);
+          setIsInitialLoad(false);
+          return;
         }
       } catch (e) {
         console.warn('Ensure event failed:', e);
+        setEvent(defaultEvent);
+        setGuests([]);
+        setElements([]);
+        setIsInitialLoad(false);
+        return;
       }
-
       setEvent(ensuredEvent);
 
       // Load ALL data from backend ONLY
@@ -609,13 +596,58 @@ export default function ConferencePlanner() {
         }}
         onSave={async () => {
           try {
-            if (!event?.id) {
-              alert('Please create an event first');
-              return;
+            const currentValues = event || {};
+            let currentEventId = currentValues.id || null;
+
+            if (!currentEventId) {
+              const createResp = await ConferenceAPI.createEvent({
+                name: currentValues.name || 'New Conference Event',
+                description: currentValues.description || '',
+                roomWidth: currentValues.roomWidth,
+                roomHeight: currentValues.roomHeight,
+                eventDate: currentValues.date,
+              });
+              if (!createResp.success || !createResp.data?.id) {
+                throw new Error(createResp.error || 'Failed to create event');
+              }
+              const created = createResp.data;
+              currentEventId = created.id;
+              const normalized = {
+                id: created.id,
+                name: created.name || currentValues.name || 'New Conference Event',
+                description: created.description || currentValues.description || '',
+                date: created.event_date || currentValues.date || new Date().toISOString().split('T')[0],
+                roomWidth: created.room_width ?? currentValues.roomWidth ?? 24,
+                roomHeight: created.room_height ?? currentValues.roomHeight ?? 16,
+              };
+              setEvent(normalized);
+              navigate(`/conference?eventId=${created.id}`, { replace: true });
+            }
+
+            const updateResult = await ConferenceAPI.updateEvent(currentEventId, {
+              name: currentValues.name,
+              description: currentValues.description,
+              roomWidth: currentValues.roomWidth,
+              roomHeight: currentValues.roomHeight,
+              eventDate: currentValues.date,
+            });
+            if (!updateResult.success) {
+              throw new Error(updateResult.error || 'Failed to update event details');
+            }
+            if (updateResult.data) {
+              const updated = updateResult.data;
+              setEvent(prev => ({
+                ...prev,
+                name: updated.name ?? prev?.name,
+                description: updated.description ?? prev?.description,
+                roomWidth: Number(updated.room_width ?? prev?.roomWidth ?? 24),
+                roomHeight: Number(updated.room_height ?? prev?.roomHeight ?? 16),
+                date: updated.event_date ?? prev?.date,
+              }));
             }
 
             // Save elements to backend
-            const saveResult = await ConferenceAPI.saveLayout(event.id, elements);
+            const saveResult = await ConferenceAPI.saveLayout(currentEventId, elements);
             if (saveResult.success) {
               alert(`✓ Saved ${saveResult.data.saved} elements to event`);
             } else {
@@ -635,7 +667,18 @@ export default function ConferencePlanner() {
       />
 
       {/* Canvas Size Input */}
-      <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center gap-4">
+      <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-700">Event Name:</label>
+          <input
+            type="text"
+            value={event.name}
+            onChange={(e) => setEvent({ ...event, name: e.target.value })}
+            className="w-64 px-3 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="Enter event name"
+          />
+        </div>
+        <div className="h-6 w-px bg-gray-200 hidden md:block" />
         <label className="text-sm font-medium text-gray-700">Canvas Size:</label>
         <div className="flex items-center gap-2">
           <label className="text-xs text-gray-600">Width(m):</label>
