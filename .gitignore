@@ -20,7 +20,7 @@ pnpm-debug.log*
 .idea/
 
 # ===== Python / Django =====
-__pycache__/
+*/__pycache__/
 *.py[cod]
 *.pyo
 *.pyd
@@ -45,3 +45,4 @@ htmlcov/
 # AI instructions
 .claude/
 .cursor/
+.venv/
