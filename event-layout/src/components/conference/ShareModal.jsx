@@ -1,7 +1,7 @@
 // ShareModal component for generating shareable links with dietary filters
 
 import React, { useState, useEffect } from 'react';
-import { FiX, FiCopy, FiCheck, FiShare2 } from 'react-icons/fi';
+import { FiX, FiShare2 } from 'react-icons/fi';
 
 export default function ShareModal({
   isOpen,
@@ -14,7 +14,6 @@ export default function ShareModal({
   const [shareToken, setShareToken] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [copied, setCopied] = useState(false);
   const [selectedFilters, setSelectedFilters] = useState({
     all: true,
   });
@@ -113,16 +112,6 @@ export default function ShareModal({
     return `${baseUrl}?filter=${activeFilters.join(',')}`;
   };
 
-  const copyToClipboard = async () => {
-    const url = getShareUrl();
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
-  };
 
   if (!isOpen) return null;
 
@@ -252,36 +241,16 @@ export default function ShareModal({
                 <h3 className="text-lg font-semibold text-gray-800 mb-3">
                   Shareable Link
                 </h3>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={shareUrl}
-                    readOnly
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 font-mono text-sm"
-                  />
-                  <button
-                    onClick={copyToClipboard}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                      copied
-                        ? 'bg-green-600 text-white'
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
-                    }`}
-                  >
-                    {copied ? (
-                      <>
-                        <FiCheck className="w-4 h-4" />
-                        Copied!
-                      </>
-                    ) : (
-                      <>
-                        <FiCopy className="w-4 h-4" />
-                        Copy
-                      </>
-                    )}
-                  </button>
-                </div>
+                <input
+                  type="text"
+                  value={shareUrl}
+                  readOnly
+                  onClick={(e) => e.target.select()}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 font-mono text-sm cursor-pointer hover:bg-gray-100 transition-colors"
+                  title="Click to select all, then copy manually"
+                />
                 <p className="mt-2 text-sm text-gray-600">
-                  Share this link with stakeholders. No login required.
+                  Click the link above to select it, then copy it manually (Ctrl+C or Cmd+C). Share this link with stakeholders. No login required.
                 </p>
               </div>
 
