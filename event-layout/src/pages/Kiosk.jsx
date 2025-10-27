@@ -27,7 +27,7 @@ import * as TradeshowAPI from '../server-actions/tradeshow-planner';
 import { normalizeConferenceGuest, normalizeTradeshowVendor, normalizeConferenceElement, normalizeTradeshowBooth } from '../lib/utils/normalizers';
 import { getLastKioskEventId, setLastKioskEventId } from '../lib/utils/storage';
 
-const REFRESH_INTERVAL = 60000; // 60 seconds
+const REFRESH_INTERVAL = 5000; // 5 seconds
 const UUID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 const directionFromAngle = (angle) => {
@@ -771,7 +771,7 @@ export function ConferenceKiosk() {
         <div className="flex items-center justify-center gap-4">
           <span>📍 Conference Information System</span>
           <span>•</span>
-          <span>Auto-refresh: Every 60 seconds</span>
+          <span>Auto-refresh: Every 10 seconds</span>
           <span>•</span>
           <span className={isOnline ? 'text-green-400' : 'text-yellow-400'}>
             {isOnline ? '🟢 Online' : '🟡 Offline (Cached)'}
@@ -2022,7 +2022,7 @@ export function TradeshowKiosk() {
         <div className="flex items-center justify-center gap-4">
           <span>🏢 Tradeshow Information System</span>
           <span>•</span>
-          <span>Auto-refresh: Every 60 seconds</span>
+          <span>Auto-refresh: Every 10 seconds</span>
           <span>•</span>
           <span className={isOnline ? 'text-green-400' : 'text-yellow-400'}>
             {isOnline ? '🟢 Online' : '🟡 Offline (Cached)'}

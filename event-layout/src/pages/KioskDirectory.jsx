@@ -15,7 +15,7 @@ import {
 import * as ConferenceAPI from '../server-actions/conference-planner';
 import * as TradeshowAPI from '../server-actions/tradeshow-planner';
 
-const REFRESH_INTERVAL = 60000; // 60 seconds
+const REFRESH_INTERVAL = 5000; // 5 seconds
 
 export default function KioskDirectory() {
   const [viewMode, setViewMode] = useState('conference'); // 'conference' or 'tradeshow'

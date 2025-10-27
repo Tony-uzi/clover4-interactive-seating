@@ -10,7 +10,7 @@ import {
 } from '../lib/utils/storage';
 import * as ConferenceAPI from '../server-actions/conference-planner';
 
-const REFRESH_INTERVAL = 60000; // 60 seconds
+const REFRESH_INTERVAL = 5000; // 5 seconds
 
 export default function KioskSchedule() {
   const [currentTime, setCurrentTime] = useState(new Date());
