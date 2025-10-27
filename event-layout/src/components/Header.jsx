@@ -1,31 +1,32 @@
-import { NavLink, Link, useNavigate } from "react-router-dom";
+import { NavLink, Link, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import * as AuthAPI from "../server-actions/auth";
 
 export default function Header() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [authed, setAuthed] = useState(false);
   const [userName, setUserName] = useState("");
 
+  // Check auth status on mount and whenever location changes
   useEffect(() => {
-    const token = AuthAPI.getAuthToken();
-    setAuthed(!!token);
-    try {
-      const u = JSON.parse(localStorage.getItem("user") || "null");
-      setUserName(u?.name || "");
-    } catch {}
+    const checkAuth = () => {
+      const token = AuthAPI.getAuthToken();
+      setAuthed(!!token);
+      try {
+        const u = JSON.parse(localStorage.getItem("user") || "null");
+        setUserName(u?.name || "");
+      } catch {}
+    };
+
+    checkAuth();
 
     const onStorage = () => {
-      const t = AuthAPI.getAuthToken();
-      setAuthed(!!t);
-      try {
-        const u2 = JSON.parse(localStorage.getItem("user") || "null");
-        setUserName(u2?.name || "");
-      } catch {}
+      checkAuth();
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  }, [location.pathname]);
 
   const link = ({ isActive }) => (isActive ? "active" : "");
 

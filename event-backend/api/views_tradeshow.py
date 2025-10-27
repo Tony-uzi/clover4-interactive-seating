@@ -375,7 +375,7 @@ def tradeshow_shared_view(request, share_token):
     booths_data = TradeshowBoothSerializer(booths, many=True).data
     
     # Get vendors with booth assignments
-    vendors = TradeshowVendor.objects.filter(event=event).prefetch_related('booth_assignments')
+    vendors = TradeshowVendor.objects.filter(event=event).prefetch_related('assignments')
     vendors_data = TradeshowVendorSerializer(vendors, many=True).data
     
     # Get routes

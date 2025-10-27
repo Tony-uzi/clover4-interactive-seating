@@ -1,6 +1,6 @@
 // Public shared view of tradeshow layout with vendor filters
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import TradeshowCanvas from '../components/tradeshow/TradeshowCanvas';
 import { FiEye, FiFilter } from 'react-icons/fi';
@@ -38,6 +38,41 @@ export default function TradeshowSharedView() {
       applyFilters();
     }
   }, [activeFilters, allBooths, vendors]);
+
+  // Calculate route steps for active route - MUST be at top level
+  const routeStepsForCanvas = useMemo(() => {
+    if (!activeRouteId || !routes.length) return [];
+    const activeRoute = routes.find(route => String(route.id) === String(activeRouteId));
+    if (!activeRoute || !activeRoute.boothOrder?.length) return [];
+
+    const getBooth = (boothId) =>
+      allBooths.find(booth => String(booth.id) === String(boothId)) || null;
+
+    const getVendorForBooth = (booth) => {
+      if (!booth) return null;
+      const boothLabel = booth.label ? String(booth.label) : null;
+      return (
+        vendors.find(v => String(v.boothId) === String(booth.id)) ||
+        (boothLabel
+          ? vendors.find(v => String(v.boothNumber) === boothLabel)
+          : null)
+      );
+    };
+
+    return activeRoute.boothOrder
+      .map((boothId, index) => {
+        const booth = getBooth(boothId);
+        if (!booth) return null;
+        const vendor = getVendorForBooth(booth);
+        return {
+          boothId: String(boothId),
+          booth,
+          vendorName: vendor?.name || vendor?.companyName || '',
+          step: index + 1,
+        };
+      })
+      .filter(Boolean);
+  }, [activeRouteId, routes, allBooths, vendors]);
 
   const loadSharedData = async () => {
     setLoading(true);
@@ -274,6 +309,7 @@ export default function TradeshowSharedView() {
           booths={filteredBooths}
           vendors={vendors}
           routes={routes}
+          routeSteps={routeStepsForCanvas}
           activeRouteId={activeRouteId}
           selectedBoothId={null}
           onSelectBooth={() => {}} // Read-only
