@@ -83,6 +83,11 @@ export async function getEvent(eventId) {
  */
 export async function createEvent(eventData) {
   try {
+    const metadata = {};
+    if (eventData.hallVertices) {
+      metadata.hallVertices = eventData.hallVertices;
+    }
+
     const response = await fetch('/api/tradeshow/events/', {
       method: 'POST',
       headers: authHeaders(),
@@ -93,7 +98,8 @@ export async function createEvent(eventData) {
         hall_height: eventData.hallHeight || eventData.hall_height || 30.0,
         event_date_start: eventData.dateStart || eventData.event_date_start || new Date().toISOString(),
         event_date_end: eventData.dateEnd || eventData.event_date_end || new Date().toISOString(),
-        is_public: eventData.isPublic || eventData.is_public || false
+        is_public: eventData.isPublic || eventData.is_public || false,
+        metadata: Object.keys(metadata).length > 0 ? metadata : null
       })
     });
     const data = await handleResponse(response);
@@ -109,6 +115,11 @@ export async function createEvent(eventData) {
  */
 export async function updateEvent(eventId, updates) {
   try {
+    const metadata = {};
+    if (updates.hallVertices !== undefined) {
+      metadata.hallVertices = updates.hallVertices;
+    }
+
     const response = await fetch(`/api/tradeshow/events/${eventId}/`, {
       method: 'PATCH',
       headers: authHeaders(),
@@ -119,7 +130,8 @@ export async function updateEvent(eventId, updates) {
         hall_height: updates.hallHeight || updates.hall_height,
         event_date_start: updates.dateStart || updates.event_date_start,
         event_date_end: updates.dateEnd || updates.event_date_end,
-        is_public: updates.isPublic || updates.is_public
+        is_public: updates.isPublic || updates.is_public,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined
       })
     });
     const data = await handleResponse(response);

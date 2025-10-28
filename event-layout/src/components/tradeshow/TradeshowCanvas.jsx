@@ -20,6 +20,7 @@ export default function TradeshowCanvas({
   onBoothsChange,
   hallWidth = 40,
   hallHeight = 30,
+  initialHallVertices = null,
   selectedBoothId,
   onSelectBooth,
   vendors = [],
@@ -31,6 +32,7 @@ export default function TradeshowCanvas({
   visitedBoothIds = [],
   skippedBoothIds = [],
   readOnly = false,
+  onHallResize,
   draggingVendorId = null,
   onAssignVendor,
   onVendorDragEnd,
@@ -69,15 +71,22 @@ export default function TradeshowCanvas({
   };
 
   // Hall boundary points (vertices that can be dragged to create irregular shapes)
-  const [hallVertices, setHallVertices] = useState(() => [
-    { x: 0, y: 0, id: 0 },
-    { x: hallWidth, y: 0, id: 1 },
-    { x: hallWidth, y: hallHeight, id: 2 },
-    { x: 0, y: hallHeight, id: 3 },
-  ]);
+  const [hallVertices, setHallVertices] = useState(() => {
+    if (initialHallVertices && Array.isArray(initialHallVertices) && initialHallVertices.length > 0) {
+      return initialHallVertices;
+    }
+    return [
+      { x: 0, y: 0, id: 0 },
+      { x: hallWidth, y: 0, id: 1 },
+      { x: hallWidth, y: hallHeight, id: 2 },
+      { x: 0, y: hallHeight, id: 3 },
+    ];
+  });
 
   // Track if vertices have been manually modified
-  const [verticesModified, setVerticesModified] = useState(false);
+  const [verticesModified, setVerticesModified] = useState(() => {
+    return initialHallVertices && Array.isArray(initialHallVertices) && initialHallVertices.length > 0;
+  });
 
   // Track previous dimensions to detect changes
   const prevDimensionsRef = useRef({ width: hallWidth, height: hallHeight });
@@ -187,6 +196,13 @@ export default function TradeshowCanvas({
 
     setHallVertices(newVertices);
     setVerticesModified(true); // Mark as manually modified
+
+    // Update hall dimensions and vertices if callback exists
+    if (onHallResize) {
+      const maxX = Math.max(...newVertices.map(p => p.x));
+      const maxY = Math.max(...newVertices.map(p => p.y));
+      onHallResize(maxX, maxY, newVertices);
+    }
   };
 
   // Vendor drag/drop helpers

@@ -368,6 +368,7 @@ def tradeshow_shared_view(request, share_token):
         'event_date_end': event.event_date_end,
         'hall_width': float(event.hall_width),
         'hall_height': float(event.hall_height),
+        'metadata': event.metadata,
     }
     
     # Get booths

@@ -318,6 +318,7 @@ export default function TradeshowSharedView() {
           draggingVendorId={null}
           hallWidth={event.hall_width || event.hallWidth}
           hallHeight={event.hall_height || event.hallHeight}
+          initialHallVertices={event.metadata?.hallVertices || null}
           readOnly={true}
         />
       </div>

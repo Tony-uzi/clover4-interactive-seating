@@ -78,6 +78,7 @@ export default function TradeshowPlanner() {
         date: new Date().toISOString().split('T')[0],
         hallWidth: 40,
         hallHeight: 30,
+        hallVertices: null, // Will be set by canvas if manually modified
       };
 
       const params = new URLSearchParams(location.search);
@@ -104,6 +105,7 @@ export default function TradeshowPlanner() {
             date: eventResp.data.date || defaultEvent.date,
             hallWidth: eventResp.data.hall_width ?? defaultEvent.hallWidth,
             hallHeight: eventResp.data.hall_height ?? defaultEvent.hallHeight,
+            hallVertices: eventResp.data.metadata?.hallVertices || null,
           };
           console.log('✓ Loaded existing event from URL:', ensuredEvent.id);
         } else {
@@ -564,6 +566,7 @@ export default function TradeshowPlanner() {
           description: event?.description || '',
           hallWidth: event?.hallWidth || 40,
           hallHeight: event?.hallHeight || 30,
+          hallVertices: event?.hallVertices,
           date: event?.date || new Date().toISOString().split('T')[0],
         });
         if (!createResp.success || !createResp.data?.id) {
@@ -579,6 +582,7 @@ export default function TradeshowPlanner() {
           date: created.date || event?.date || new Date().toISOString().split('T')[0],
           hallWidth: created.hall_width ?? event?.hallWidth ?? 40,
           hallHeight: created.hall_height ?? event?.hallHeight ?? 30,
+          hallVertices: created.metadata?.hallVertices || event?.hallVertices,
         };
         setEvent(normalized);
         navigate(`/tradeshow?eventId=${created.id}`, { replace: true });
@@ -745,6 +749,7 @@ export default function TradeshowPlanner() {
                 description: currentValues.description || '',
                 hallWidth: currentValues.hallWidth,
                 hallHeight: currentValues.hallHeight,
+                hallVertices: currentValues.hallVertices,
                 date: currentValues.date,
               });
               if (!createResp.success || !createResp.data?.id) {
@@ -759,6 +764,7 @@ export default function TradeshowPlanner() {
                 date: created.date || currentValues.date || new Date().toISOString().split('T')[0],
                 hallWidth: created.hall_width ?? currentValues.hallWidth ?? 40,
                 hallHeight: created.hall_height ?? currentValues.hallHeight ?? 30,
+                hallVertices: created.metadata?.hallVertices || currentValues.hallVertices,
               };
               setEvent(normalized);
               navigate(`/tradeshow?eventId=${created.id}`, { replace: true });
@@ -769,6 +775,7 @@ export default function TradeshowPlanner() {
               description: currentValues.description,
               hallWidth: currentValues.hallWidth,
               hallHeight: currentValues.hallHeight,
+              hallVertices: currentValues.hallVertices,
             });
             if (!updateResult.success) {
               throw new Error(updateResult.error || 'Failed to update event details');
@@ -781,6 +788,7 @@ export default function TradeshowPlanner() {
                 description: updated.description ?? prev?.description,
                 hallWidth: Number(updated.hall_width ?? prev?.hallWidth ?? 40),
                 hallHeight: Number(updated.hall_height ?? prev?.hallHeight ?? 30),
+                hallVertices: updated.metadata?.hallVertices ?? prev?.hallVertices,
               }));
             }
 
@@ -933,6 +941,7 @@ export default function TradeshowPlanner() {
             onBoothsChange={setBooths}
             hallWidth={event.hallWidth}
             hallHeight={event.hallHeight}
+            initialHallVertices={event.hallVertices}
             selectedBoothId={selectedBoothId}
             onSelectBooth={setSelectedBoothId}
             vendors={vendors}
@@ -942,6 +951,9 @@ export default function TradeshowPlanner() {
             draggingVendorId={draggingVendorId}
             onAssignVendor={handleAssignVendorToBooth}
             onVendorDragEnd={handleVendorDragEnd}
+            onHallResize={(width, height, vertices) => {
+              setEvent({ ...event, hallWidth: width, hallHeight: height, hallVertices: vertices });
+            }}
           />
         </div>
 

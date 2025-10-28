@@ -22,6 +22,7 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
     onElementsChange,
     roomWidth = 24,
     roomHeight = 16,
+    initialRoomVertices = null,
     selectedElementId,
     onSelectElement,
     guests = [],
@@ -40,15 +41,22 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
   const [dropTargetId, setDropTargetId] = useState(null);
 
   // Room boundary points (vertices that can be dragged to create irregular shapes)
-  const [roomVertices, setRoomVertices] = useState(() => [
-    { x: 0, y: 0, id: 0 },
-    { x: roomWidth, y: 0, id: 1 },
-    { x: roomWidth, y: roomHeight, id: 2 },
-    { x: 0, y: roomHeight, id: 3 },
-  ]);
+  const [roomVertices, setRoomVertices] = useState(() => {
+    if (initialRoomVertices && Array.isArray(initialRoomVertices) && initialRoomVertices.length > 0) {
+      return initialRoomVertices;
+    }
+    return [
+      { x: 0, y: 0, id: 0 },
+      { x: roomWidth, y: 0, id: 1 },
+      { x: roomWidth, y: roomHeight, id: 2 },
+      { x: 0, y: roomHeight, id: 3 },
+    ];
+  });
 
   // Track if vertices have been manually modified
-  const [verticesModified, setVerticesModified] = useState(false);
+  const [verticesModified, setVerticesModified] = useState(() => {
+    return initialRoomVertices && Array.isArray(initialRoomVertices) && initialRoomVertices.length > 0;
+  });
 
   // Track previous dimensions to detect changes
   const prevDimensionsRef = useRef({ width: roomWidth, height: roomHeight });
@@ -145,11 +153,11 @@ const ConferenceCanvas = forwardRef(function ConferenceCanvas(
     setRoomVertices(newVertices);
     setVerticesModified(true); // Mark as manually modified
 
-    // Update room dimensions if callback exists
+    // Update room dimensions and vertices if callback exists
     if (onRoomResize) {
       const maxX = Math.max(...newVertices.map(p => p.x));
       const maxY = Math.max(...newVertices.map(p => p.y));
-      onRoomResize(maxX, maxY);
+      onRoomResize(maxX, maxY, newVertices);
     }
   };
 

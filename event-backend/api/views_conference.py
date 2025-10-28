@@ -379,6 +379,7 @@ def conference_shared_view(request, share_token):
         'date': event.event_date,
         'room_width': float(event.room_width),
         'room_height': float(event.room_height),
+        'metadata': event.metadata,
     }
     
     # Get elements

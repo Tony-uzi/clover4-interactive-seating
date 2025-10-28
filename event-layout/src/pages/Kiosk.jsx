@@ -171,6 +171,7 @@ export function ConferenceKiosk() {
           date: eventResponse.data.date,
           roomWidth: eventResponse.data.room_width,
           roomHeight: eventResponse.data.room_height,
+          roomVertices: eventResponse.data.metadata?.roomVertices || null,
         };
 
         const updatedGuests = guestsResponse.data
@@ -222,6 +223,7 @@ export function ConferenceKiosk() {
           date: '',
           roomWidth: 24,
           roomHeight: 16,
+          roomVertices: null,
         });
         setGuests([]);
         setElements([]);
@@ -237,6 +239,7 @@ export function ConferenceKiosk() {
         date: '',
         roomWidth: 24,
         roomHeight: 16,
+        roomVertices: null,
       });
       setGuests([]);
       setElements([]);
@@ -600,6 +603,7 @@ export function ConferenceKiosk() {
             onElementsChange={() => {}}
             roomWidth={event.roomWidth}
             roomHeight={event.roomHeight}
+            initialRoomVertices={event.roomVertices}
             selectedElementId={highlightedElementId}
             onSelectElement={() => {}}
             guests={guests}
@@ -840,6 +844,7 @@ export function TradeshowKiosk() {
           date: eventResponse.data.date,
           hallWidth: eventResponse.data.hall_width,
           hallHeight: eventResponse.data.hall_height,
+          hallVertices: eventResponse.data.metadata?.hallVertices || null,
         };
 
         const updatedVendors = vendorsResponse.data
@@ -899,6 +904,7 @@ export function TradeshowKiosk() {
           date: '',
           hallWidth: 40,
           hallHeight: 30,
+          hallVertices: null,
         });
         setVendors([]);
         setBooths([]);
@@ -915,6 +921,7 @@ export function TradeshowKiosk() {
         date: '',
         hallWidth: 40,
         hallHeight: 30,
+        hallVertices: null,
       });
       setVendors([]);
       setBooths([]);
@@ -1611,6 +1618,7 @@ export function TradeshowKiosk() {
             onBoothsChange={() => {}}
             hallWidth={event.hallWidth}
             hallHeight={event.hallHeight}
+            initialHallVertices={event.hallVertices}
             selectedBoothId={highlightedBoothId}
             onSelectBooth={() => {}}
             vendors={vendors}

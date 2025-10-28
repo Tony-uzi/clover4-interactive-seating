@@ -64,6 +64,11 @@ export async function getEvent(eventId) {
  */
 export async function createEvent(eventData) {
   try {
+    const metadata = {};
+    if (eventData.roomVertices) {
+      metadata.roomVertices = eventData.roomVertices;
+    }
+
     const response = await fetch('/api/conference/events/', {
       method: 'POST',
       headers: authHeaders(),
@@ -74,7 +79,8 @@ export async function createEvent(eventData) {
         room_height: eventData.roomHeight || eventData.room_height || 16.0,
         event_date: eventData.eventDate || eventData.event_date || new Date().toISOString(),
         canvas_shape: eventData.canvasShape || eventData.canvas_shape || 'rectangle',
-        is_public: eventData.isPublic || eventData.is_public || false
+        is_public: eventData.isPublic || eventData.is_public || false,
+        metadata: Object.keys(metadata).length > 0 ? metadata : null
       })
     });
     const data = await handleResponse(response);
@@ -90,6 +96,11 @@ export async function createEvent(eventData) {
  */
 export async function updateEvent(eventId, updates) {
   try {
+    const metadata = {};
+    if (updates.roomVertices !== undefined) {
+      metadata.roomVertices = updates.roomVertices;
+    }
+
     const response = await fetch(`/api/conference/events/${eventId}/`, {
       method: 'PATCH',
       headers: authHeaders(),
@@ -100,7 +111,8 @@ export async function updateEvent(eventId, updates) {
         room_height: updates.roomHeight || updates.room_height,
         event_date: updates.eventDate || updates.event_date,
         canvas_shape: updates.canvasShape || updates.canvas_shape,
-        is_public: updates.isPublic || updates.is_public
+        is_public: updates.isPublic || updates.is_public,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined
       })
     });
     const data = await handleResponse(response);

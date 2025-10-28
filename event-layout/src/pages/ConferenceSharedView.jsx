@@ -248,6 +248,7 @@ export default function ConferenceSharedView() {
           draggingGuestId={null}
           roomWidth={event.room_width || event.roomWidth}
           roomHeight={event.room_height || event.roomHeight}
+          initialRoomVertices={event.metadata?.roomVertices || null}
           readOnly={true}
         />
       </div>

@@ -57,6 +57,7 @@ export default function ConferencePlanner() {
         date: new Date().toISOString().split('T')[0],
         roomWidth: 24,
         roomHeight: 16,
+        roomVertices: null, // Will be set by canvas if manually modified
       };
 
       if (!urlEventId) {
@@ -78,6 +79,7 @@ export default function ConferencePlanner() {
               date: eventResp.data.date || defaultEvent.date,
               roomWidth: eventResp.data.room_width ?? defaultEvent.roomWidth,
               roomHeight: eventResp.data.room_height ?? defaultEvent.roomHeight,
+              roomVertices: eventResp.data.metadata?.roomVertices || null,
             };
             console.log('✓ Loaded existing event from URL:', ensuredEvent.id);
         } else {
@@ -429,6 +431,7 @@ export default function ConferencePlanner() {
               description: event?.description || '',
               roomWidth: event?.roomWidth || 24,
               roomHeight: event?.roomHeight || 16,
+              roomVertices: event?.roomVertices,
               eventDate: event?.date || new Date().toISOString().split('T')[0],
             });
             if (createResp.success && createResp.data?.id) {
@@ -441,6 +444,7 @@ export default function ConferencePlanner() {
                 date: created.event_date || event?.date || new Date().toISOString().split('T')[0],
                 roomWidth: created.room_width ?? event?.roomWidth ?? 24,
                 roomHeight: created.room_height ?? event?.roomHeight ?? 16,
+                roomVertices: created.metadata?.roomVertices || event?.roomVertices,
               };
               setEvent(normalized);
               navigate(`/conference?eventId=${created.id}`, { replace: true });
@@ -639,6 +643,7 @@ export default function ConferencePlanner() {
                 description: currentValues.description || '',
                 roomWidth: currentValues.roomWidth,
                 roomHeight: currentValues.roomHeight,
+                roomVertices: currentValues.roomVertices,
                 eventDate: currentValues.date,
               });
               if (!createResp.success || !createResp.data?.id) {
@@ -653,6 +658,7 @@ export default function ConferencePlanner() {
                 date: created.event_date || currentValues.date || new Date().toISOString().split('T')[0],
                 roomWidth: created.room_width ?? currentValues.roomWidth ?? 24,
                 roomHeight: created.room_height ?? currentValues.roomHeight ?? 16,
+                roomVertices: created.metadata?.roomVertices || currentValues.roomVertices,
               };
               setEvent(normalized);
               navigate(`/conference?eventId=${created.id}`, { replace: true });
@@ -663,6 +669,7 @@ export default function ConferencePlanner() {
               description: currentValues.description,
               roomWidth: currentValues.roomWidth,
               roomHeight: currentValues.roomHeight,
+              roomVertices: currentValues.roomVertices,
               eventDate: currentValues.date,
             });
             if (!updateResult.success) {
@@ -676,6 +683,7 @@ export default function ConferencePlanner() {
                 description: updated.description ?? prev?.description,
                 roomWidth: Number(updated.room_width ?? prev?.roomWidth ?? 24),
                 roomHeight: Number(updated.room_height ?? prev?.roomHeight ?? 16),
+                roomVertices: updated.metadata?.roomVertices ?? prev?.roomVertices,
                 date: updated.event_date ?? prev?.date,
               }));
             }
@@ -799,14 +807,15 @@ export default function ConferencePlanner() {
             onElementsChange={setElements}
             roomWidth={event.roomWidth}
             roomHeight={event.roomHeight}
+            initialRoomVertices={event.roomVertices}
             selectedElementId={selectedElementId}
             onSelectElement={setSelectedElementId}
             guests={guests}
             draggingGuestId={draggingGuestId}
             onAssignGuest={handleAssignGuestToElement}
             onGuestDragEnd={handleGuestDragEnd}
-            onRoomResize={(width, height) => {
-              setEvent({ ...event, roomWidth: width, roomHeight: height });
+            onRoomResize={(width, height, vertices) => {
+              setEvent({ ...event, roomWidth: width, roomHeight: height, roomVertices: vertices });
             }}
           />
         </div>
